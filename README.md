@@ -75,13 +75,17 @@ npm run build && npm start
 
 ```
 app/            라우트 — /, /measure, /stats, /demo, /orb-preview
-components/     랜딩·카메라·오브·통계·푸터 등 화면
-hooks/          감정 루프, 체크인, 넛지, PiP
-lib/            감정 분석·집계, Dexie, 기준선·보정·제안
+components/     common, landing, measure, onboarding, orb, nudge, report
+hooks/          emotion, checkin, nudge, ui
+lib/            emotion, stress, storage, checkin, orb, nudge
 public/         PWA(manifest, sw.js), face-api 모델
-tests/          Vitest
-docs/           설계 스펙·구현 계획 (참고용)
+tests/          components·hooks·lib의 도메인 구조를 따르는 Vitest 테스트
+docs/           architecture, collaboration, 기존 설계 스펙·구현 계획
 ```
+
+전체 파일 구조와 이동 경로는 [프로젝트 구조](docs/architecture/PROJECT_STRUCTURE.md),
+담당 영역과 공동 관리 기준은 [코드 소유권](docs/collaboration/CODE_OWNERSHIP.md)을 참고합니다.
+비어 있는 `components/RiskAlert.tsx`, `lib/notification.ts`는 원래 위치에 보존했습니다.
 
 데이터 흐름: `CameraView` → `useEmotionRecorder`(약 0.5초 분석) → 1분 `aggregate` → Dexie `emotions` → `/stats`에서 스트레스·기준선·보정 후 리포트.
 

@@ -1,5 +1,5 @@
-import EmotionOrb from '@/components/EmotionOrb'
-import type { EmotionResult } from '@/lib/emotionAnalysis'
+import EmotionOrb from '@/components/orb/EmotionOrb'
+import type { EmotionResult } from '@/lib/emotion/emotionAnalysis'
 
 const STATES: { label: string; emotions: EmotionResult }[] = [
   { label: '평온', emotions: { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 } },

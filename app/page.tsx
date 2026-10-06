@@ -1,13 +1,13 @@
 'use client'
 
-import LandingCTA from '@/components/LandingCTA'
-import LandingData from '@/components/LandingData'
-import LandingFeatures from '@/components/LandingFeatures'
-import LandingFooter from '@/components/LandingFooter'
-import LandingHero from '@/components/LandingHero'
-import LandingNav from '@/components/LandingNav'
-import LandingRisk from '@/components/LandingRisk'
-import { useScrollReveal } from '@/hooks/useScrollReveal'
+import LandingCTA from '@/components/landing/LandingCTA'
+import LandingData from '@/components/landing/LandingData'
+import LandingFeatures from '@/components/landing/LandingFeatures'
+import LandingFooter from '@/components/landing/LandingFooter'
+import LandingHero from '@/components/landing/LandingHero'
+import LandingNav from '@/components/landing/LandingNav'
+import LandingRisk from '@/components/landing/LandingRisk'
+import { useScrollReveal } from '@/hooks/ui/useScrollReveal'
 
 export default function LandingPage() {
   useScrollReveal()
