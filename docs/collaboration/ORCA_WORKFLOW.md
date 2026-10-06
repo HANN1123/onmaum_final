@@ -1,12 +1,12 @@
 # Orca 협업 가이드
 
-이정환과 김우빈이 Claude Code와 Codex CLI를 이용해 온마음을 병렬 개발하는 운영 기준입니다. 기능별 책임은 [CODE_OWNERSHIP.md](CODE_OWNERSHIP.md)를 따릅니다.
+이정환과 김우빈이 Claude Code와 Codex CLI를 이용해 온마음을 병렬 개발하는 운영 기준입니다. Gemini CLI는 필요할 때 추가 검토에 사용합니다. 기능별 책임은 [CODE_OWNERSHIP.md](CODE_OWNERSHIP.md)를 따릅니다.
 
 ## 기본 구성
 
 | 작업 공간 | 기본 에이전트 | 역할 | 개발 서버 |
 |---|---|---|---|
-| ONMAUM - Integration | 필요할 때 검토 에이전트 하나 | 기준 코드, 통합 확인, 교차 리뷰 | `npm run dev` → 3000 |
+| ONMAUM - Integration | Gemini CLI 검토 탭, 필요할 때 사용 | 기준 코드, 통합 확인, 교차 리뷰 | `npm run dev` → 3000 |
 | ONMAUM - Core | Codex | 이정환의 분석·계산·저장 영역 | `npm run dev:core` → 3001 |
 | ONMAUM - UI | Claude Code | 김우빈의 화면·상호작용 영역 | `npm run dev:ui` → 3002 |
 
@@ -60,6 +60,39 @@ codex login status
 
 Claude Code는 `CLAUDE.md`의 `@AGENTS.md`와 담당 문서를 읽고, Codex는 `AGENTS.md`에서 공통 작업 규칙을 읽습니다. 개인 전역 모델·권한 설정은 이 저장소 설정으로 덮어쓰지 않습니다.
 
+## Gemini CLI 선택 사용
+
+Integration 작업 공간의 `Gemini - Review` 탭에서 필요할 때 질문하거나 변경 사항을 검토합니다. Gemini는 필수 작업 단계가 아니며 자동으로 작업을 배정하지 않습니다. PC에 설치된 전역 CLI를 사용하고 앱의 npm 의존성에는 추가하지 않습니다. 설치 버전은 `gemini --version`으로 확인합니다.
+
+다른 PC에서 CLI가 없다면 공식 패키지를 설치하고 프로젝트 루트에서 실행합니다.
+
+```bash
+npm install -g @google/gemini-cli
+gemini --approval-mode=plan --model gemini-3.8-flash
+```
+
+인증 방식은 먼저 확인합니다. [Google 공식 공지](https://github.com/google-gemini/gemini-cli/discussions/28017)에 따라 2026-06-18부터 개인 계정(무료·Google AI Pro·Ultra)의 Gemini CLI 지원이 종료됐습니다. 기업용 Gemini Code Assist 라이선스와 API 키 인증은 별도입니다. 개인 계정용 후속 도구는 Antigravity CLI입니다.
+
+이 프로젝트는 `.gemini/settings.json`으로 API 키 인증과 `gemini-3.8-flash`를 선택하고, Plan 모드의 자동 고성능 모델 전환을 끕니다. 개인 전역 OAuth 설정은 유지합니다. `GEMINI.md`는 `AGENTS.md`, 담당 영역, 이 협업 가이드를 가져옵니다.
+
+API 키는 각 작업 공간의 `.gemini/.env`에 로컬로 설정합니다. 이 파일은 기존 `.env*` 규칙으로 Git에서 제외됩니다. 실제 키를 채팅, 커밋, 공유 문서에 넣지 않습니다.
+
+```dotenv
+GEMINI_API_KEY=<본인의 무료 등급 프로젝트 API 키>
+```
+
+이미 터미널에 `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` 환경 변수가 있으면 다른 프로젝트의 키가 우선될 수 있습니다. 이 경우 해당 터미널 세션에서만 기존 변수를 해제한 뒤 실행합니다. 다른 작업 공간으로 키를 자동 복사하지 않습니다.
+
+2026-10-06 계정 화면에서 `onmaum-demo` 프로젝트의 무료 등급을 확인했습니다. 기본 모델 Gemini 3.8 Flash는 분당 5회·입력 250,000토큰, 하루 20회 한도입니다. Gemini 3.5 Flash Lite는 분당 15회·하루 500회 한도가 있지만 연결 검사 때 서버 혼잡(503)이 발생해, 실제 응답이 확인된 3.8 Flash를 기본으로 사용합니다. 한 번의 CLI 작업에서 여러 API 요청을 보낼 수 있으며, 한도는 프로젝트별로 바뀔 수 있으므로 AI Studio에서 확인합니다. 호출 한도를 넘으면 재시도를 기다리며 자동으로 결제 등급을 올리지 않습니다. 모델 지정은 모든 보조·대체 호출을 차단하는 장치가 아니므로, 무료 사용의 기준은 프로젝트의 무료 등급 유지입니다. [무료 API 정책](https://ai.google.dev/gemini-api/docs/pricing)에 따라 입력 내용이 제품 개선에 사용될 수 있습니다.
+
+탭을 닫았다면 Integration의 일반 터미널에서 위 실행 명령을 사용하거나 다음처럼 Orca 탭을 다시 만듭니다. 이미 탭이 있으면 기존 탭을 사용합니다.
+
+```bash
+orca terminal create --worktree "name:ONMAUM - Integration" --title "Gemini - Review" --command "gemini --approval-mode=plan --model gemini-3.8-flash" --json
+```
+
+대화형 Plan Mode에서 검토를 시작하며, 구현이 필요하면 별도 작업으로 지정합니다. Plan Mode는 전환 가능한 실행 모드입니다. 비대화형 `-p` 실행은 계획 종료 후 자동 구현으로 전환할 수 있으므로 위 검토 탭의 실행 명령에 추가하지 않습니다. 검토 요청에는 대상 브랜치/커밋과 비교 기준을 명시합니다. 기본 Plan 정책은 셸 명령도 제한하므로, 일반 터미널에서 `git diff <base>...<target>` 결과를 만들어 Gemini에 제공하거나 읽을 수 있는 diff 파일로 전달합니다. 다른 에이전트가 사용하는 작업 공간의 브랜치를 전환하지 않습니다.
+
 ## 작업 전달과 교차 검토
 
 1. Issue 또는 [TASK_BRIEF.md](TASK_BRIEF.md)를 이용해 담당자, 목표, 변경 경로, 완료 조건을 정합니다.
@@ -107,7 +140,7 @@ orca repo set-base-ref --repo name:onmaum_final --ref origin/main --json
 
 먼저 Claude와 Codex의 구현·교차 검토를 사용합니다. 추가 도구는 아래 문제가 실제로 생길 때 도입합니다.
 
-- 독립적인 세 번째 검토가 필요하면 [Gemini CLI](https://geminicli.com/docs/)의 [Plan Mode](https://geminicli.com/docs/cli/plan-mode/)를 검토용으로 고려합니다.
+- 독립적인 세 번째 검토가 필요하면 준비된 Gemini CLI 검토 탭을 사용합니다.
 - PR 리뷰가 밀리면 [CodeRabbit](https://docs.coderabbit.ai/guides/code-review-overview)의 자동 PR 리뷰를 검토합니다. 저장소 접근 설정은 팀이 도입을 결정한 뒤 수행합니다.
 - 말씀하신 Jev가 [TypeSafe의 Jev](https://docs.typesafe.ai/introduction)라면 구조화 판단·분류용 모델입니다. Orca에서 코드 작성·리뷰를 분담하는 현재 구성에 필수인 도구는 아닙니다. 앱 내 판단 기능을 실험할 때 별도로 검토합니다.
 
@@ -116,4 +149,5 @@ orca repo set-base-ref --repo name:onmaum_final --ref origin/main --json
 - [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
 - [Codex AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 - [Claude Code 프로젝트 메모리](https://code.claude.com/docs/en/memory)
+- [Gemini CLI 설치](https://geminicli.com/docs/get-started/installation/), [로그인](https://geminicli.com/docs/get-started/authentication/), [GEMINI.md](https://geminicli.com/docs/cli/gemini-md/), [Plan Mode](https://geminicli.com/docs/cli/plan-mode/)
 - Orca 설치 버전에 맞는 명령: `orca skills get orca-cli --json`

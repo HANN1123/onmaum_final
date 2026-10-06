@@ -1,0 +1,15 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "gemini-api-key"
+    }
+  },
+  "model": {
+    "name": "gemini-3.8-flash"
+  },
+  "general": {
+    "plan": {
+      "modelRouting": false
+    }
+  }
+}

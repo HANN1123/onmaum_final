@@ -63,7 +63,7 @@
 | `app/layout.tsx`, `app/globals.css`, `public/manifest.json` | 앱 전체 화면 틀, 전역 스타일, PWA 설정의 공통 접점 |
 | `package.json`, `package-lock.json` | 실행 명령과 의존성의 공통 접점 |
 | `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `postcss.config.mjs`, `vitest.config.ts`, `tests/setup.ts`, `.gitignore` | 빌드·타입·스타일·테스트·개발 환경 설정 |
-| `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/collaboration/**` | 에이전트 작업 규칙, 프로젝트 사용법, 협업 기준 |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.gemini/settings.json`, `README.md`, `docs/collaboration/**` | 에이전트 작업 규칙, 프로젝트 사용법, 협업 기준 |
 | `.github/**`, `scripts/collaboration/**`, `tests/tooling/**`, `.node-version`, `.gitattributes` | PR·CI·작업 공간 설치·검사와 공통 실행 환경 |
 | `docs/architecture/PROJECT_STRUCTURE.md` | Core 주 담당이지만 UI/Core 경계를 설명하는 내용은 함께 관리 |
 | `docs/roadmap.md`, `docs/2026-1학기-정리.md` | 제품 방향, 계획, 학기별 기록 |

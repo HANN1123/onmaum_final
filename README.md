@@ -47,7 +47,7 @@
 
 ## 실행 방법
 
-Claude와 Codex를 사용하는 팀 작업은 [Orca 협업 가이드](docs/collaboration/ORCA_WORKFLOW.md)를 따릅니다.
+Claude·Codex로 구현하고 필요할 때 Gemini CLI로 검토하는 팀 작업은 [Orca 협업 가이드](docs/collaboration/ORCA_WORKFLOW.md)를 따릅니다.
 Node 버전은 `.node-version`을 기준으로 맞춥니다.
 
 ```bash
