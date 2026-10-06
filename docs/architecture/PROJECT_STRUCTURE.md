@@ -201,6 +201,8 @@ UI, 계산식, 데이터 모델, IndexedDB schema, 저장 키, 테스트 케이�
 
 설치 시 원본 lock 파일의 일부 `@emnapi` 선택 의존성 불일치로 이 Windows 환경에서 `npm ci`가 실패했습니다. 검증에는 Node 22.20.0과 기본 설치 npm 10.9.3의 `npm install --no-save --no-audit --no-fund`를 사용했고, 이동 전후 같은 설치 환경을 사용했습니다. 로컬 선택 의존성 중 `@emnapi/wasi-threads`는 lock의 1.2.1 대신 1.2.3으로 해석됐습니다. `package.json`과 `package-lock.json`은 변경하지 않았으며 lock 파일 정비는 별도 작업입니다.
 
+이후 Orca 협업 환경 구성에서 이 선택 의존성 누락을 lock 파일에 반영했습니다. 현재 설치·검사 절차와 새 협업 도구는 [ORCA_WORKFLOW.md](../collaboration/ORCA_WORKFLOW.md)를 따릅니다. 위 검증 기록과 아래 경로표는 도메인 재분류 시점의 기록입니다.
+
 ## 전체 이동 경로 (84개)
 
 ### components (27개)

@@ -47,10 +47,14 @@
 
 ## 실행 방법
 
+Claude와 Codex를 사용하는 팀 작업은 [Orca 협업 가이드](docs/collaboration/ORCA_WORKFLOW.md)를 따릅니다.
+Node 버전은 `.node-version`을 기준으로 맞춥니다.
+
 ```bash
-npm install
+npm run setup:workspace # lock 파일 기준 설치
 npm run dev          # http://localhost:3000
 npm run test:run     # 단발 테스트
+npm run check        # 도구 테스트 → 앱 테스트 → lint → build
 npm run build && npm start
 ```
 
@@ -79,7 +83,7 @@ components/     common, landing, measure, onboarding, orb, nudge, report
 hooks/          emotion, checkin, nudge, ui
 lib/            emotion, stress, storage, checkin, orb, nudge
 public/         PWA(manifest, sw.js), face-api 모델
-tests/          components·hooks·lib의 도메인 구조를 따르는 Vitest 테스트
+tests/          도메인별 Vitest 테스트와 tooling/ 협업 도구 테스트
 docs/           architecture, collaboration, 기존 설계 스펙·구현 계획
 ```
 

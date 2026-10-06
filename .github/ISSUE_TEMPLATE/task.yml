@@ -1,0 +1,34 @@
+name: 개발 작업
+description: 담당 영역과 완료 조건을 정한 뒤 Orca 작업 공간에서 진행합니다.
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표와 완료 조건
+      description: 사용자가 겪는 문제, 원하는 동작, 확인 방법을 적습니다.
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: 담당 영역
+      options:
+        - Core
+        - UI
+        - 공동
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: 담당자와 검토자
+      placeholder: '담당: 이정환 / 검토: 김우빈'
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 변경할 경로와 공통 계약
+      description: 예상 파일, 타입·props·저장 구조 영향, 다른 작업과의 선후관계를 적습니다.
+    validations:
+      required: true
