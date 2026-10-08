@@ -1,92 +1,87 @@
 # ONMAUM Code Ownership
 
-온마음은 이정환(Core / Data / Architecture / Algorithm)과 김우빈(UI / UX / Frontend)이 각자의 AI Coding Agent와 함께 개발합니다. 사람 이름으로 소스 폴더를 나누지 않고, 기능과 책임을 기준으로 담당 영역을 구분합니다.
+2026년 2학기 공식 역할분담을 기준으로 한다. 이정환은 ③ 서버·관리자 ⑤ 알고리즘 ⑥ 피드백, 김우빈은 ① 카메라 인식 ② Electron ④ UI 변경을 맡는다. Primary Owner는 주 담당자이며 독점 소유자가 아니다.
 
-이 문서는 재분류 후 실제 경로를 기준으로 합니다. 전체 구조와 이전 경로 대응표는 [PROJECT_STRUCTURE.md](../architecture/PROJECT_STRUCTURE.md)를 참고합니다. Primary Owner는 주 담당자이며 독점 소유자가 아닙니다.
+업무는 `Spec → 구현 계획 → 테스트 정의 → 기능 브랜치 → 개발 → 테스트 → PR → 상대 팀원 Review → main Merge`로 진행한다. 실제 트리·이동표는 [프로젝트 구조](../architecture/PROJECT_STRUCTURE.md), 이번 범위·검증은 [재분류 작업 명세](ROLE_RECLASSIFICATION.md), 작업 공간 운영은 [Orca 가이드](ORCA_WORKFLOW.md)를 따른다.
 
-## 이정환 — Core / Data / Architecture / Algorithm
+## 이정환 — ③ 서버·관리자 / ⑤ 알고리즘 / ⑥ 피드백
 
-| 주 담당 경로 | 책임 |
-|---|---|
-| `lib/emotion/**` | 얼굴 표정 분석, 감정 집계, 감정 기록 조회·저장, 감정·프로필 기반 회복 제안 |
-| `lib/stress/**` | 스트레스 지수, 일별 집계, 개인 기준선, 자기보고 보정, 계산 가중치 |
-| `lib/storage/**` | IndexedDB, 로컬 프로필·설정, 체크인·넛지 일일 상태 저장 |
-| `lib/checkin/checkin.ts` | 체크인 시간대와 노출 조건 판정 |
-| `lib/nudge/nudge.ts` | 넛지 지속 시간, 횟수 제한, 쿨다운, 방해 금지 조건 |
-| `hooks/emotion/**` | 측정 루프, 감정 집계와 저장 연결 |
-| `hooks/checkin/**` | 체크인 판정·표시 데이터·보정·저장 연결 |
-| `hooks/nudge/useNudge.ts` | 넛지 판정, 일일 상태 저장, 브라우저 알림 실행 |
-| `public/models/**` | 얼굴 인식 모델 파일과 로딩 계약 |
-| `public/sw.js` | 서비스 워커 캐시와 오프라인 동작 |
-| `docs/architecture/PROJECT_STRUCTURE.md` | 소스 구조, 의존 방향, 이동 경로 기록 |
+| 파일/디렉터리 | 업무번호 | 이유 |
+|---|---|---|
+| `features/algorithm/emotion/**` | ⑤ | raw 정규화, 감정 타입·상수, 우세 감정, 프레임 집계 |
+| `features/algorithm/stress/**` | ⑤ | 긍정·스트레스 지수, 일별·시간대 집계, 가중치 |
+| `features/algorithm/baseline/**` | ⑤ | 개인 기준선, 상태 분류, 자기보고 보정 |
+| `features/feedback/lib/**` | ⑥ | 체크인·넛지 조건, 피드백 문구·자기관리 제안 선택 |
+| `features/feedback/hooks/**` | ⑥ | 체크인·넛지 상태와 저장, 브라우저 알림·권한 연결 |
+| `features/feedback/components/**` | ⑥ | 체크인·넛지 기능 컴포넌트. 시각 디자인은 김우빈 공동 검토 |
+| `shared/storage/**` | Shared | Dexie CRUD/schema, 프로필·설정·일일 상태. 이정환 주 관리, 공동 주의 영역 |
+| `tests/algorithm/**`, `tests/feedback/**`, `tests/shared/**` | ⑤⑥ / Shared | 해당 소스의 동작 검증 |
 
-관련 테스트도 같은 담당자를 따릅니다.
+③ 서버·관리자는 현재 미구현이다. 향후 **`features/admin/`**에 관리자 통계·권한·집계·API·데이터 계약·리포트를 둔다. 지금은 해당 디렉터리나 서버 코드를 만들지 않는다. 원본 영상·얼굴 이미지·개인 raw frame·불필요한 식별 정보를 기본 수집 대상으로 삼지 않으며, 동의된 최소 정보·익명 집계를 우선한다.
 
-- `tests/lib/emotion/**`, `tests/lib/stress/**`, `tests/lib/storage/**`
-- `tests/lib/checkin/checkin.test.ts`, `tests/lib/nudge/**`
-- `tests/hooks/emotion/**`, `tests/hooks/checkin/**`, `tests/hooks/nudge/useNudge.test.tsx`
+## 김우빈 — ① 카메라 인식 / ② Electron / ④ UI 변경
 
-`lib/emotion/selfCareSuggestion.ts`의 선택 규칙은 Core 담당이고, 사용자에게 보이는 문구는 김우빈과 함께 검토합니다. `hooks/nudge/useNudge.ts`도 판정·저장 책임은 Core에 두되 알림 문구와 상호작용은 UI 담당과 맞춥니다.
+| 파일/디렉터리 | 업무번호 | 이유 |
+|---|---|---|
+| `features/camera/components/CameraView.tsx` | ① | 웹캠 권한·video stream·카메라 오류 처리 |
+| `features/camera/lib/faceDetection.ts` | ① | face-api 모델 로딩·얼굴·랜드마크·raw 표정 검출, 알고리즘 호출 어댑터 |
+| `features/camera/hooks/useEmotionRecorder.ts` | ① / 공동 | 분석 주기 중심 통합 훅. 집계·저장 계약은 이정환 공동 검토 |
+| `public/models/**` | ① | 모델 자산과 `/models` 로딩 계약 |
+| `features/ui/common/**` | ④ | 앱 틀·내비게이션·푸터·서비스 워커 등록 |
+| `features/ui/landing/**` | ④ | 랜딩 화면 |
+| `features/ui/measure/**` | ④ | 계산된 감정 결과 표시 |
+| `features/ui/report/**` | ④ / 공동 | 리포트·차트·최근 기록 표현. 계산 해석은 이정환 공동 검토 |
+| `features/ui/onboarding/**` | ④ | 온보딩·설문 화면 |
+| `features/ui/orb/**`, `features/ui/hooks/**` | ④ | 오브 시각화·CSS·표현 함수·Document PiP·스크롤 효과 |
+| `app/page.tsx`, `app/demo/**`, `app/orb-preview/**` | ④ | 화면 route·조합 |
+| `app/measure/**`, `app/stats/**` | ④ / 공동 | 카메라·저장·알고리즘·피드백과 UI의 통합 |
+| `app/favicon.ico`, `public/*.svg` | ④ | 파비콘·앱 아이콘·시각 자산 |
+| `tests/camera/**`, `tests/ui/**` | ①④ | 해당 소스의 동작 검증 |
 
-## 김우빈 — UI / UX / Frontend
+② Electron은 현재 미구현이다. 향후 **`features/electron/`** 아래 `main/`, `preload/`, `window/`, `types/`를 필요할 때 만든다. main process·IPC·창·background·tray·always-on-top·lifecycle·Windows 실행·웹앱 연결은 김우빈 담당이다. 알고리즘은 Electron이 소비하며 Electron 폴더로 옮기지 않는다. 브라우저 Document PiP는 현재 UI 기능이다.
 
-| 주 담당 경로 | 책임 |
-|---|---|
-| `components/common/**` | 공통 화면 틀, 내비게이션, 연락처 푸터, 서비스 워커 등록 연결 |
-| `components/landing/**` | 랜딩 화면 |
-| `components/report/**` | 일일 리포트, 차트, 최근 기록, 체크인 카드 |
-| `components/onboarding/**` | 온보딩과 설문 화면 |
-| `components/orb/**` | 오브 렌더링, 애니메이션, PiP 버튼, 관련 CSS Module |
-| `components/nudge/**` | 넛지 배너·호스트·설정 화면 |
-| `lib/orb/**` | 오브 색상·모션·카피·성장 표현, PiP 지원 확인 |
-| `lib/checkin/checkinCopy.ts` | 스트레스 단계와 기준선 모드에 대응하는 체크인 문구 |
-| `hooks/ui/**` | PiP 창의 UI 생명주기, 스크롤 등장 효과 |
-| `hooks/nudge/useNotificationPermission.ts` | 브라우저 알림 권한의 UI 상태와 요청 흐름 |
-| `app/page.tsx`, `app/stats/**`, `app/demo/**`, `app/orb-preview/**` | 일반 화면과 화면 조합 |
-| `app/favicon.ico`, `public/*.svg` | 파비콘, 앱 아이콘, 정적 시각 자산 |
+## 업무 경계
 
-관련 테스트도 같은 담당자를 따릅니다.
+### Camera → Algorithm
 
-- `tests/components/**`
-- `tests/lib/orb/**`, `tests/lib/checkin/checkinCopy.test.ts`
-- `tests/hooks/nudge/useNotificationPermission.test.tsx`
+김우빈의 `CameraView → faceDetection`이 얼굴·랜드마크·표정 확률을 얻는다. `faceDetection.analyzeEmotion`은 기존 `normalizeExpressions(raw: RawExpressions)`를 호출하고 `Promise<EmotionResult | null>`을 반환한다. 실제 raw 경계는 그 호출 인자다. `RawExpressions`의 happy/neutral/sad/angry/disgusted와 `EmotionResult`의 happy/calm/sad/angry는 `features/algorithm/emotion/emotionAnalysis.ts`에 한 번만 정의되어 있다.
 
-`lib/` 전체가 Core 담당인 것은 아닙니다. 오브 표현 함수와 체크인 카피는 UI 책임입니다. 다만 `lib/orb/orbStages.ts`의 성장 임계값이나 감정 데이터의 해석을 바꾸는 작업은 Core 담당과 함께 검토합니다.
+이정환은 raw 이후 정규화·가중치·집계·스트레스/긍정·baseline·risk·상태 판정을 맡는다. 카메라 어댑터는 계산식을 소유하지 않는다. 레코더는 기존 호출 순서를 유지한 통합 훅이므로 옵션·반환값·주기·flush·저장 계약 변경 시 양쪽이 검토한다.
 
-## 공동 관리와 경계 영역
+### Algorithm → UI
+
+알고리즘이 계산 결과를 만들고 UI가 표시한다. `DailyReport`와 `TrendChart`는 기존 알고리즘 함수를 호출해 화면을 구성한다. `DailyReport`의 기존 `averageEmotion`은 대규모 리팩터링을 피하기 위해 그대로 두었다. 이 평균의 의미·가중치나 계산 호출 변경은 이정환이 함께 검토한다. `orbStages` 성장 임계값과 `orbCaption` 감정별 카피 선택도 알고리즘·피드백 해석이 바뀌면 공동 검토한다.
+
+### Feedback → UI
+
+이정환은 **무엇을·언제·어떤 조건에서 보여주며 어떤 메시지를 선택할지** 맡는다. 김우빈은 **레이아웃·색상·간격·반응형·애니메이션·시각적 상호작용**을 맡는다. feedback 컴포넌트의 위치가 시각 디자인 단독 소유를 뜻하지 않는다. 이번 이동에서는 props·문구·스타일·조건을 유지하고 컴포넌트를 대규모 분해하지 않았다.
+
+## 공동 영역 — shared conflict zone
 
 | 경로 | 협업 기준 |
 |---|---|
-| `components/measure/**`, `app/measure/**` | 카메라·감정 표시·측정 시작/종료가 만나는 경계. UI 변경은 김우빈, 측정·저장 계약은 이정환 중심으로 검토 |
-| `hooks/emotion/**` | Core 주 담당. 반환값, 옵션, 측정 생명주기가 달라지면 측정 UI 사용처도 함께 확인 |
-| `components/common/ServiceWorkerRegistrar.tsx`, `public/sw.js` | 등록 경로와 캐시 동작이 연결되므로 두 담당자가 변경 영향을 공유 |
-| `app/layout.tsx`, `app/globals.css`, `public/manifest.json` | 앱 전체 화면 틀, 전역 스타일, PWA 설정의 공통 접점 |
-| `package.json`, `package-lock.json` | 실행 명령과 의존성의 공통 접점 |
-| `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `postcss.config.mjs`, `vitest.config.ts`, `tests/setup.ts`, `.gitignore` | 빌드·타입·스타일·테스트·개발 환경 설정 |
-| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.gemini/settings.json`, `README.md`, `docs/collaboration/**` | 에이전트 작업 규칙, 프로젝트 사용법, 협업 기준 |
-| `.github/**`, `scripts/collaboration/**`, `tests/tooling/**`, `.node-version`, `.gitattributes` | PR·CI·작업 공간 설치·검사와 공통 실행 환경 |
-| `docs/architecture/PROJECT_STRUCTURE.md` | Core 주 담당이지만 UI/Core 경계를 설명하는 내용은 함께 관리 |
-| `docs/roadmap.md`, `docs/2026-1학기-정리.md` | 제품 방향, 계획, 학기별 기록 |
+| `shared/storage/**` | 이정환 주 관리. DB schema·저장 키·데이터 계약 변경은 반드시 상대 팀원에게 공유한 뒤 진행 |
+| `features/algorithm/emotion/emotionAnalysis.ts`, `shared/storage/db.ts` 및 feature 간 공개 타입·props·함수 | 기존 정의 재사용. 계약 변경 전 양쪽 사용처·mock·테스트 확인 |
+| `features/camera/hooks/useEmotionRecorder.ts`, `app/measure/**`, `app/stats/**` | 카메라·알고리즘·저장·피드백·화면 통합 |
+| `features/ui/report/**`, `features/feedback/components/**` | 계산·문구 의미와 시각 표현의 접점 |
+| `features/ui/common/ServiceWorkerRegistrar.tsx`, `public/sw.js`, `public/manifest.json` | 등록 URL·캐시·PWA 계약 |
+| `app/layout.tsx`, `app/globals.css` | 앱 전체 화면 틀·전역 스타일 |
+| `package.json`, `package-lock.json` | 실행 명령·의존성 |
+| `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `postcss.config.mjs`, `vitest.config.ts`, `tests/setup.ts`, `.gitignore` | 빌드·타입·스타일·테스트 설정 |
+| `AGENTS.md`, `README.md`, `CLAUDE.md`, `GEMINI.md`, `.gemini/settings.json` | 에이전트 규칙·사용법·검토 환경 |
+| `docs/collaboration/**`, `docs/architecture/**`, `docs/roadmap.md`, `docs/2026-1학기-정리.md` | 협업·구조·계획·학기 기록 |
+| `.github/**`, `scripts/collaboration/**`, `tests/tooling/**`, `.node-version`, `.gitattributes` | Issue·PR·CI·설치·검사와 실행 환경 |
 
-공동 관리란 변경 목적과 영향을 공유하고 PR에서 상대 담당자의 검토를 받는 기준입니다. 이미 합의된 작업 범위 안의 파일 이동과 import 수정마다 별도의 승인 절차를 추가하지 않습니다.
+공동 관리란 목적과 영향을 공유하고 PR에서 상대 담당자가 검토하는 기준이다. 이미 합의된 범위의 파일 이동·import 수정마다 별도 승인 단계를 추가하지 않는다. GitHub 계정·리뷰 권한을 확인하지 않고 CODEOWNERS를 추정해 만들지 않는다.
 
-## 남겨 둔 파일과 기존 문서
+## 보존 사항과 작업 원칙
 
-- `components/RiskAlert.tsx`: 현재 비어 있는 파일이며 원래 위치에 보존합니다. UI 담당을 기준으로 하고, 실제 경고 조건을 도입하는 작업은 Core와 함께 설계합니다.
-- `lib/notification.ts`: 현재 비어 있고 사용처가 없는 파일이며 원래 위치에 보존합니다. Core 담당을 기준으로 합니다. 현재 알림 실행은 `hooks/nudge/useNudge.ts`, 권한 UI는 `hooks/nudge/useNotificationPermission.ts`에 있습니다.
-- `docs/superpowers/specs/**`, `docs/superpowers/plans/**`: 당시 설계와 구현 계획을 보존합니다. 감정 분석·저장·스트레스 관련 기록은 Core, 오브·화면 관련 기록은 UI, 혼합 문서는 공동으로 관리합니다. 문서 안의 과거 경로와 코드 예시는 현재 파일 위치의 기준으로 사용하지 않습니다.
-- `app/`의 라우트와 `public/`의 공개 URL은 유지합니다. 모델 경로(`/models`), 서비스 워커(`/sw.js`), 아이콘·manifest 경로는 소스 폴더 이동과 별개입니다.
-- 테스트는 실제 소스 영역에 맞추되, 테스트가 없는 영역을 위해 빈 폴더를 만들지 않습니다.
-
-## 작업 원칙
-
-1. 작업 전 `git status`, 현재 브랜치와 이 문서를 확인합니다. `main`에서 직접 작업하지 않고 기존 변경사항을 보존합니다.
-2. 담당 영역 밖을 수정할 수 있지만, PR에서 변경 이유와 영향을 설명합니다. 공통 파일과 공개 타입·함수 계약을 바꿀 때는 상대 담당자와 변경 범위를 맞춥니다.
-3. 기본 의존 방향은 `app → components → hooks → lib`입니다. `components`가 `lib`를 직접 사용하는 것은 허용하며, `lib`가 UI 컴포넌트를 import하는 방향은 피합니다.
-4. 기존 `@/*` alias와 상대 import 방식을 유지합니다. 파일을 이동할 때 import, mock 대상 문자열, CSS Module 참조와 관련 테스트 경로를 함께 확인합니다.
-5. 구조 정리와 기능 변경을 섞지 않습니다. 이번 재분류는 UI, 분석·계산 규칙, 데이터 모델, IndexedDB schema, 저장 키, 라이브러리를 유지합니다.
-6. 변경 범위에 맞게 검증하며 구조 변경 완료 시 `npm run test:run`, `npm run lint`, `npm run build` 결과를 확인합니다. 기존 실패와 skip은 새 문제와 구분합니다.
-
-## 향후 확장 책임
-
-Electron/Core, 서버 연동, 세션 구조, 관리자 데이터 계약과 알고리즘은 이정환이 중심이 되고, 해당 화면과 사용자 흐름은 김우빈이 중심이 됩니다. 이는 향후 계획이며 현재 존재하지 않는 `electron/`, 서버 또는 관리자 전용 폴더를 이번 구조의 실제 경로로 간주하지 않습니다. 구현을 시작할 때 실제 경로와 경계를 이 문서에 추가합니다.
+1. 작업 전 현재 디렉터리·브랜치·`git status`와 이 문서를 확인한다. `main`을 직접 수정하거나 다른 작업 공간을 편집하지 않는다.
+2. 한 작업 공간의 구현 에이전트는 하나, 한 브랜치의 업무도 하나로 유지한다. 상대 영역·공통 파일 변경은 구현 전에 작업 명세에 밝힌다.
+3. 데이터 흐름은 camera 입력 → algorithm 계산 → feedback/UI의 결과 소비다. import 방향은 `app → features`, `camera/feedback/UI → algorithm`이다. 각 기능은 `shared/storage`를 사용한다. algorithm과 storage는 UI 컴포넌트·훅을 런타임 import하지 않는다.
+4. 기존 교차 도메인 타입 참조는 type-only로 유지한다. 타입 공유를 이유로 불필요하게 파일을 쪼개거나 런타임 순환 의존성을 만들지 않는다.
+5. `app/` route 위치와 `/models`, `/sw.js`, manifest·아이콘 URL을 유지한다. 모델 자산과 CSS 내용도 유지한다.
+6. `features/feedback/components/RiskAlert.tsx`, `features/feedback/lib/notification.ts`는 기존 0바이트 파일이다. 이번 작업에서 구현하지 않는다.
+7. `docs/superpowers/**`는 당시 설계·계획이다. 현존 모듈의 경로 참조만 갱신하며 폐기된 기능·과거 동작은 현재 구현으로 간주하지 않는다. 현재 작업 지침은 AGENTS와 이 문서가 우선이다.
+8. 구조 정리와 기능 변경을 섞지 않는다. 알고리즘·카메라·피드백·UI·schema·저장 키·의존성·테스트 기대값을 보존한다. 기존 recorder skip 4개를 유지한다.
+9. 테스트는 소스와 대응하는 `tests/<업무>/...`에 둔다. 미구현 업무를 위해 빈 테스트 폴더를 만들지 않는다. 인계 전 `npm run check`, `npx tsc --noEmit`, `git diff --check`와 경로 검색 결과를 기록한다.

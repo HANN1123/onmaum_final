@@ -79,19 +79,22 @@ npm run build && npm start
 
 ```
 app/            라우트 — /, /measure, /stats, /demo, /orb-preview
-components/     common, landing, measure, onboarding, orb, nudge, report
-hooks/          emotion, checkin, nudge, ui
-lib/            emotion, stress, storage, checkin, orb, nudge
+features/camera/     ① 카메라·모델·측정 루프 — 김우빈
+features/ui/         ④ 화면·오브·Document PiP — 김우빈
+features/algorithm/  ⑤ 감정·스트레스·기준선 — 이정환
+features/feedback/   ⑥ 체크인·넛지·알림·자기관리 제안 — 이정환
+shared/storage/      공통 저장 기반 — 이정환 주 관리, 공동 주의
 public/         PWA(manifest, sw.js), face-api 모델
-tests/          도메인별 Vitest 테스트와 tooling/ 협업 도구 테스트
+tests/          camera, ui, algorithm, feedback, shared 및 tooling
 docs/           architecture, collaboration, 기존 설계 스펙·구현 계획
 ```
 
 전체 파일 구조와 이동 경로는 [프로젝트 구조](docs/architecture/PROJECT_STRUCTURE.md),
 담당 영역과 공동 관리 기준은 [코드 소유권](docs/collaboration/CODE_OWNERSHIP.md)을 참고합니다.
-비어 있는 `components/RiskAlert.tsx`, `lib/notification.ts`는 원래 위치에 보존했습니다.
+② Electron(김우빈)은 향후 `features/electron/`, ③ 서버·관리자(이정환)는 향후 `features/admin/`에 구현합니다. 현재는 두 디렉터리와 기능을 생성하지 않았습니다.
+비어 있는 `features/feedback/components/RiskAlert.tsx`, `features/feedback/lib/notification.ts`는 빈 상태로 이동했습니다.
 
-데이터 흐름: `CameraView` → `useEmotionRecorder`(약 0.5초 분석) → 1분 `aggregate` → Dexie `emotions` → `/stats`에서 스트레스·기준선·보정 후 리포트.
+데이터 흐름: Camera/Detection → 기존 `RawExpressions` → Algorithm 정규화·집계·Stress/State → Feedback 조건·문구 → UI 표시. `useEmotionRecorder`가 약 0.5초 분석·1분 집계를 연결하며 기록은 `shared/storage`의 Dexie `emotions`에 저장합니다. 알고리즘 결과·카메라 옵션·UI·DB schema는 재분류 전과 같습니다.
 
 설계 세부(알고리즘, Electron 창 구조 등)는 `docs/`를 보세요. README는 “무엇이 실제로 돌아가는지”만 적습니다.
 

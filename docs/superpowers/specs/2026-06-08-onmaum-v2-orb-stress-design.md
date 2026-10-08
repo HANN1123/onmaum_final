@@ -1,5 +1,7 @@
 # 온마음(ONMAUM) v2 — 감정 오브 · 스트레스 지수 설계
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 작성일: 2026-06-08
 상태: 설계 확정 (구현 전)
 

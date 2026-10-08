@@ -1,5 +1,9 @@
 # 스트레스 지수 엔진 (P0+P1) Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
+> 아래 Task 1의 함수 추출·행 번호는 당시 혼합 파일에 대한 기록입니다. 현재 `analyzeEmotion`과 모델 로딩은 `features/camera/lib/faceDetection.ts`, 정규화 함수와 감정 타입은 `features/algorithm/emotion/emotionAnalysis.ts`에 있습니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 감정 인식 정확도 보강(disgust 합치기)과 2축 스트레스 지수(긍정 P / 스트레스 N) 산출 엔진을 순수 함수 + TDD로 구현한다.
@@ -14,10 +18,10 @@
 
 ## File Structure
 
-- `lib/emotionAnalysis.ts` (수정) — `normalizeExpressions()` 추출 + disgust를 angry(적대 정서)에 합침. `analyzeEmotion()`이 이를 사용.
-- `lib/stressIndex.ts` (생성) — 2축 지수 순수 함수 모음: `frameContribution`, `aggregateStress`, `mindBalance`, `affectEnergy`, `gateSustainedNegative`, `emaStress` + 상수.
-- `tests/lib/emotionAnalysis.test.ts` (생성) — `normalizeExpressions` 테스트.
-- `tests/lib/stressIndex.test.ts` (생성) — 엔진 함수 테스트.
+- `features/algorithm/emotion/emotionAnalysis.ts` (수정) — `normalizeExpressions()` 추출 + disgust를 angry(적대 정서)에 합침. `analyzeEmotion()`이 이를 사용.
+- `features/algorithm/stress/stressIndex.ts` (생성) — 2축 지수 순수 함수 모음: `frameContribution`, `aggregateStress`, `mindBalance`, `affectEnergy`, `gateSustainedNegative`, `emaStress` + 상수.
+- `tests/algorithm/emotion/emotionAnalysis.test.ts` (생성) — `normalizeExpressions` 테스트.
+- `tests/algorithm/stress/stressIndex.test.ts` (생성) — 엔진 함수 테스트.
 
 후속 플랜(이 플랜 범위 밖): 오브 렌더 엔진(P2), PiP 오버레이(P3), 온보딩 설문·피드백·하이브리드 기준선 배선(P4), 데모 흐름(P5), HSEmotion(P6).
 
@@ -26,15 +30,15 @@
 ## Task 1: disgust를 angry에 합치는 정규화 추출 (P0)
 
 **Files:**
-- Modify: `lib/emotionAnalysis.ts` (라인 35-60 `analyzeEmotion` 내부 정규화 로직을 함수로 추출)
-- Test: `tests/lib/emotionAnalysis.test.ts` (생성)
+- Modify: `features/algorithm/emotion/emotionAnalysis.ts` (라인 35-60 `analyzeEmotion` 내부 정규화 로직을 함수로 추출)
+- Test: `tests/algorithm/emotion/emotionAnalysis.test.ts` (생성)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
-`tests/lib/emotionAnalysis.test.ts`:
+`tests/algorithm/emotion/emotionAnalysis.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
-import { normalizeExpressions } from '@/lib/emotionAnalysis'
+import { normalizeExpressions } from '@/features/algorithm/emotion/emotionAnalysis'
 
 describe('normalizeExpressions', () => {
   it('disgust를 angry(적대 정서)에 합친다', () => {
@@ -60,12 +64,12 @@ describe('normalizeExpressions', () => {
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `npx vitest run tests/lib/emotionAnalysis.test.ts`
+Run: `npx vitest run tests/algorithm/emotion/emotionAnalysis.test.ts`
 Expected: FAIL — `normalizeExpressions` is not exported / not a function.
 
 - [ ] **Step 3: 최소 구현**
 
-`lib/emotionAnalysis.ts` — 기존 `analyzeEmotion`의 라인 45-59 정규화 블록을 아래 함수로 추출하고, `analyzeEmotion`은 이를 호출하도록 교체. 파일 상단(타입 정의 부근)에 추가:
+`features/algorithm/emotion/emotionAnalysis.ts` — 기존 `analyzeEmotion`의 라인 45-59 정규화 블록을 아래 함수로 추출하고, `analyzeEmotion`은 이를 호출하도록 교체. 파일 상단(타입 정의 부근)에 추가:
 ```ts
 export interface RawExpressions {
   happy: number
@@ -94,13 +98,13 @@ export function normalizeExpressions(raw: RawExpressions): EmotionResult {
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `npx vitest run tests/lib/emotionAnalysis.test.ts`
+Run: `npx vitest run tests/algorithm/emotion/emotionAnalysis.test.ts`
 Expected: PASS (3 tests)
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/emotionAnalysis.ts tests/lib/emotionAnalysis.test.ts
+git add features/algorithm/emotion/emotionAnalysis.ts tests/algorithm/emotion/emotionAnalysis.test.ts
 git commit -m "feat(emotionAnalysis): disgust를 angry에 합치는 normalizeExpressions 추출 (TDD)"
 ```
 
@@ -109,15 +113,15 @@ git commit -m "feat(emotionAnalysis): disgust를 angry에 합치는 normalizeExp
 ## Task 2: 프레임 기여도 (긍정/부정)
 
 **Files:**
-- Create: `lib/stressIndex.ts`
-- Test: `tests/lib/stressIndex.test.ts` (생성)
+- Create: `features/algorithm/stress/stressIndex.ts`
+- Test: `tests/algorithm/stress/stressIndex.test.ts` (생성)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
-`tests/lib/stressIndex.test.ts`:
+`tests/algorithm/stress/stressIndex.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
-import { frameContribution } from '@/lib/stressIndex'
+import { frameContribution } from '@/features/algorithm/stress/stressIndex'
 
 describe('frameContribution', () => {
   it('pos=happy, neg=sad + angry×1.5', () => {
@@ -136,15 +140,15 @@ describe('frameContribution', () => {
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
-Expected: FAIL — Cannot find module `@/lib/stressIndex`.
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
+Expected: FAIL — Cannot find module `@/features/algorithm/stress/stressIndex`.
 
 - [ ] **Step 3: 최소 구현**
 
-`lib/stressIndex.ts` 생성:
+`features/algorithm/stress/stressIndex.ts` 생성:
 ```ts
-import type { EmotionResult } from './emotionAnalysis'
-import { ANGRY_WEIGHT } from './riskCalculator'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { ANGRY_WEIGHT } from '@/features/algorithm/stress/riskCalculator'
 
 export function frameContribution(e: EmotionResult): { pos: number; neg: number } {
   return { pos: e.happy, neg: e.sad + e.angry * ANGRY_WEIGHT }
@@ -153,13 +157,13 @@ export function frameContribution(e: EmotionResult): { pos: number; neg: number 
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/stressIndex.ts tests/lib/stressIndex.test.ts
+git add features/algorithm/stress/stressIndex.ts tests/algorithm/stress/stressIndex.test.ts
 git commit -m "feat(stressIndex): 프레임 기여도 frameContribution (TDD)"
 ```
 
@@ -168,13 +172,13 @@ git commit -m "feat(stressIndex): 프레임 기여도 frameContribution (TDD)"
 ## Task 3: 구간 집계 (2축 P/N) + 파생값
 
 **Files:**
-- Modify: `lib/stressIndex.ts`
-- Test: `tests/lib/stressIndex.test.ts` (추가)
+- Modify: `features/algorithm/stress/stressIndex.ts`
+- Test: `tests/algorithm/stress/stressIndex.test.ts` (추가)
 
-- [ ] **Step 1: 실패하는 테스트 작성** (`tests/lib/stressIndex.test.ts`에 describe 블록 추가)
+- [ ] **Step 1: 실패하는 테스트 작성** (`tests/algorithm/stress/stressIndex.test.ts`에 describe 블록 추가)
 
 ```ts
-import { aggregateStress, mindBalance, affectEnergy } from '@/lib/stressIndex'
+import { aggregateStress, mindBalance, affectEnergy } from '@/features/algorithm/stress/stressIndex'
 
 describe('aggregateStress', () => {
   it('빈 배열 → null', () => {
@@ -220,10 +224,10 @@ describe('파생값', () => {
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: FAIL — `aggregateStress`/`mindBalance`/`affectEnergy` not exported.
 
-- [ ] **Step 3: 최소 구현** (`lib/stressIndex.ts`에 추가)
+- [ ] **Step 3: 최소 구현** (`features/algorithm/stress/stressIndex.ts`에 추가)
 
 ```ts
 export interface StressScores {
@@ -265,13 +269,13 @@ export function affectEnergy(s: StressScores): number {
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: PASS (전체)
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/stressIndex.ts tests/lib/stressIndex.test.ts
+git add features/algorithm/stress/stressIndex.ts tests/algorithm/stress/stressIndex.test.ts
 git commit -m "feat(stressIndex): 2축 구간 집계 aggregateStress + 파생값 (TDD)"
 ```
 
@@ -280,13 +284,13 @@ git commit -m "feat(stressIndex): 2축 구간 집계 aggregateStress + 파생값
 ## Task 4: 지속 게이트 (순간 오탐 배제)
 
 **Files:**
-- Modify: `lib/stressIndex.ts`
-- Test: `tests/lib/stressIndex.test.ts` (추가)
+- Modify: `features/algorithm/stress/stressIndex.ts`
+- Test: `tests/algorithm/stress/stressIndex.test.ts` (추가)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
 ```ts
-import { gateSustainedNegative, NEG_PRESENT_THRESHOLD, MIN_SUSTAIN_MS } from '@/lib/stressIndex'
+import { gateSustainedNegative, NEG_PRESENT_THRESHOLD, MIN_SUSTAIN_MS } from '@/features/algorithm/stress/stressIndex'
 
 describe('gateSustainedNegative', () => {
   it('3초 이상 지속된 부정만 인정', () => {
@@ -317,10 +321,10 @@ describe('gateSustainedNegative', () => {
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: FAIL — `gateSustainedNegative` 등 not exported.
 
-- [ ] **Step 3: 최소 구현** (`lib/stressIndex.ts`에 추가)
+- [ ] **Step 3: 최소 구현** (`features/algorithm/stress/stressIndex.ts`에 추가)
 
 ```ts
 export const NEG_PRESENT_THRESHOLD = 0.4
@@ -366,13 +370,13 @@ export function gateSustainedNegative(
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: PASS (전체)
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/stressIndex.ts tests/lib/stressIndex.test.ts
+git add features/algorithm/stress/stressIndex.ts tests/algorithm/stress/stressIndex.test.ts
 git commit -m "feat(stressIndex): 지속 게이트 gateSustainedNegative — 순간 오탐 배제 (TDD)"
 ```
 
@@ -381,13 +385,13 @@ git commit -m "feat(stressIndex): 지속 게이트 gateSustainedNegative — 순
 ## Task 5: EMA (지금값 스무딩)
 
 **Files:**
-- Modify: `lib/stressIndex.ts`
-- Test: `tests/lib/stressIndex.test.ts` (추가)
+- Modify: `features/algorithm/stress/stressIndex.ts`
+- Test: `tests/algorithm/stress/stressIndex.test.ts` (추가)
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
 ```ts
-import { emaStress, EMA_ALPHA } from '@/lib/stressIndex'
+import { emaStress, EMA_ALPHA } from '@/features/algorithm/stress/stressIndex'
 
 describe('emaStress', () => {
   it('이전값 null → 현재값 그대로', () => {
@@ -407,10 +411,10 @@ describe('emaStress', () => {
 
 - [ ] **Step 2: 테스트 실패 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: FAIL — `emaStress`/`EMA_ALPHA` not exported.
 
-- [ ] **Step 3: 최소 구현** (`lib/stressIndex.ts`에 추가)
+- [ ] **Step 3: 최소 구현** (`features/algorithm/stress/stressIndex.ts`에 추가)
 
 ```ts
 export const EMA_ALPHA = 0.3
@@ -423,14 +427,14 @@ export function emaStress(prev: number | null, current: number, alpha: number = 
 
 - [ ] **Step 4: 테스트 통과 확인**
 
-Run: `npx vitest run tests/lib/stressIndex.test.ts`
+Run: `npx vitest run tests/algorithm/stress/stressIndex.test.ts`
 Expected: PASS (전체)
 
 - [ ] **Step 5: 전체 테스트 + 커밋**
 
 ```bash
 npx vitest run
-git add lib/stressIndex.ts tests/lib/stressIndex.test.ts
+git add features/algorithm/stress/stressIndex.ts tests/algorithm/stress/stressIndex.test.ts
 git commit -m "feat(stressIndex): 지금값 스무딩 emaStress (TDD)"
 ```
 Expected: 전체 스위트 PASS (기존 테스트 포함).

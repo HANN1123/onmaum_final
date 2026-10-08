@@ -1,14 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import CameraView from '@/components/measure/CameraView'
-import EmotionDisplay from '@/components/measure/EmotionDisplay'
-import EmotionOrb from '@/components/orb/EmotionOrb'
-import OrbPipButton from '@/components/orb/OrbPipButton'
-import OnboardingSurvey from '@/components/onboarding/OnboardingSurvey'
-import { useEmotionRecorder } from '@/hooks/emotion/useEmotionRecorder'
-import { loadFaceApiModels, type EmotionResult } from '@/lib/emotion/emotionAnalysis'
-import { db } from '@/lib/storage/db'
+import CameraView from '@/features/camera/components/CameraView'
+import EmotionDisplay from '@/features/ui/measure/EmotionDisplay'
+import EmotionOrb from '@/features/ui/orb/EmotionOrb'
+import OrbPipButton from '@/features/ui/orb/OrbPipButton'
+import OnboardingSurvey from '@/features/ui/onboarding/OnboardingSurvey'
+import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
+import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { db } from '@/shared/storage/db'
 
 type ModelStatus = 'loading' | 'ready' | 'error'
 

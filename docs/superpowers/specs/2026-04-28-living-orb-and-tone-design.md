@@ -1,5 +1,7 @@
 # Living Orb + 톤 통합 설계
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 - **작성일**: 2026-04-28
 - **대상**: 랜딩(`/`) + 앱(`/measure`, `/stats`) 시각 톤 통합 + Living Orb 도입
 - **선행**: Step 1~8 + 랜딩 페이지 (모두 완료)
@@ -169,7 +171,7 @@
 - `LivingOrb.tsx` — SVG 기반 구 컴포넌트 (props: stage, hue, saturation, opacity, motion, theme)
 - `ThemeToggle.tsx` — 3-mode 토글 버튼
 - `MilestoneToast.tsx` — 단계 전환 toast
-- `lib/orbStages.ts` — 5단계 정의 + 임계값
+- `features/ui/orb/lib/orbStages.ts` — 5단계 정의 + 임계값
 - `lib/orbAxes.ts` — 4축 매핑 함수 (순수 함수, TDD)
 - `hooks/useTheme.ts` — 테마 상태 관리
 - `hooks/useLivingOrb.ts` — 4축 실시간 계산 (record 개수 + 주간 감정 + 빈도)
@@ -181,12 +183,12 @@
 - `app/page.tsx` (랜딩) — useScrollReveal과 함께 ThemeProvider 활용
 - `app/measure/page.tsx` — 헤더 라벨 패턴, 이모지 제거, 다크 톤 대응
 - `app/stats/page.tsx` — 동일
-- `components/LandingNav.tsx` — ThemeToggle 통합, 다크/라이트 양쪽 지원
-- `components/Navigation.tsx` — LandingNav와 톤 통일, ThemeToggle 통합
-- `components/LandingFooter.tsx` + `ContactsFooter.tsx` — 톤 통일
-- `components/ReactiveOrb.tsx` — 라이트 variant 추가 (color props 또는 theme context)
-- `components/EmotionDisplay.tsx`, `DailyRiskCard.tsx`, `TrendChart.tsx`, `RecentRecords.tsx`, `SelfCareTip.tsx` — 다크 톤 대응 + 타이포 통일
-- `hooks/useEmotionRecorder.ts` — 변경 없음 (기존 그대로)
+- `features/ui/landing/LandingNav.tsx` — ThemeToggle 통합, 다크/라이트 양쪽 지원
+- `features/ui/common/Navigation.tsx` — LandingNav와 톤 통일, ThemeToggle 통합
+- `features/ui/landing/LandingFooter.tsx` + `ContactsFooter.tsx` — 톤 통일
+- `features/ui/orb/ReactiveOrb.tsx` — 라이트 variant 추가 (color props 또는 theme context)
+- `features/ui/measure/EmotionDisplay.tsx`, `DailyRiskCard.tsx`, `TrendChart.tsx`, `RecentRecords.tsx`, `SelfCareTip.tsx` — 다크 톤 대응 + 타이포 통일
+- `features/camera/hooks/useEmotionRecorder.ts` — 변경 없음 (기존 그대로)
 
 **그대로**:
 - `RiskWarningModal`, `useWarningDismissal`, `useNotificationPermission`, `useRiskNotification`, `riskCalculator`, `emotionRepository`, `db`, `selfCareTips`
@@ -251,7 +253,7 @@ useMilestone(currentStage): {
 ## 9. 테스트 전략
 
 ### 9.1 순수 함수 (TDD)
-- `lib/orbStages.ts` — recordCount → stage 매핑 (경계값 0/1/3/4/10/11/30/31)
+- `features/ui/orb/lib/orbStages.ts` — recordCount → stage 매핑 (경계값 0/1/3/4/10/11/30/31)
 - `lib/orbAxes.ts`:
   - `opacityFromCount(n)` — 0=0.15, 31=1.0, log 곡선
   - `hueFromWeeklyEmotion(emotions)` — dominant 가중 평균

@@ -2,6 +2,8 @@
 
 ## 다음 작업 축
 
+2026년 2학기 담당: 김우빈 ① 카메라 인식·② Electron·④ UI, 이정환 ③ 서버·관리자·⑤ 알고리즘·⑥ 피드백. 현재 코드 경계는 [CODE_OWNERSHIP.md](collaboration/CODE_OWNERSHIP.md)를 따른다. 아래는 개발 방향이며 Electron과 서버·관리자는 아직 구현되지 않았다.
+
 1. 카메라 기반 인식 고도화 — DeepMedi류 rPPG/심박 참고, 웹캠 신호 안정화
 2. Electron — 브라우저 PWA 대신 PC 앱, 백그라운드(숨김 창)에서도 측정 가능
 3. 서버 연동 · 관리자 페이지 (옵트인 · 로컬 우선)

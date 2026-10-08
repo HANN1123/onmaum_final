@@ -1,5 +1,7 @@
 # Step 6 — 위험 경고 UI + 상담 연락처 Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** DailyRisk가 'warning'일 때 사용자에게 부드러운 권유 톤의 모달을 띄우고, 1577-0199/1393 상담 hotline을 모달과 페이지 푸터에 노출. 일상적으로는 SelfCareTip 한 줄 카드를 회전 표시.
@@ -495,15 +497,15 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add components/RiskWarningModal.ts
 
 ---
 
-## Task 4: `components/ContactsFooter.tsx`
+## Task 4: `features/ui/common/ContactsFooter.tsx`
 
 **Files:**
-- Create: `tests/components/ContactsFooter.test.tsx`
-- Create: `components/ContactsFooter.tsx`
+- Create: `tests/ui/common/ContactsFooter.test.tsx`
+- Create: `features/ui/common/ContactsFooter.tsx`
 
 - [ ] **Step 1: 구현**
 
-`components/ContactsFooter.tsx`:
+`features/ui/common/ContactsFooter.tsx`:
 
 ```typescript
 export default function ContactsFooter() {
@@ -532,12 +534,12 @@ export default function ContactsFooter() {
 
 - [ ] **Step 2: 테스트 작성**
 
-`tests/components/ContactsFooter.test.tsx`:
+`tests/ui/common/ContactsFooter.test.tsx`:
 
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import ContactsFooter from '@/components/ContactsFooter'
+import ContactsFooter from '@/features/ui/common/ContactsFooter'
 
 describe('ContactsFooter', () => {
   it('1577-0199, 1393 텍스트 노출', () => {
@@ -564,7 +566,7 @@ describe('ContactsFooter', () => {
 - [ ] **Step 3: 테스트 실행 → pass 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/components/ContactsFooter.test.tsx
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/ui/common/ContactsFooter.test.tsx
 ```
 
 기대: 3/3 pass.
@@ -580,7 +582,7 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npx tsc --noEmit && npx eslint compone
 - [ ] **Step 5: commit**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add components/ContactsFooter.tsx tests/components/ContactsFooter.test.tsx && git commit -m "feat: ContactsFooter (1577-0199 + 1393 푸터 항상 노출)"
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add features/ui/common/ContactsFooter.tsx tests/ui/common/ContactsFooter.test.tsx && git commit -m "feat: ContactsFooter (1577-0199 + 1393 푸터 항상 노출)"
 ```
 
 ---
@@ -714,20 +716,20 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add components/SelfCareTip.tsx tes
 
 import { useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import CameraView from '@/components/CameraView'
-import ContactsFooter from '@/components/ContactsFooter'
+import CameraView from '@/features/camera/components/CameraView'
+import ContactsFooter from '@/features/ui/common/ContactsFooter'
 import DailyRiskCard from '@/components/DailyRiskCard'
-import EmotionDisplay from '@/components/EmotionDisplay'
-import RecentRecords from '@/components/RecentRecords'
+import EmotionDisplay from '@/features/ui/measure/EmotionDisplay'
+import RecentRecords from '@/features/ui/report/RecentRecords'
 import RiskWarningModal from '@/components/RiskWarningModal'
 import SelfCareTip from '@/components/SelfCareTip'
-import TrendChart from '@/components/TrendChart'
-import { useEmotionRecorder } from '@/hooks/useEmotionRecorder'
+import TrendChart from '@/features/ui/report/TrendChart'
+import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
 import { useWarningDismissal } from '@/hooks/useWarningDismissal'
-import { db } from '@/lib/db'
-import { loadFaceApiModels } from '@/lib/emotionAnalysis'
-import { getEmotionsByDate } from '@/lib/emotionRepository'
-import { aggregateDailyRisk } from '@/lib/riskCalculator'
+import { db } from '@/shared/storage/db'
+import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
+import { getEmotionsByDate } from '@/shared/storage/emotionRepository'
+import { aggregateDailyRisk } from '@/features/algorithm/stress/riskCalculator'
 
 type ModelStatus = 'loading' | 'ready' | 'error'
 

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import EmotionOrb from '@/components/orb/EmotionOrb'
-import DailyReport from '@/components/report/DailyReport'
-import type { EmotionResult } from '@/lib/emotion/emotionAnalysis'
-import type { EmotionRecord } from '@/lib/storage/db'
+import EmotionOrb from '@/features/ui/orb/EmotionOrb'
+import DailyReport from '@/features/ui/report/DailyReport'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 const CALM: EmotionResult = { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 }
 const ANGRY: EmotionResult = { happy: 0.05, calm: 0.15, sad: 0.1, angry: 0.7 }

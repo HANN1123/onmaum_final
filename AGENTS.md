@@ -22,6 +22,28 @@ Shared files such as package.json, package-lock.json, app/layout.tsx,
 app/globals.css, and project configuration require extra care because
 they are common conflict points.
 
+## Team Ownership
+
+### Jung-hwan Lee
+
+- Server / Admin (3)
+- Algorithm (5)
+- Feedback (6)
+- Shared storage primary maintainer; coordinate schema changes.
+
+### Woo-bin Kim
+
+- Camera Recognition (1)
+- Electron (2)
+- UI (4)
+
+Before editing a feature owned by the other contributor,
+check `docs/collaboration/CODE_OWNERSHIP.md`.
+
+Avoid unrelated changes outside the current Issue.
+
+Cross-domain changes should be explicitly reported before implementation.
+
 ## Orca workflow
 
 Read `docs/collaboration/ORCA_WORKFLOW.md` when starting or handing off work.

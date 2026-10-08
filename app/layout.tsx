@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import AppChrome from "@/components/common/AppChrome";
-import ServiceWorkerRegistrar from "@/components/common/ServiceWorkerRegistrar";
+import AppChrome from "@/features/ui/common/AppChrome";
+import ServiceWorkerRegistrar from "@/features/ui/common/ServiceWorkerRegistrar";
 import "./globals.css";
 
 export const metadata: Metadata = {

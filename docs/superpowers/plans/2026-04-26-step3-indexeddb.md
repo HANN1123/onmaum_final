@@ -1,5 +1,7 @@
 # Step 3 — IndexedDB 저장 (1분 집계) Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Step 2의 실시간 감정 분석 결과(500ms 샘플)를 1분 단위로 집계하여 IndexedDB에 영구 저장하는 데이터 레이어와 React Hook을 구축한다. `app/page.tsx`의 분석 루프 코드를 hook으로 분리하여 단순화한다.
@@ -162,19 +164,19 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add package.json package-lock.json
 ## Task 2: emotionAggregator 구현 (TDD 엄격)
 
 **Files:**
-- Create: `tests/lib/emotionAggregator.test.ts`
-- Create: `lib/emotionAggregator.ts` (현재 빈 파일이 아닌, Step 1에서 비어 있으나 touch만 됨 — 덮어씀)
+- Create: `tests/algorithm/emotion/emotionAggregator.test.ts`
+- Create: `features/algorithm/emotion/emotionAggregator.ts` (현재 빈 파일이 아닌, Step 1에서 비어 있으나 touch만 됨 — 덮어씀)
 
-**의존:** `lib/emotionAnalysis.ts`의 `EmotionResult`, `Emotion`, `EMOTION_ORDER`, `getDominantEmotion` (이미 존재)
+**의존:** `features/algorithm/emotion/emotionAnalysis.ts`의 `EmotionResult`, `Emotion`, `EMOTION_ORDER`, `getDominantEmotion` (이미 존재)
 
 - [ ] **Step 1: emotionAggregator.test.ts 작성 (모든 테스트 케이스, 실패 상태)**
 
-`tests/lib/emotionAggregator.test.ts` 파일 생성:
+`tests/algorithm/emotion/emotionAggregator.test.ts` 파일 생성:
 
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { aggregate, type EmotionSample } from '@/lib/emotionAggregator'
-import type { EmotionResult } from '@/lib/emotionAnalysis'
+import { aggregate, type EmotionSample } from '@/features/algorithm/emotion/emotionAggregator'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 
 const END_TIME = new Date('2026-04-26T12:00:00.000+09:00')
 
@@ -286,19 +288,19 @@ describe('aggregate', () => {
 - [ ] **Step 2: 테스트 실행 → 모두 실패 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/lib/emotionAggregator.test.ts
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/algorithm/emotion/emotionAggregator.test.ts
 ```
 
-기대: 12개 모두 실패 (`Cannot find module '@/lib/emotionAggregator'` 또는 export 없음).
+기대: 12개 모두 실패 (`Cannot find module '@/features/algorithm/emotion/emotionAggregator'` 또는 export 없음).
 
 - [ ] **Step 3: emotionAggregator.ts 구현**
 
-`lib/emotionAggregator.ts` 파일 생성 (기존 빈 파일이면 덮어쓰기):
+`features/algorithm/emotion/emotionAggregator.ts` 파일 생성 (기존 빈 파일이면 덮어쓰기):
 
 ```typescript
-import type { EmotionResult } from './emotionAnalysis'
-import { getDominantEmotion } from './emotionAnalysis'
-import type { EmotionRecordInput } from './emotionRepository'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { getDominantEmotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { EmotionRecordInput } from '@/shared/storage/emotionRepository'
 
 export interface EmotionSample {
   emotion: EmotionResult | null
@@ -361,8 +363,8 @@ export function aggregate(
 > 주: `EmotionRecordInput` 타입은 Task 4의 `emotionRepository.ts`에서 export 예정. 이 import는 Task 4 완료 전까지 type 에러. **임시 우회**: 이 import 라인을 다음으로 대체 후 Task 4에서 정정:
 >
 > ```typescript
-> import type { EmotionResult, Emotion } from './emotionAnalysis'
-> import { getDominantEmotion } from './emotionAnalysis'
+> import type { EmotionResult, Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
+> import { getDominantEmotion } from '@/features/algorithm/emotion/emotionAnalysis'
 >
 > // 임시 타입 (Task 4에서 emotionRepository.ts에서 import로 교체)
 > type EmotionRecordInput = {
@@ -378,7 +380,7 @@ export function aggregate(
 - [ ] **Step 4: 테스트 실행 → 모두 통과 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/lib/emotionAggregator.test.ts
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/algorithm/emotion/emotionAggregator.test.ts
 ```
 
 기대: 12개 모두 pass. 실패 시 디버깅 (특히 dominantEmotion tie-breaking 케이스).
@@ -394,7 +396,7 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npx tsc --noEmit && npx eslint lib tes
 - [ ] **Step 6: commit**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/emotionAggregator.ts tests/lib/emotionAggregator.test.ts && git commit -m "feat: emotionAggregator 순수 함수 + TDD (12 케이스)"
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add features/algorithm/emotion/emotionAggregator.ts tests/algorithm/emotion/emotionAggregator.test.ts && git commit -m "feat: emotionAggregator 순수 함수 + TDD (12 케이스)"
 ```
 
 ---
@@ -402,17 +404,17 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/emotionAggregator.ts tests
 ## Task 3: db.ts 작성 (Dexie 인스턴스 + 스키마)
 
 **Files:**
-- Modify: `lib/db.ts` (현재 빈 파일)
+- Modify: `shared/storage/db.ts` (현재 빈 파일)
 
 **테스트 없음** (단순 인스턴스 정의, 스펙에서 skip 결정).
 
 - [ ] **Step 1: db.ts 작성**
 
-`lib/db.ts` 파일 내용 (덮어쓰기):
+`shared/storage/db.ts` 파일 내용 (덮어쓰기):
 
 ```typescript
 import Dexie, { type EntityTable } from 'dexie'
-import type { Emotion } from './emotionAnalysis'
+import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
 export interface EmotionRecord {
   id: number
@@ -452,7 +454,7 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npx tsc --noEmit
 - [ ] **Step 3: commit (Task 4와 합쳐서 커밋해도 OK — 단독 commit 권장)**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/db.ts && git commit -m "feat: Dexie 기반 OnmaumDB 인스턴스 + EmotionRecord 스키마"
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add shared/storage/db.ts && git commit -m "feat: Dexie 기반 OnmaumDB 인스턴스 + EmotionRecord 스키마"
 ```
 
 ---
@@ -460,13 +462,13 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/db.ts && git commit -m "fe
 ## Task 4: emotionRepository 구현 (TDD with fake-indexeddb)
 
 **Files:**
-- Create: `tests/lib/emotionRepository.test.ts`
-- Create: `lib/emotionRepository.ts`
-- Modify: `lib/emotionAggregator.ts` (Task 2의 임시 타입을 정식 import로 교체)
+- Create: `tests/shared/storage/emotionRepository.test.ts`
+- Create: `shared/storage/emotionRepository.ts`
+- Modify: `features/algorithm/emotion/emotionAggregator.ts` (Task 2의 임시 타입을 정식 import로 교체)
 
 - [ ] **Step 1: emotionRepository.test.ts 작성**
 
-`tests/lib/emotionRepository.test.ts` 파일 생성:
+`tests/shared/storage/emotionRepository.test.ts` 파일 생성:
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -476,8 +478,8 @@ import {
   getEmotionsByDateRange,
   deleteAllEmotions,
   type EmotionRecordInput,
-} from '@/lib/emotionRepository'
-import { db } from '@/lib/db'
+} from '@/shared/storage/emotionRepository'
+import { db } from '@/shared/storage/db'
 
 function makeInput(overrides: Partial<EmotionRecordInput> = {}): EmotionRecordInput {
   return {
@@ -568,17 +570,17 @@ describe('emotionRepository', () => {
 - [ ] **Step 2: 테스트 실행 → 모두 실패 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/lib/emotionRepository.test.ts
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/shared/storage/emotionRepository.test.ts
 ```
 
-기대: 모두 실패 (`Cannot find module '@/lib/emotionRepository'`).
+기대: 모두 실패 (`Cannot find module '@/shared/storage/emotionRepository'`).
 
 - [ ] **Step 3: emotionRepository.ts 구현**
 
-`lib/emotionRepository.ts` 파일 생성:
+`shared/storage/emotionRepository.ts` 파일 생성:
 
 ```typescript
-import { db, type EmotionRecord } from './db'
+import { db, type EmotionRecord } from '@/shared/storage/db'
 
 export type EmotionRecordInput = Omit<EmotionRecord, 'id'>
 
@@ -607,12 +609,12 @@ export async function deleteAllEmotions(): Promise<void> {
 
 - [ ] **Step 4: emotionAggregator.ts 임시 타입을 정식 import로 교체**
 
-`lib/emotionAggregator.ts` 상단의 임시 타입 정의(또는 직접 import한 EmotionRecordInput)를 다음으로 정정:
+`features/algorithm/emotion/emotionAggregator.ts` 상단의 임시 타입 정의(또는 직접 import한 EmotionRecordInput)를 다음으로 정정:
 
 ```typescript
-import type { EmotionResult } from './emotionAnalysis'
-import { getDominantEmotion } from './emotionAnalysis'
-import type { EmotionRecordInput } from './emotionRepository'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { getDominantEmotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { EmotionRecordInput } from '@/shared/storage/emotionRepository'
 ```
 
 (임시 type 정의 블록은 삭제. `EMOTION_ORDER`는 사용 안 하면 import에서 빼기.)
@@ -620,7 +622,7 @@ import type { EmotionRecordInput } from './emotionRepository'
 - [ ] **Step 5: 테스트 실행 → 모두 통과 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/lib/emotionRepository.test.ts tests/lib/emotionAggregator.test.ts
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/shared/storage/emotionRepository.test.ts tests/algorithm/emotion/emotionAggregator.test.ts
 ```
 
 기대: emotionRepository 6개 + emotionAggregator 12개 = 18개 모두 pass.
@@ -636,7 +638,7 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npx tsc --noEmit && npx eslint lib tes
 - [ ] **Step 7: commit**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/emotionRepository.ts lib/emotionAggregator.ts tests/lib/emotionRepository.test.ts && git commit -m "feat: emotionRepository CRUD + TDD (fake-indexeddb 통합)"
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add shared/storage/emotionRepository.ts features/algorithm/emotion/emotionAggregator.ts tests/shared/storage/emotionRepository.test.ts && git commit -m "feat: emotionRepository CRUD + TDD (fake-indexeddb 통합)"
 ```
 
 ---
@@ -644,22 +646,22 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add lib/emotionRepository.ts lib/e
 ## Task 5: useEmotionRecorder hook 구현 (best effort TDD)
 
 **Files:**
-- Create: `tests/hooks/useEmotionRecorder.test.tsx`
-- Create: `hooks/useEmotionRecorder.ts`
+- Create: `tests/camera/hooks/useEmotionRecorder.test.tsx`
+- Create: `features/camera/hooks/useEmotionRecorder.ts`
 
 > Hook은 분석 루프 + buffer + 저장을 묶는 통합 모듈이라 단위 테스트가 복잡함. 핵심 동작 위주로 테스트.
 
 - [ ] **Step 1: useEmotionRecorder.test.tsx 작성**
 
-`tests/hooks/useEmotionRecorder.test.tsx` 파일 생성:
+`tests/camera/hooks/useEmotionRecorder.test.tsx` 파일 생성:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useEmotionRecorder } from '@/hooks/useEmotionRecorder'
-import * as analysisModule from '@/lib/emotionAnalysis'
-import * as repoModule from '@/lib/emotionRepository'
-import { db } from '@/lib/db'
+import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
+import * as analysisModule from '@/features/camera/lib/faceDetection'
+import * as repoModule from '@/shared/storage/emotionRepository'
+import { db } from '@/shared/storage/db'
 
 const mockEmotion = { happy: 0.7, calm: 0.2, sad: 0.05, angry: 0.05 }
 
@@ -777,25 +779,23 @@ describe('useEmotionRecorder', () => {
 - [ ] **Step 2: 테스트 실행 → 모두 실패 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/hooks/useEmotionRecorder.test.tsx
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/camera/hooks/useEmotionRecorder.test.tsx
 ```
 
-기대: 모두 실패 (`Cannot find module '@/hooks/useEmotionRecorder'`).
+기대: 모두 실패 (`Cannot find module '@/features/camera/hooks/useEmotionRecorder'`).
 
 - [ ] **Step 3: useEmotionRecorder.ts 구현**
 
-`hooks/useEmotionRecorder.ts` 파일 생성:
+`features/camera/hooks/useEmotionRecorder.ts` 파일 생성:
 
 ```typescript
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import {
-  analyzeEmotion,
-  type EmotionResult,
-} from '@/lib/emotionAnalysis'
-import { aggregate, type EmotionSample } from '@/lib/emotionAggregator'
-import { addEmotionRecord } from '@/lib/emotionRepository'
+import { analyzeEmotion } from '@/features/camera/lib/faceDetection'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { aggregate, type EmotionSample } from '@/features/algorithm/emotion/emotionAggregator'
+import { addEmotionRecord } from '@/shared/storage/emotionRepository'
 
 interface Options {
   active: boolean
@@ -918,7 +918,7 @@ export function useEmotionRecorder(opts: Options): Result {
 - [ ] **Step 4: 테스트 실행 → 통과 확인**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/hooks/useEmotionRecorder.test.tsx
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npm run test:run -- tests/camera/hooks/useEmotionRecorder.test.tsx
 ```
 
 기대: 5개 모두 pass. 만약 timer/promise 동기화 문제로 일부 실패 시:
@@ -945,7 +945,7 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && npx tsc --noEmit && npx eslint app lib
 - [ ] **Step 7: commit**
 
 ```bash
-cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add hooks/useEmotionRecorder.ts tests/hooks/useEmotionRecorder.test.tsx && git commit -m "feat: useEmotionRecorder hook + best effort 테스트"
+cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add features/camera/hooks/useEmotionRecorder.ts tests/camera/hooks/useEmotionRecorder.test.tsx && git commit -m "feat: useEmotionRecorder hook + best effort 테스트"
 ```
 
 ---
@@ -965,11 +965,11 @@ cd "/Users/woo-bin/3.1 team pj/ONMAUM" && git add hooks/useEmotionRecorder.ts te
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import CameraView from '@/components/CameraView'
-import EmotionDisplay from '@/components/EmotionDisplay'
-import { useEmotionRecorder } from '@/hooks/useEmotionRecorder'
-import { loadFaceApiModels } from '@/lib/emotionAnalysis'
-import { db } from '@/lib/db'
+import CameraView from '@/features/camera/components/CameraView'
+import EmotionDisplay from '@/features/ui/measure/EmotionDisplay'
+import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
+import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
+import { db } from '@/shared/storage/db'
 
 type ModelStatus = 'loading' | 'ready' | 'error'
 

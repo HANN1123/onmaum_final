@@ -1,5 +1,7 @@
 # P4 잔여 (개인 기준선 · 체크인 · 넛지 · /stats v2) Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 온마음 v2의 P4 미구현분(개인 기준선·오전/오후 체크인·안전판 넛지)을 구현하고, `/stats`를 구 flatAffect 위험 시스템에서 2축 P/N 기반 v2 표면으로 마이그레이션한다.
@@ -32,38 +34,38 @@
 
 | 파일 | 책임 | 정의(export) |
 |------|------|------|
-| `lib/dailyStress.ts` | 원시 레코드 → 일별/최근/시간대 P·N (즉석) | `dailyStressFor`, `dailyStressHistory`, `recentStress`, `hardestPeriod`, `DailyStressPoint`, `RECENT_WINDOW_MS`, `PERIOD_BUCKET_HOURS` |
-| `lib/baseline.ts` | 기준선 상태 + 분류 | `computeBaselineState`, `classifyStress`, `BaselineState`, `BaselineMode`, `StressLevel`, 상수들 |
-| `lib/calibration.ts` | self-report 보정 오프셋(순수) | `SelfReport`, `nextOffset`, `applyOffset`, `OFFSET_MAX`, `OFFSET_STEP`, `OFFSET_DECAY` |
-| `lib/checkin.ts` | 체크인 시간창/노출(순수) | `CheckinSlot`, `CheckinWindow`, `currentSlot`, `checkinDue` |
-| `lib/nudge.ts` | 넛지 정책(순수) | `NudgeSettings`, `NudgeDayState`, `SustainState`, `updateSustain`, `shouldNudge` |
-| `lib/settings.ts` | 영속 설정(localStorage) | `Settings`, `DEFAULT_SETTINGS`, `loadSettings`, `saveSettings` |
-| `lib/dayState.ts` | 일자별 상태(localStorage) | `CheckinEntry`, `loadCheckinDone`, `saveCheckinEntry`, `loadNudgeDayState`, `saveNudgeDayState` |
-| `hooks/useCheckin.ts` | 체크인 배선 | `useCheckin` |
-| `hooks/useNudge.ts` | 넛지 배선(앱 전역) | `useNudge` |
-| `components/CheckInCard.tsx` | 체크인 카드 UI | default |
-| `components/NudgeSettings.tsx` | 넛지 설정 UI | default |
-| `components/NudgeBanner.tsx` | 인앱 넛지 배너 | default |
-| `components/NudgeHost.tsx` | 넛지 hook+배너 마운트 래퍼 | default |
-| `components/DailyReport.tsx` (수정) | 평소대비·힘든 시간대 추가 | default |
-| `components/TrendChart.tsx` (수정) | N 추이 + 기준선 점선 | default |
+| `features/algorithm/stress/dailyStress.ts` | 원시 레코드 → 일별/최근/시간대 P·N (즉석) | `dailyStressFor`, `dailyStressHistory`, `recentStress`, `hardestPeriod`, `DailyStressPoint`, `RECENT_WINDOW_MS`, `PERIOD_BUCKET_HOURS` |
+| `features/algorithm/baseline/baseline.ts` | 기준선 상태 + 분류 | `computeBaselineState`, `classifyStress`, `BaselineState`, `BaselineMode`, `StressLevel`, 상수들 |
+| `features/algorithm/baseline/calibration.ts` | self-report 보정 오프셋(순수) | `SelfReport`, `nextOffset`, `applyOffset`, `OFFSET_MAX`, `OFFSET_STEP`, `OFFSET_DECAY` |
+| `features/feedback/lib/checkin.ts` | 체크인 시간창/노출(순수) | `CheckinSlot`, `CheckinWindow`, `currentSlot`, `checkinDue` |
+| `features/feedback/lib/nudge.ts` | 넛지 정책(순수) | `NudgeSettings`, `NudgeDayState`, `SustainState`, `updateSustain`, `shouldNudge` |
+| `shared/storage/settings.ts` | 영속 설정(localStorage) | `Settings`, `DEFAULT_SETTINGS`, `loadSettings`, `saveSettings` |
+| `shared/storage/dayState.ts` | 일자별 상태(localStorage) | `CheckinEntry`, `loadCheckinDone`, `saveCheckinEntry`, `loadNudgeDayState`, `saveNudgeDayState` |
+| `features/feedback/hooks/useCheckin.ts` | 체크인 배선 | `useCheckin` |
+| `features/feedback/hooks/useNudge.ts` | 넛지 배선(앱 전역) | `useNudge` |
+| `features/feedback/components/CheckInCard.tsx` | 체크인 카드 UI | default |
+| `features/feedback/components/NudgeSettings.tsx` | 넛지 설정 UI | default |
+| `features/feedback/components/NudgeBanner.tsx` | 인앱 넛지 배너 | default |
+| `features/feedback/components/NudgeHost.tsx` | 넛지 hook+배너 마운트 래퍼 | default |
+| `features/ui/report/DailyReport.tsx` (수정) | 평소대비·힘든 시간대 추가 | default |
+| `features/ui/report/TrendChart.tsx` (수정) | N 추이 + 기준선 점선 | default |
 | `app/stats/page.tsx` (수정) | v2 표면 | default |
-| `components/AppChrome.tsx` (수정) | `useNudge` + `NudgeBanner` 마운트 | default |
+| `features/ui/common/AppChrome.tsx` (수정) | `useNudge` + `NudgeBanner` 마운트 | default |
 
 ---
 
 # Phase A — 개인 기준선 (foundation)
 
-## Task A1: `lib/dailyStress.ts` — 일별/최근/시간대 P·N 즉석 산출
+## Task A1: `features/algorithm/stress/dailyStress.ts` — 일별/최근/시간대 P·N 즉석 산출
 
 **Files:**
-- Create: `lib/dailyStress.ts`
-- Test: `tests/lib/dailyStress.test.ts`
+- Create: `features/algorithm/stress/dailyStress.ts`
+- Test: `tests/algorithm/stress/dailyStress.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/dailyStress.test.ts
+// tests/algorithm/stress/dailyStress.test.ts
 import { describe, it, expect } from 'vitest'
 import {
   dailyStressFor,
@@ -71,8 +73,8 @@ import {
   recentStress,
   hardestPeriod,
   RECENT_WINDOW_MS,
-} from '@/lib/dailyStress'
-import type { EmotionRecord } from '@/lib/db'
+} from '@/features/algorithm/stress/dailyStress'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 function rec(partial: Partial<EmotionRecord> & { timestamp: Date; duration: number }): EmotionRecord {
   return {
@@ -143,14 +145,14 @@ describe('hardestPeriod', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/dailyStress.test.ts` · Expected: FAIL (`Cannot find module '@/lib/dailyStress'`)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/algorithm/stress/dailyStress.test.ts` · Expected: FAIL (`Cannot find module '@/features/algorithm/stress/dailyStress'`)
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/dailyStress.ts
-import type { EmotionRecord } from './db'
-import { aggregateStress, type StressScores } from './stressIndex'
+// features/algorithm/stress/dailyStress.ts
+import type { EmotionRecord } from '@/shared/storage/db'
+import { aggregateStress, type StressScores } from '@/features/algorithm/stress/stressIndex'
 
 export const RECENT_WINDOW_MS = 30 * 60 * 1000
 export const PERIOD_BUCKET_HOURS = 2
@@ -217,35 +219,35 @@ export function hardestPeriod(
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/dailyStress.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/algorithm/stress/dailyStress.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/dailyStress.ts tests/lib/dailyStress.test.ts
+git add features/algorithm/stress/dailyStress.ts tests/algorithm/stress/dailyStress.test.ts
 git commit -m "feat(dailyStress): 일별·최근·시간대 P/N 즉석 산출 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task A2: `lib/baseline.ts` — 기준선 상태 + 4밴드 분류
+## Task A2: `features/algorithm/baseline/baseline.ts` — 기준선 상태 + 4밴드 분류
 
 **Files:**
-- Create: `lib/baseline.ts`
-- Test: `tests/lib/baseline.test.ts`
+- Create: `features/algorithm/baseline/baseline.ts`
+- Test: `tests/algorithm/baseline/baseline.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/baseline.test.ts
+// tests/algorithm/baseline/baseline.test.ts
 import { describe, it, expect } from 'vitest'
 import {
   computeBaselineState,
   classifyStress,
   MIN_VALID_DAYS,
   MIN_VALID_DAY_DURATION_MS,
-} from '@/lib/baseline'
-import type { DailyStressPoint } from '@/lib/dailyStress'
+} from '@/features/algorithm/baseline/baseline'
+import type { DailyStressPoint } from '@/features/algorithm/stress/dailyStress'
 
 function pt(date: string, stress: number | null, totalDuration: number): DailyStressPoint {
   return {
@@ -312,13 +314,13 @@ describe('classifyStress (relative)', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/baseline.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/algorithm/baseline/baseline.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/baseline.ts
-import type { DailyStressPoint } from './dailyStress'
+// features/algorithm/baseline/baseline.ts
+import type { DailyStressPoint } from '@/features/algorithm/stress/dailyStress'
 
 export type StressLevel = 'low' | 'typical' | 'high' | 'veryHigh'
 export type BaselineMode = 'absolute' | 'relative'
@@ -372,12 +374,12 @@ export function classifyStress(value: number, baseline: BaselineState): StressLe
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/baseline.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/algorithm/baseline/baseline.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/baseline.ts tests/lib/baseline.test.ts
+git add features/algorithm/baseline/baseline.ts tests/algorithm/baseline/baseline.test.ts
 git commit -m "feat(baseline): 하이브리드 기준선 + 평소대비 4밴드 분류 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -387,18 +389,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 # Phase B — 보정 오프셋 & 저장 계층
 
-## Task B1: `lib/calibration.ts` — self-report 보정 오프셋(순수)
+## Task B1: `features/algorithm/baseline/calibration.ts` — self-report 보정 오프셋(순수)
 
 **Files:**
-- Create: `lib/calibration.ts`
-- Test: `tests/lib/calibration.test.ts`
+- Create: `features/algorithm/baseline/calibration.ts`
+- Test: `tests/algorithm/baseline/calibration.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/calibration.test.ts
+// tests/algorithm/baseline/calibration.test.ts
 import { describe, it, expect } from 'vitest'
-import { nextOffset, applyOffset, OFFSET_MAX, OFFSET_STEP } from '@/lib/calibration'
+import { nextOffset, applyOffset, OFFSET_MAX, OFFSET_STEP } from '@/features/algorithm/baseline/calibration'
 
 describe('nextOffset', () => {
   it("'worse' → +STEP, 'better' → -STEP", () => {
@@ -427,12 +429,12 @@ describe('applyOffset', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/calibration.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/algorithm/baseline/calibration.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/calibration.ts
+// features/algorithm/baseline/calibration.ts
 export const OFFSET_MAX = 15
 export const OFFSET_STEP = 3
 export const OFFSET_DECAY = 1
@@ -454,29 +456,29 @@ export function applyOffset(n: number, offset: number): number {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/calibration.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/algorithm/baseline/calibration.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/calibration.ts tests/lib/calibration.test.ts
+git add features/algorithm/baseline/calibration.ts tests/algorithm/baseline/calibration.test.ts
 git commit -m "feat(calibration): self-report 보정 오프셋 모델 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task B2: `lib/checkin.ts` — 체크인 시간창/노출(순수)
+## Task B2: `features/feedback/lib/checkin.ts` — 체크인 시간창/노출(순수)
 
 **Files:**
-- Create: `lib/checkin.ts`
-- Test: `tests/lib/checkin.test.ts`
+- Create: `features/feedback/lib/checkin.ts`
+- Test: `tests/feedback/lib/checkin.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/checkin.test.ts
+// tests/feedback/lib/checkin.test.ts
 import { describe, it, expect } from 'vitest'
-import { currentSlot, checkinDue } from '@/lib/checkin'
+import { currentSlot, checkinDue } from '@/features/feedback/lib/checkin'
 
 const morning = { startHour: 10, endHour: 12 }
 const afternoon = { startHour: 15, endHour: 17 }
@@ -508,12 +510,12 @@ describe('checkinDue', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/checkin.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/lib/checkin.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/checkin.ts
+// features/feedback/lib/checkin.ts
 export type CheckinSlot = 'morning' | 'afternoon'
 export interface CheckinWindow {
   startHour: number
@@ -546,29 +548,29 @@ export function checkinDue(args: {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/checkin.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/lib/checkin.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/checkin.ts tests/lib/checkin.test.ts
+git add features/feedback/lib/checkin.ts tests/feedback/lib/checkin.test.ts
 git commit -m "feat(checkin): 오전/오후 시간창 + 노출 판정 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task B3: `lib/nudge.ts` — 넛지 정책(순수)
+## Task B3: `features/feedback/lib/nudge.ts` — 넛지 정책(순수)
 
 **Files:**
-- Create: `lib/nudge.ts`
-- Test: `tests/lib/nudge.test.ts`
+- Create: `features/feedback/lib/nudge.ts`
+- Test: `tests/feedback/lib/nudge.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/nudge.test.ts
+// tests/feedback/lib/nudge.test.ts
 import { describe, it, expect } from 'vitest'
-import { updateSustain, shouldNudge, type NudgeSettings, type NudgeDayState } from '@/lib/nudge'
+import { updateSustain, shouldNudge, type NudgeSettings, type NudgeDayState } from '@/features/feedback/lib/nudge'
 
 const settings: NudgeSettings = {
   enabled: true,
@@ -628,13 +630,13 @@ describe('shouldNudge', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/nudge.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/lib/nudge.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/nudge.ts
-import type { StressLevel } from './baseline'
+// features/feedback/lib/nudge.ts
+import type { StressLevel } from '@/features/algorithm/baseline/baseline'
 
 export interface NudgeSettings {
   enabled: boolean
@@ -689,29 +691,29 @@ export function shouldNudge(args: {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/nudge.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/lib/nudge.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/nudge.ts tests/lib/nudge.test.ts
+git add features/feedback/lib/nudge.ts tests/feedback/lib/nudge.test.ts
 git commit -m "feat(nudge): 지속+빈도+쿨다운+방해금지 넛지 정책 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task B4: `lib/settings.ts` — 영속 설정 (localStorage)
+## Task B4: `shared/storage/settings.ts` — 영속 설정 (localStorage)
 
 **Files:**
-- Create: `lib/settings.ts`
-- Test: `tests/lib/settings.test.ts`
+- Create: `shared/storage/settings.ts`
+- Test: `tests/shared/storage/settings.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/settings.test.ts
+// tests/shared/storage/settings.test.ts
 import { describe, it, expect, beforeEach } from 'vitest'
-import { loadSettings, saveSettings, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/lib/settings'
+import { loadSettings, saveSettings, DEFAULT_SETTINGS, SETTINGS_KEY } from '@/shared/storage/settings'
 
 describe('settings', () => {
   beforeEach(() => localStorage.clear())
@@ -742,14 +744,14 @@ describe('settings', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/settings.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/shared/storage/settings.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/settings.ts
-import type { CheckinWindow } from './checkin'
-import type { NudgeSettings } from './nudge'
+// shared/storage/settings.ts
+import type { CheckinWindow } from '@/features/feedback/lib/checkin'
+import type { NudgeSettings } from '@/features/feedback/lib/nudge'
 
 export const SETTINGS_KEY = 'onmaum_settings'
 
@@ -802,34 +804,34 @@ export function saveSettings(s: Settings): void {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/settings.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/shared/storage/settings.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/settings.ts tests/lib/settings.test.ts
+git add shared/storage/settings.ts tests/shared/storage/settings.test.ts
 git commit -m "feat(settings): 넛지/체크인창/보정오프셋 영속 설정 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task B5: `lib/dayState.ts` — 일자별 체크인/넛지 상태 (localStorage)
+## Task B5: `shared/storage/dayState.ts` — 일자별 체크인/넛지 상태 (localStorage)
 
 **Files:**
-- Create: `lib/dayState.ts`
-- Test: `tests/lib/dayState.test.ts`
+- Create: `shared/storage/dayState.ts`
+- Test: `tests/shared/storage/dayState.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/dayState.test.ts
+// tests/shared/storage/dayState.test.ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   loadCheckinDone,
   saveCheckinEntry,
   loadNudgeDayState,
   saveNudgeDayState,
-} from '@/lib/dayState'
+} from '@/shared/storage/dayState'
 
 describe('checkin dayState', () => {
   beforeEach(() => localStorage.clear())
@@ -862,15 +864,15 @@ describe('nudge dayState', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/dayState.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/shared/storage/dayState.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/dayState.ts
-import type { CheckinSlot } from './checkin'
-import type { SelfReport } from './calibration'
-import type { NudgeDayState } from './nudge'
+// shared/storage/dayState.ts
+import type { CheckinSlot } from '@/features/feedback/lib/checkin'
+import type { SelfReport } from '@/features/algorithm/baseline/calibration'
+import type { NudgeDayState } from '@/features/feedback/lib/nudge'
 
 export interface CheckinEntry {
   slot: CheckinSlot
@@ -925,12 +927,12 @@ export function saveNudgeDayState(date: string, state: NudgeDayState): void {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/dayState.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/shared/storage/dayState.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/dayState.ts tests/lib/dayState.test.ts
+git add shared/storage/dayState.ts tests/shared/storage/dayState.test.ts
 git commit -m "feat(dayState): 일자별 체크인/넛지 상태 저장 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -940,19 +942,19 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 # Phase C — 오전/오후 체크인 (UI 배선)
 
-## Task C1: `components/CheckInCard.tsx` — 체크인 카드 (presentational)
+## Task C1: `features/feedback/components/CheckInCard.tsx` — 체크인 카드 (presentational)
 
 **Files:**
-- Create: `components/CheckInCard.tsx`
-- Test: `tests/components/CheckInCard.test.tsx`
+- Create: `features/feedback/components/CheckInCard.tsx`
+- Test: `tests/feedback/components/CheckInCard.test.tsx`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/components/CheckInCard.test.tsx
+// tests/feedback/components/CheckInCard.test.tsx
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import CheckInCard from '@/components/CheckInCard'
+import CheckInCard from '@/features/feedback/components/CheckInCard'
 
 describe('CheckInCard', () => {
   it('한 줄 카피와 1탭 버튼 표시', () => {
@@ -981,17 +983,17 @@ describe('CheckInCard', () => {
 
 > 참고: `tests/setup.ts`가 `@testing-library/jest-dom`을 로드하므로 `toBeTruthy`/`toBeInTheDocument` 사용 가능. 기존 컴포넌트 테스트 관례를 따른다 (`tests/components/SelfCareTip.test.tsx` 참고).
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/components/CheckInCard.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/components/CheckInCard.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```tsx
-// components/CheckInCard.tsx
+// features/feedback/components/CheckInCard.tsx
 'use client'
 
 import { useState } from 'react'
-import type { CheckinSlot } from '@/lib/checkin'
-import type { SelfReport } from '@/lib/calibration'
+import type { CheckinSlot } from '@/features/feedback/lib/checkin'
+import type { SelfReport } from '@/features/algorithm/baseline/calibration'
 
 interface Props {
   slot: CheckinSlot
@@ -1051,29 +1053,29 @@ export default function CheckInCard({ slot, line, onReport }: Props) {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/components/CheckInCard.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/components/CheckInCard.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/CheckInCard.tsx tests/components/CheckInCard.test.tsx
+git add features/feedback/components/CheckInCard.tsx tests/feedback/components/CheckInCard.test.tsx
 git commit -m "feat(CheckInCard): 오전/오후 체크인 카드 + 1탭 self-report (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task C2: `lib/checkinCopy.ts` — 체크인 한 줄 카피 (순수)
+## Task C2: `features/feedback/lib/checkinCopy.ts` — 체크인 한 줄 카피 (순수)
 
 **Files:**
-- Create: `lib/checkinCopy.ts`
-- Test: `tests/lib/checkinCopy.test.ts`
+- Create: `features/feedback/lib/checkinCopy.ts`
+- Test: `tests/feedback/lib/checkinCopy.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/checkinCopy.test.ts
+// tests/feedback/lib/checkinCopy.test.ts
 import { describe, it, expect } from 'vitest'
-import { checkinLine } from '@/lib/checkinCopy'
+import { checkinLine } from '@/features/feedback/lib/checkinCopy'
 
 describe('checkinLine', () => {
   it('기준선 있을 때 평소 대비 문구', () => {
@@ -1091,13 +1093,13 @@ describe('checkinLine', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/checkinCopy.test.ts` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/lib/checkinCopy.test.ts` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// lib/checkinCopy.ts
-import type { StressLevel, BaselineMode } from './baseline'
+// features/feedback/lib/checkinCopy.ts
+import type { StressLevel, BaselineMode } from '@/features/algorithm/baseline/baseline'
 
 const RELATIVE: Record<StressLevel, string> = {
   low: '오늘은 평소보다 마음이 가벼워 보여요 🌿',
@@ -1119,36 +1121,36 @@ export function checkinLine(level: StressLevel, mode: BaselineMode): string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/checkinCopy.test.ts` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/lib/checkinCopy.test.ts` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/checkinCopy.ts tests/lib/checkinCopy.test.ts
+git add features/feedback/lib/checkinCopy.ts tests/feedback/lib/checkinCopy.test.ts
 git commit -m "feat(checkinCopy): 기준선 모드별 체크인 한 줄 카피 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task C3: `hooks/useCheckin.ts` — 체크인 배선
+## Task C3: `features/feedback/hooks/useCheckin.ts` — 체크인 배선
 
 **Files:**
-- Create: `hooks/useCheckin.ts`
-- Test: `tests/hooks/useCheckin.test.tsx`
+- Create: `features/feedback/hooks/useCheckin.ts`
+- Test: `tests/feedback/hooks/useCheckin.test.tsx`
 
 설명: 오늘 레코드(liveQuery)로 `hasTodayData`·현재값(N′)·기준선·한 줄 카피를 계산하고, `checkinDue`로 노출 여부를 정한다. `submit(report)`는 보정 오프셋을 갱신(저장)하고 체크인 엔트리를 기록한다. 시각은 `now` 주입 가능(기본은 컴포넌트 마운트 시 `new Date()`).
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/hooks/useCheckin.test.tsx
+// tests/feedback/hooks/useCheckin.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import 'fake-indexeddb/auto'
-import { db } from '@/lib/db'
-import { useCheckin } from '@/hooks/useCheckin'
-import { loadSettings } from '@/lib/settings'
-import { loadCheckinDone } from '@/lib/dayState'
+import { db } from '@/shared/storage/db'
+import { useCheckin } from '@/features/feedback/hooks/useCheckin'
+import { loadSettings } from '@/shared/storage/settings'
+import { loadCheckinDone } from '@/shared/storage/dayState'
 
 async function seedToday(now: Date) {
   await db.emotions.add({
@@ -1197,24 +1199,24 @@ describe('useCheckin', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/hooks/useCheckin.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/hooks/useCheckin.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// hooks/useCheckin.ts
+// features/feedback/hooks/useCheckin.ts
 'use client'
 
 import { useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getEmotionsByDate } from '@/lib/emotionRepository'
-import { recentStress, dailyStressHistory } from '@/lib/dailyStress'
-import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS } from '@/lib/baseline'
-import { checkinDue, type CheckinSlot } from '@/lib/checkin'
-import { checkinLine } from '@/lib/checkinCopy'
-import { applyOffset, nextOffset, type SelfReport } from '@/lib/calibration'
-import { loadSettings, saveSettings } from '@/lib/settings'
-import { loadCheckinDone, saveCheckinEntry } from '@/lib/dayState'
+import { getEmotionsByDate } from '@/shared/storage/emotionRepository'
+import { recentStress, dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
+import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
+import { checkinDue, type CheckinSlot } from '@/features/feedback/lib/checkin'
+import { checkinLine } from '@/features/feedback/lib/checkinCopy'
+import { applyOffset, nextOffset, type SelfReport } from '@/features/algorithm/baseline/calibration'
+import { loadSettings, saveSettings } from '@/shared/storage/settings'
+import { loadCheckinDone, saveCheckinEntry } from '@/shared/storage/dayState'
 
 interface Args {
   now?: Date
@@ -1237,7 +1239,7 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
     start.setHours(0, 0, 0, 0)
     const end = new Date(now)
     end.setHours(23, 59, 59, 999)
-    const { getEmotionsByDateRange } = await import('@/lib/emotionRepository')
+    const { getEmotionsByDateRange } = await import('@/shared/storage/emotionRepository')
     return getEmotionsByDateRange(start, end)
   }, [date])
 
@@ -1280,12 +1282,12 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
 
 > 주의: `submit` 후 `loadCheckinDone(date)`가 갱신돼 다음 렌더에서 `due=false`가 된다. liveQuery는 Dexie 변경만 구독하므로, 체크인 완료 후 카드를 숨기려면 소비 측(`/stats`)에서 `submit` 핸들러에 로컬 `dismissed` state를 함께 둔다(Task E3).
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/hooks/useCheckin.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/hooks/useCheckin.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add hooks/useCheckin.ts tests/hooks/useCheckin.test.tsx
+git add features/feedback/hooks/useCheckin.ts tests/feedback/hooks/useCheckin.test.tsx
 git commit -m "feat(useCheckin): 체크인 노출/카피/보정 배선 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1295,24 +1297,24 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 # Phase D — 안전판 넛지 (UI 배선)
 
-## Task D1: `components/NudgeSettings.tsx` — 넛지 설정 UI
+## Task D1: `features/feedback/components/NudgeSettings.tsx` — 넛지 설정 UI
 
 **Files:**
-- Create: `components/NudgeSettings.tsx`
-- Test: `tests/components/NudgeSettings.test.tsx`
+- Create: `features/feedback/components/NudgeSettings.tsx`
+- Test: `tests/feedback/components/NudgeSettings.test.tsx`
 
 설명: 토글(켜기/끄기) + 하루 빈도 + 방해금지 시간. 켤 때 알림 권한 요청(`useNotificationPermission`). 설정은 `loadSettings`/`saveSettings`.
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/components/NudgeSettings.test.tsx
+// tests/feedback/components/NudgeSettings.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import NudgeSettings from '@/components/NudgeSettings'
-import { loadSettings } from '@/lib/settings'
+import NudgeSettings from '@/features/feedback/components/NudgeSettings'
+import { loadSettings } from '@/shared/storage/settings'
 
-vi.mock('@/hooks/useNotificationPermission', () => ({
+vi.mock('@/features/feedback/hooks/useNotificationPermission', () => ({
   useNotificationPermission: () => ({
     supported: true,
     permission: 'granted',
@@ -1332,17 +1334,17 @@ describe('NudgeSettings', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/components/NudgeSettings.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/components/NudgeSettings.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```tsx
-// components/NudgeSettings.tsx
+// features/feedback/components/NudgeSettings.tsx
 'use client'
 
 import { useState } from 'react'
-import { useNotificationPermission } from '@/hooks/useNotificationPermission'
-import { loadSettings, saveSettings, type Settings } from '@/lib/settings'
+import { useNotificationPermission } from '@/features/feedback/hooks/useNotificationPermission'
+import { loadSettings, saveSettings, type Settings } from '@/shared/storage/settings'
 
 export default function NudgeSettings() {
   const { supported, permission, request } = useNotificationPermission()
@@ -1414,30 +1416,30 @@ export default function NudgeSettings() {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/components/NudgeSettings.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/components/NudgeSettings.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/NudgeSettings.tsx tests/components/NudgeSettings.test.tsx
+git add features/feedback/components/NudgeSettings.tsx tests/feedback/components/NudgeSettings.test.tsx
 git commit -m "feat(NudgeSettings): 넛지 토글/빈도 설정 UI (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task D2: `components/NudgeBanner.tsx` — 인앱 넛지 배너
+## Task D2: `features/feedback/components/NudgeBanner.tsx` — 인앱 넛지 배너
 
 **Files:**
-- Create: `components/NudgeBanner.tsx`
-- Test: `tests/components/NudgeBanner.test.tsx`
+- Create: `features/feedback/components/NudgeBanner.tsx`
+- Test: `tests/feedback/components/NudgeBanner.test.tsx`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/components/NudgeBanner.test.tsx
+// tests/feedback/components/NudgeBanner.test.tsx
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import NudgeBanner from '@/components/NudgeBanner'
+import NudgeBanner from '@/features/feedback/components/NudgeBanner'
 
 describe('NudgeBanner', () => {
   it('open=false면 렌더 안 함', () => {
@@ -1462,12 +1464,12 @@ describe('NudgeBanner', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/components/NudgeBanner.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/components/NudgeBanner.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```tsx
-// components/NudgeBanner.tsx
+// features/feedback/components/NudgeBanner.tsx
 'use client'
 
 interface Props {
@@ -1512,22 +1514,22 @@ export default function NudgeBanner({ open, message, onClose, onMute }: Props) {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/components/NudgeBanner.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/components/NudgeBanner.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/NudgeBanner.tsx tests/components/NudgeBanner.test.tsx
+git add features/feedback/components/NudgeBanner.tsx tests/feedback/components/NudgeBanner.test.tsx
 git commit -m "feat(NudgeBanner): 인앱 넛지 배너 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
-## Task D3: `hooks/useNudge.ts` — 넛지 배선 (앱 전역)
+## Task D3: `features/feedback/hooks/useNudge.ts` — 넛지 배선 (앱 전역)
 
 **Files:**
-- Create: `hooks/useNudge.ts`
-- Test: `tests/hooks/useNudge.test.tsx`
+- Create: `features/feedback/hooks/useNudge.ts`
+- Test: `tests/feedback/hooks/useNudge.test.tsx`
 
 설명: 오늘 레코드(liveQuery)로 현재 N′·기준선 level 산출 → `updateSustain`(ref로 누적) → `shouldNudge` → 충족 시 브라우저 Notification(권한 granted일 때) + 인앱 배너 state + `saveNudgeDayState`(count+1, lastAt). 평가 시 `now`는 `new Date()`(테스트는 records 시각으로 sustain을 만족시키도록 시드). 반환: `{ bannerOpen, message, close, muteToday }`.
 
@@ -1536,14 +1538,14 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/hooks/useNudge.test.tsx
+// tests/feedback/hooks/useNudge.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import 'fake-indexeddb/auto'
-import { db } from '@/lib/db'
-import { useNudge } from '@/hooks/useNudge'
-import { saveSettings, DEFAULT_SETTINGS } from '@/lib/settings'
-import { loadNudgeDayState } from '@/lib/dayState'
+import { db } from '@/shared/storage/db'
+import { useNudge } from '@/features/feedback/hooks/useNudge'
+import { saveSettings, DEFAULT_SETTINGS } from '@/shared/storage/settings'
+import { loadNudgeDayState } from '@/shared/storage/dayState'
 
 describe('useNudge', () => {
   beforeEach(async () => {
@@ -1600,23 +1602,23 @@ describe('useNudge', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/hooks/useNudge.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/feedback/hooks/useNudge.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현**
 
 ```ts
-// hooks/useNudge.ts
+// features/feedback/hooks/useNudge.ts
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getEmotionsByDate, getEmotionsByDateRange } from '@/lib/emotionRepository'
-import { recentStress, dailyStressHistory } from '@/lib/dailyStress'
-import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS } from '@/lib/baseline'
-import { applyOffset } from '@/lib/calibration'
-import { updateSustain, shouldNudge, type SustainState } from '@/lib/nudge'
-import { loadSettings } from '@/lib/settings'
-import { loadNudgeDayState, saveNudgeDayState } from '@/lib/dayState'
+import { getEmotionsByDate, getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
+import { recentStress, dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
+import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
+import { applyOffset } from '@/features/algorithm/baseline/calibration'
+import { updateSustain, shouldNudge, type SustainState } from '@/features/feedback/lib/nudge'
+import { loadSettings } from '@/shared/storage/settings'
+import { loadNudgeDayState, saveNudgeDayState } from '@/shared/storage/dayState'
 
 const NUDGE_MESSAGE = '마음에 힘이 들어간 지 좀 됐어요. 잠깐 숨 돌릴까요?'
 
@@ -1686,12 +1688,12 @@ export function useNudge() {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/hooks/useNudge.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/feedback/hooks/useNudge.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add hooks/useNudge.ts tests/hooks/useNudge.test.tsx
+git add features/feedback/hooks/useNudge.ts tests/feedback/hooks/useNudge.test.tsx
 git commit -m "feat(useNudge): N+기준선 기반 넛지 배선 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1700,18 +1702,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task D4: `AppChrome`에 넛지 전역 마운트
 
 **Files:**
-- Modify: `components/AppChrome.tsx`
+- Modify: `features/ui/common/AppChrome.tsx`
 
 `AppChrome`은 이미 `'use client'`이고 랜딩(`/`)에선 chrome을 숨긴다(현재 코드: `if (isLanding) return <>{children}</>`). 넛지는 랜딩에서 돌면 안 되므로(측정 안 함) **비랜딩 분기에만** 마운트한다. 자체 완결적 클라이언트 컴포넌트 `NudgeHost`를 만들어 끼운다(AppChrome 본문에 hook을 직접 넣어 랜딩에서도 호출되는 일 방지).
 
-- [ ] **Step 1: `components/NudgeHost.tsx` 생성**
+- [ ] **Step 1: `features/feedback/components/NudgeHost.tsx` 생성**
 
 ```tsx
-// components/NudgeHost.tsx
+// features/feedback/components/NudgeHost.tsx
 'use client'
 
-import { useNudge } from '@/hooks/useNudge'
-import NudgeBanner from '@/components/NudgeBanner'
+import { useNudge } from '@/features/feedback/hooks/useNudge'
+import NudgeBanner from '@/features/feedback/components/NudgeBanner'
 
 export default function NudgeHost() {
   const nudge = useNudge()
@@ -1726,11 +1728,11 @@ export default function NudgeHost() {
 }
 ```
 
-- [ ] **Step 2: `components/AppChrome.tsx` 비랜딩 분기에 `<NudgeHost />` 추가**
+- [ ] **Step 2: `features/ui/common/AppChrome.tsx` 비랜딩 분기에 `<NudgeHost />` 추가**
 
 ```tsx
 // import 추가
-import NudgeHost from '@/components/NudgeHost'
+import NudgeHost from '@/features/feedback/components/NudgeHost'
 
 // 비랜딩 return을 아래로 교체:
 return (
@@ -1750,7 +1752,7 @@ return (
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/AppChrome.tsx components/NudgeHost.tsx
+git add features/ui/common/AppChrome.tsx features/feedback/components/NudgeHost.tsx
 git commit -m "feat(nudge): AppChrome 비랜딩 분기에 넛지 전역 마운트
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1763,19 +1765,19 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task E1: `DailyReport` v2 — 평소 대비 배지 + 힘들었던 시간대
 
 **Files:**
-- Modify: `components/DailyReport.tsx`
-- Test: `tests/components/DailyReport.test.tsx` (신규)
+- Modify: `features/ui/report/DailyReport.tsx`
+- Test: `tests/ui/report/DailyReport.test.tsx` (신규)
 
 설명: 기존 P/N 게이지 + 회복 제안은 유지하되, ① N′(보정) 적용, ② 기준선 배지(평소 대비), ③ 힘들었던 시간대 추가. `records`(오늘) 외에 기준선 계산용 `historyRecords`(최근 14일)와 `offset`을 props로 받는다(상위 /stats에서 주입 → 테스트 용이).
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```tsx
-// tests/components/DailyReport.test.tsx
+// tests/ui/report/DailyReport.test.tsx
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import DailyReport from '@/components/DailyReport'
-import type { EmotionRecord } from '@/lib/db'
+import DailyReport from '@/features/ui/report/DailyReport'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 function rec(p: Partial<EmotionRecord> & { timestamp: Date; duration: number }): EmotionRecord {
   return { id: 0, detectionRate: 1, happy: 0, calm: 0, sad: 0, angry: 0, dominantEmotion: 'calm', flatAffectScore: 0, ...p }
@@ -1798,24 +1800,24 @@ describe('DailyReport v2', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/components/DailyReport.test.tsx` · Expected: FAIL
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/report/DailyReport.test.tsx` · Expected: FAIL
 
 - [ ] **Step 3: 구현 (기존 파일 교체)**
 
 ```tsx
-// components/DailyReport.tsx
+// features/ui/report/DailyReport.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { EmotionRecord } from '@/lib/db'
-import type { EmotionResult } from '@/lib/emotionAnalysis'
-import { aggregateStress } from '@/lib/stressIndex'
-import { dailyStressHistory, hardestPeriod, PERIOD_BUCKET_HOURS } from '@/lib/dailyStress'
-import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS, type StressLevel } from '@/lib/baseline'
-import { applyOffset } from '@/lib/calibration'
-import { topTwoEmotions } from '@/lib/orbColor'
-import { loadProfile, type Profile } from '@/lib/profile'
-import { suggestionFor } from '@/lib/selfCareSuggestion'
+import type { EmotionRecord } from '@/shared/storage/db'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { aggregateStress } from '@/features/algorithm/stress/stressIndex'
+import { dailyStressHistory, hardestPeriod, PERIOD_BUCKET_HOURS } from '@/features/algorithm/stress/dailyStress'
+import { computeBaselineState, classifyStress, BASELINE_WINDOW_DAYS, type StressLevel } from '@/features/algorithm/baseline/baseline'
+import { applyOffset } from '@/features/algorithm/baseline/calibration'
+import { topTwoEmotions } from '@/features/ui/orb/lib/orbColor'
+import { loadProfile, type Profile } from '@/shared/storage/profile'
+import { suggestionFor } from '@/features/feedback/lib/selfCareSuggestion'
 
 function averageEmotion(records: EmotionRecord[]): EmotionResult {
   const total = records.reduce((sum, r) => sum + r.duration, 0)
@@ -1907,12 +1909,12 @@ export default function DailyReport({ records, historyRecords, offset, now = new
 
 > `/demo`도 `DailyReport`를 쓰므로(P5) props 변경에 맞춰 Task E3에서 demo 호출부도 갱신한다.
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/components/DailyReport.test.tsx` · Expected: PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/report/DailyReport.test.tsx` · Expected: PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/DailyReport.tsx tests/components/DailyReport.test.tsx
+git add features/ui/report/DailyReport.tsx tests/ui/report/DailyReport.test.tsx
 git commit -m "feat(DailyReport): 평소대비 배지 + 힘든 시간대 + N′ 적용 (TDD)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1921,14 +1923,14 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task E2: `TrendChart` — N 추이 + 기준선 점선
 
 **Files:**
-- Modify: `components/TrendChart.tsx`
+- Modify: `features/ui/report/TrendChart.tsx`
 
 설명: 막대를 `negativeRatio`(0~1) 대신 일별 **N(스트레스 0~100)**로 바꾸고, 기준선(median)을 `ReferenceLine` 점선으로 표시. risk 색/평탄도 제거. 데이터는 `dailyStressHistory` 사용.
 
 - [ ] **Step 1: 구현 (기존 파일 교체)**
 
 ```tsx
-// components/TrendChart.tsx
+// features/ui/report/TrendChart.tsx
 'use client'
 
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -1942,9 +1944,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { getEmotionsByDateRange } from '@/lib/emotionRepository'
-import { dailyStressHistory } from '@/lib/dailyStress'
-import { computeBaselineState } from '@/lib/baseline'
+import { getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
+import { dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
+import { computeBaselineState } from '@/features/algorithm/baseline/baseline'
 
 const DAYS = 7
 
@@ -2040,7 +2042,7 @@ export default function TrendChart() {
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add components/TrendChart.tsx
+git add features/ui/report/TrendChart.tsx
 git commit -m "feat(TrendChart): 최근 7일 N 추이 + 기준선 점선
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -2060,15 +2062,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import CheckInCard from '@/components/CheckInCard'
-import DailyReport from '@/components/DailyReport'
-import NudgeSettings from '@/components/NudgeSettings'
-import RecentRecords from '@/components/RecentRecords'
-import TrendChart from '@/components/TrendChart'
-import { useCheckin } from '@/hooks/useCheckin'
-import { getEmotionsByDate, getEmotionsByDateRange } from '@/lib/emotionRepository'
-import { loadSettings } from '@/lib/settings'
-import { BASELINE_WINDOW_DAYS } from '@/lib/baseline'
+import CheckInCard from '@/features/feedback/components/CheckInCard'
+import DailyReport from '@/features/ui/report/DailyReport'
+import NudgeSettings from '@/features/feedback/components/NudgeSettings'
+import RecentRecords from '@/features/ui/report/RecentRecords'
+import TrendChart from '@/features/ui/report/TrendChart'
+import { useCheckin } from '@/features/feedback/hooks/useCheckin'
+import { getEmotionsByDate, getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
+import { loadSettings } from '@/shared/storage/settings'
+import { BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
 
 export default function StatsPage() {
   const today = new Date().toLocaleDateString('en-CA')
@@ -2127,14 +2129,14 @@ export default function StatsPage() {
 ```
 (데모는 기준선 데이터가 없어 absolute 모드로 동작 — 의도된 동작.)
 
-- [ ] **Step 3: 네비 라벨 갱신** — `components/Navigation.tsx`의 `{ href: '/stats', label: '통계' }`를 `label: '오늘'`로 변경(표면 성격 변화 반영).
+- [ ] **Step 3: 네비 라벨 갱신** — `features/ui/common/Navigation.tsx`의 `{ href: '/stats', label: '통계' }`를 `label: '오늘'`로 변경(표면 성격 변화 반영).
 
 - [ ] **Step 4: 타입 + 전체 테스트** — Run: `npx tsc --noEmit && npm run test:run` · Expected: 에러 없음 / 전부 PASS
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add app/stats/page.tsx app/demo/page.tsx components/Navigation.tsx
+git add app/stats/page.tsx app/demo/page.tsx features/ui/common/Navigation.tsx
 git commit -m "feat(stats): /stats를 v2 표면(체크인+리포트+넛지설정+추이)으로 교체
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -2144,7 +2146,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Delete: `components/DailyRiskCard.tsx`, `components/RiskWarningModal.tsx`, `components/SelfCareTip.tsx`, `components/NotificationToggle.tsx`, `hooks/useRiskNotification.ts`, `hooks/useWarningDismissal.ts` 및 각 테스트
-- Modify: `lib/riskCalculator.ts` (상수만 유지)
+- Modify: `features/algorithm/stress/riskCalculator.ts` (상수만 유지)
 
 > **선행 확인 필수:** 삭제 전 각 심볼이 다른 곳에서 import되지 않는지 검증한다. `ANGRY_WEIGHT`/`MIN_RECORD_DURATION_MS`는 `stressIndex.ts` 등에서 사용되므로 **삭제 금지**.
 
@@ -2157,7 +2159,7 @@ Expected: 출력 없음(= 어디서도 안 씀). 출력 있으면 먼저 그 참
 - [ ] **Step 2: `riskCalculator.ts`에서 상수만 남기기** — `calculateRiskLevel`, `aggregateDailyRisk`, `DailyRisk`, `RiskLevel`, 임계 상수 제거. 단 이들이 다른 곳(예: `aggregateDailyRisk`를 더 이상 아무도 안 씀)에서 미사용임을 grep으로 확인 후 제거. 최종 파일:
 
 ```ts
-// lib/riskCalculator.ts
+// features/algorithm/stress/riskCalculator.ts
 /**
  * 화남 인식률 보정 가중치. (memory: project_step4_anger_compensation)
  * stressIndex 등에서 재사용.

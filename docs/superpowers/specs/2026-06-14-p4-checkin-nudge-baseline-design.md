@@ -1,5 +1,7 @@
 # 온마음 v2 P4 잔여 — 개인 기준선 · 오전/오후 체크인 · 안전판 넛지 · /stats v2 마이그레이션
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 작성일: 2026-06-14
 상태: 설계 확정 (구현 전)
 상위 spec: [2026-06-08-onmaum-v2-orb-stress-design.md](./2026-06-08-onmaum-v2-orb-stress-design.md)
@@ -19,7 +21,7 @@
 
 ## 1. 배경 / 현재 상태
 
-- **P/N 엔진(P1)은 있으나 기준선 없음.** `lib/stressIndex.ts`에 `aggregateStress`(절대식 P/N), `gateSustainedNegative`, `emaStress`는 있으나 "평소 대비" 로직 전무.
+- **P/N 엔진(P1)은 있으나 기준선 없음.** `features/algorithm/stress/stressIndex.ts`에 `aggregateStress`(절대식 P/N), `gateSustainedNegative`, `emaStress`는 있으나 "평소 대비" 로직 전무.
 - **넛지 인프라가 구 시스템에 묶여 충돌.** `useRiskNotification`/`RiskWarningModal`/`DailyRiskCard`/`NotificationToggle`이 `riskCalculator`(good/caution/**warning**)에 연결돼 있고, **`flatAffectAvg`(무표정)를 위험 지표로 사용** → 상위 spec §4·§20("무표정 ≠ 소진, flatAffect를 위험 지표로 쓰지 않음")과 정면 충돌.
 - **v2 퇴근 리포트가 데모에만 갇힘.** `DailyReport`(2축 P/N)는 `/demo`에서만 렌더, 실제 앱 네비(`측정`/`통계`)에서 도달 불가.
 - **프로필이 빈약.** `Profile { reliefs: string[] }`뿐 — 넛지 설정(방해금지·빈도 상한·토글)·보정 오프셋 저장처 없음.
@@ -41,25 +43,25 @@
 
 ### 신규 lib (순수 함수 — TDD 대상)
 
-- **`lib/dailyStress.ts`** — 원시 `EmotionRecord[]`를 사용자 로컬 날짜별로 묶어 일별 P/N 산출(즉석). 내부에서 기존 `aggregateStress` 재사용.
+- **`features/algorithm/stress/dailyStress.ts`** — 원시 `EmotionRecord[]`를 사용자 로컬 날짜별로 묶어 일별 P/N 산출(즉석). 내부에서 기존 `aggregateStress` 재사용.
   - `dailyStressFor(records, date): StressScores | null`
   - `dailyStressHistory(records, days): { date, scores, totalDuration }[]` (오래된→최근)
-- **`lib/baseline.ts`** — 일별 N 이력 → 개인 기준선 + "평소 대비" 분류(하이브리드).
-- **`lib/calibration.ts`** — self-report 보정 오프셋 모델(증감·클램프·적용·리셋).
-- **`lib/checkin.ts`** — 오전/오후 시간창 판정 + due 여부(순수).
-- **`lib/nudge.ts`** — `shouldNudge(...)` 순수 정책 함수.
-- **`lib/settings.ts`** — 넛지 설정·보정 오프셋·체크인/넛지 상태 load/save(localStorage). `profile.ts`와 동일한 방어적 파싱 패턴.
+- **`features/algorithm/baseline/baseline.ts`** — 일별 N 이력 → 개인 기준선 + "평소 대비" 분류(하이브리드).
+- **`features/algorithm/baseline/calibration.ts`** — self-report 보정 오프셋 모델(증감·클램프·적용·리셋).
+- **`features/feedback/lib/checkin.ts`** — 오전/오후 시간창 판정 + due 여부(순수).
+- **`features/feedback/lib/nudge.ts`** — `shouldNudge(...)` 순수 정책 함수.
+- **`shared/storage/settings.ts`** — 넛지 설정·보정 오프셋·체크인/넛지 상태 load/save(localStorage). `profile.ts`와 동일한 방어적 파싱 패턴.
 
 ### 신규 hooks
 
-- **`hooks/useCheckin.ts`** — due 감지 + self-report 처리(오프셋 갱신·로그 저장).
-- **`hooks/useNudge.ts`** — 앱 전역(`AppChrome` 마운트)에서 오늘 레코드 liveQuery → `shouldNudge` 평가 → Notification/인앱 배너. **구 `useRiskNotification` 대체.**
+- **`features/feedback/hooks/useCheckin.ts`** — due 감지 + self-report 처리(오프셋 갱신·로그 저장).
+- **`features/feedback/hooks/useNudge.ts`** — 앱 전역(`AppChrome` 마운트)에서 오늘 레코드 liveQuery → `shouldNudge` 평가 → Notification/인앱 배너. **구 `useRiskNotification` 대체.**
 
 ### 신규 components
 
-- **`components/CheckInCard.tsx`** — 체크인 카드(지금 한 줄 + `맞아요`/`지금은 좀 달라요` 1탭 + 방향 2지선다).
-- **`components/NudgeSettings.tsx`** — 토글·하루 빈도 상한·방해금지 시간. **구 `NotificationToggle` 대체.** 알림 권한 요청 포함.
-- **`components/DailyReport.tsx` 확장** — 평소 대비 배지 + 추이 + 힘들었던 시간대 추가.
+- **`features/feedback/components/CheckInCard.tsx`** — 체크인 카드(지금 한 줄 + `맞아요`/`지금은 좀 달라요` 1탭 + 방향 2지선다).
+- **`features/feedback/components/NudgeSettings.tsx`** — 토글·하루 빈도 상한·방해금지 시간. **구 `NotificationToggle` 대체.** 알림 권한 요청 포함.
+- **`features/ui/report/DailyReport.tsx` 확장** — 평소 대비 배지 + 추이 + 힘들었던 시간대 추가.
 
 ### 변경 / 은퇴
 

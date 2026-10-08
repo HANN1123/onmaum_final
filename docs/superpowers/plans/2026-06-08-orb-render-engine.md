@@ -1,12 +1,14 @@
 # 감정 오브 렌더 엔진 (P2) Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 스트레스 지수(P/N)·감정·누적량을 입력받아 오브의 색/성장/움직임/한 줄 카피로 매핑하는 순수 엔진을 TDD로 만들고, 이를 소비하는 "또렷(crisp)" 글래스+오로라 캔버스 컴포넌트를 구현한다.
 
 **Architecture:** 순수 매핑 함수는 `lib/orb*.ts`에 책임별로 분리(성장/색/움직임/카피). 캔버스 렌더 컴포넌트는 이 함수들을 props로 소비. 색 기준값은 spec §5와 v1(`feature/living-orb-and-tone`)의 값이 동일해 재사용한다.
 
-**Tech Stack:** TypeScript, Vitest(`@/` alias, happy-dom, globals, 한국어 테스트명), React(Canvas 2D). P1 엔진(`lib/stressIndex.ts`)과 `EmotionResult`/`Emotion`(`lib/emotionAnalysis.ts`) 사용.
+**Tech Stack:** TypeScript, Vitest(`@/` alias, happy-dom, globals, 한국어 테스트명), React(Canvas 2D). P1 엔진(`features/algorithm/stress/stressIndex.ts`)과 `EmotionResult`/`Emotion`(`features/algorithm/emotion/emotionAnalysis.ts`) 사용.
 
 **Spec:** `docs/superpowers/specs/2026-06-08-onmaum-v2-orb-stress-design.md` §5(오브), §9(카피)
 
@@ -14,12 +16,12 @@
 
 ## File Structure
 
-- `lib/orbStages.ts` (생성) — 성장 5단계 + 누적량→투명도. v1에서 포팅.
-- `lib/orbColor.ts` (생성) — 감정 기준색, 상위2 그라데이션, 누적 "내 색" 블렌드.
-- `lib/orbMotion.ts` (생성) — 감정별 숨결/움직임 파라미터.
-- `lib/orbCaption.ts` (생성) — 토스 톤 한 줄 카피.
-- `components/ReactiveOrb.tsx` (수정/교체) — 위 엔진을 소비하는 "또렷" 글래스+오로라 캔버스. (시각 검증)
-- 테스트: `tests/lib/orbStages.test.ts`, `tests/lib/orbColor.test.ts`, `tests/lib/orbMotion.test.ts`, `tests/lib/orbCaption.test.ts`
+- `features/ui/orb/lib/orbStages.ts` (생성) — 성장 5단계 + 누적량→투명도. v1에서 포팅.
+- `features/ui/orb/lib/orbColor.ts` (생성) — 감정 기준색, 상위2 그라데이션, 누적 "내 색" 블렌드.
+- `features/ui/orb/lib/orbMotion.ts` (생성) — 감정별 숨결/움직임 파라미터.
+- `features/ui/orb/lib/orbCaption.ts` (생성) — 토스 톤 한 줄 카피.
+- `features/ui/orb/ReactiveOrb.tsx` (수정/교체) — 위 엔진을 소비하는 "또렷" 글래스+오로라 캔버스. (시각 검증)
+- 테스트: `tests/ui/orb/lib/orbStages.test.ts`, `tests/ui/orb/lib/orbColor.test.ts`, `tests/ui/orb/lib/orbMotion.test.ts`, `tests/ui/orb/lib/orbCaption.test.ts`
 
 후속(범위 밖): PiP 오버레이(P3), 온보딩·피드백·하이브리드 기준선(P4), 데모(P5).
 
@@ -28,12 +30,12 @@
 ## Task 1: 성장 5단계 + 투명도 (orbStages)
 
 **Files:**
-- Create: `lib/orbStages.ts`
-- Test: `tests/lib/orbStages.test.ts`
+- Create: `features/ui/orb/lib/orbStages.ts`
+- Test: `tests/ui/orb/lib/orbStages.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
-`tests/lib/orbStages.test.ts`:
+`tests/ui/orb/lib/orbStages.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
 import {
@@ -42,7 +44,7 @@ import {
   STAGE_MESSAGES,
   stageFromCount,
   opacityFromCount,
-} from '@/lib/orbStages'
+} from '@/features/ui/orb/lib/orbStages'
 
 describe('orbStages', () => {
   it('5단계 임계값', () => {
@@ -72,9 +74,9 @@ describe('orbStages', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/orbStages.test.ts` → FAIL (모듈 없음)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/orb/lib/orbStages.test.ts` → FAIL (모듈 없음)
 
-- [ ] **Step 3: 구현** — `lib/orbStages.ts`:
+- [ ] **Step 3: 구현** — `features/ui/orb/lib/orbStages.ts`:
 ```ts
 export type OrbStage = 'empty' | 'awakening' | 'forming' | 'settled' | 'living'
 
@@ -114,10 +116,10 @@ export function opacityFromCount(count: number): number {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/orbStages.test.ts` → PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/orb/lib/orbStages.test.ts` → PASS
 - [ ] **Step 5: 커밋**
 ```bash
-git add lib/orbStages.ts tests/lib/orbStages.test.ts
+git add features/ui/orb/lib/orbStages.ts tests/ui/orb/lib/orbStages.test.ts
 git commit -m "feat(orbStages): 성장 5단계 + 누적량 투명도 (TDD)"
 ```
 
@@ -126,15 +128,15 @@ git commit -m "feat(orbStages): 성장 5단계 + 누적량 투명도 (TDD)"
 ## Task 2: 감정 기준색 + 상위2 감정 (orbColor)
 
 **Files:**
-- Create: `lib/orbColor.ts`
-- Test: `tests/lib/orbColor.test.ts`
+- Create: `features/ui/orb/lib/orbColor.ts`
+- Test: `tests/ui/orb/lib/orbColor.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
-`tests/lib/orbColor.test.ts`:
+`tests/ui/orb/lib/orbColor.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
-import { EMOTION_HUES, rgbString, topTwoEmotions } from '@/lib/orbColor'
+import { EMOTION_HUES, rgbString, topTwoEmotions } from '@/features/ui/orb/lib/orbColor'
 
 describe('orbColor 기본', () => {
   it('감정 기준색 (spec §5)', () => {
@@ -153,12 +155,12 @@ describe('orbColor 기본', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/orbColor.test.ts` → FAIL (모듈 없음)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/orb/lib/orbColor.test.ts` → FAIL (모듈 없음)
 
-- [ ] **Step 3: 구현** — `lib/orbColor.ts`:
+- [ ] **Step 3: 구현** — `features/ui/orb/lib/orbColor.ts`:
 ```ts
-import type { Emotion, EmotionResult } from './emotionAnalysis'
-import { EMOTION_ORDER } from './emotionAnalysis'
+import type { Emotion, EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { EMOTION_ORDER } from '@/features/algorithm/emotion/emotionAnalysis'
 
 export type RGB = readonly [number, number, number]
 
@@ -179,10 +181,10 @@ export function topTwoEmotions(e: EmotionResult): [Emotion, Emotion] {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/orbColor.test.ts` → PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/orb/lib/orbColor.test.ts` → PASS
 - [ ] **Step 5: 커밋**
 ```bash
-git add lib/orbColor.ts tests/lib/orbColor.test.ts
+git add features/ui/orb/lib/orbColor.ts tests/ui/orb/lib/orbColor.test.ts
 git commit -m "feat(orbColor): 감정 기준색 + 상위2 감정 (TDD)"
 ```
 
@@ -191,12 +193,12 @@ git commit -m "feat(orbColor): 감정 기준색 + 상위2 감정 (TDD)"
 ## Task 3: 상위2 그라데이션 + 누적 "내 색" (orbColor)
 
 **Files:**
-- Modify: `lib/orbColor.ts`
-- Test: `tests/lib/orbColor.test.ts` (추가)
+- Modify: `features/ui/orb/lib/orbColor.ts`
+- Test: `tests/ui/orb/lib/orbColor.test.ts` (추가)
 
 - [ ] **Step 1: 실패 테스트 작성** (추가)
 ```ts
-import { gradientColors, accumulatedColor } from '@/lib/orbColor'
+import { gradientColors, accumulatedColor } from '@/features/ui/orb/lib/orbColor'
 
 describe('orbColor 혼합', () => {
   it('상위2 그라데이션 (from=지배, to=차순)', () => {
@@ -216,9 +218,9 @@ describe('orbColor 혼합', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/orbColor.test.ts` → FAIL (`gradientColors`/`accumulatedColor` 없음)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/orb/lib/orbColor.test.ts` → FAIL (`gradientColors`/`accumulatedColor` 없음)
 
-- [ ] **Step 3: 구현** (추가) — `lib/orbColor.ts`:
+- [ ] **Step 3: 구현** (추가) — `features/ui/orb/lib/orbColor.ts`:
 ```ts
 export function gradientColors(e: EmotionResult): { from: string; to: string } {
   const [a, b] = topTwoEmotions(e)
@@ -242,10 +244,10 @@ export function accumulatedColor(emotions: EmotionResult): string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/orbColor.test.ts` → PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/orb/lib/orbColor.test.ts` → PASS
 - [ ] **Step 5: 커밋**
 ```bash
-git add lib/orbColor.ts tests/lib/orbColor.test.ts
+git add features/ui/orb/lib/orbColor.ts tests/ui/orb/lib/orbColor.test.ts
 git commit -m "feat(orbColor): 상위2 그라데이션 + 누적 내 색 블렌드 (TDD)"
 ```
 
@@ -254,15 +256,15 @@ git commit -m "feat(orbColor): 상위2 그라데이션 + 누적 내 색 블렌�
 ## Task 4: 감정별 숨결/움직임 (orbMotion)
 
 **Files:**
-- Create: `lib/orbMotion.ts`
-- Test: `tests/lib/orbMotion.test.ts`
+- Create: `features/ui/orb/lib/orbMotion.ts`
+- Test: `tests/ui/orb/lib/orbMotion.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
-`tests/lib/orbMotion.test.ts`:
+`tests/ui/orb/lib/orbMotion.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
-import { motionFor } from '@/lib/orbMotion'
+import { motionFor } from '@/features/ui/orb/lib/orbMotion'
 
 describe('motionFor', () => {
   it('평온 = 느리고 깊은 숨, 부유 없음', () => {
@@ -290,11 +292,11 @@ describe('motionFor', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/orbMotion.test.ts` → FAIL (모듈 없음)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/orb/lib/orbMotion.test.ts` → FAIL (모듈 없음)
 
-- [ ] **Step 3: 구현** — `lib/orbMotion.ts`:
+- [ ] **Step 3: 구현** — `features/ui/orb/lib/orbMotion.ts`:
 ```ts
-import type { Emotion } from './emotionAnalysis'
+import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
 export interface MotionParams {
   breathPeriodMs: number // 호흡 주기
@@ -315,10 +317,10 @@ export function motionFor(dominant: Emotion): MotionParams {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/orbMotion.test.ts` → PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/orb/lib/orbMotion.test.ts` → PASS
 - [ ] **Step 5: 커밋**
 ```bash
-git add lib/orbMotion.ts tests/lib/orbMotion.test.ts
+git add features/ui/orb/lib/orbMotion.ts tests/ui/orb/lib/orbMotion.test.ts
 git commit -m "feat(orbMotion): 감정별 숨결/움직임 파라미터 (TDD)"
 ```
 
@@ -327,15 +329,15 @@ git commit -m "feat(orbMotion): 감정별 숨결/움직임 파라미터 (TDD)"
 ## Task 5: 토스 톤 한 줄 카피 (orbCaption)
 
 **Files:**
-- Create: `lib/orbCaption.ts`
-- Test: `tests/lib/orbCaption.test.ts`
+- Create: `features/ui/orb/lib/orbCaption.ts`
+- Test: `tests/ui/orb/lib/orbCaption.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
-`tests/lib/orbCaption.test.ts`:
+`tests/ui/orb/lib/orbCaption.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
-import { EMOTION_CAPTIONS, captionFor } from '@/lib/orbCaption'
+import { EMOTION_CAPTIONS, captionFor } from '@/features/ui/orb/lib/orbCaption'
 
 describe('orbCaption', () => {
   it('4감정 토스 톤 카피 (spec §9)', () => {
@@ -355,11 +357,11 @@ describe('orbCaption', () => {
 })
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/lib/orbCaption.test.ts` → FAIL (모듈 없음)
+- [ ] **Step 2: 실패 확인** — Run: `npx vitest run tests/ui/orb/lib/orbCaption.test.ts` → FAIL (모듈 없음)
 
-- [ ] **Step 3: 구현** — `lib/orbCaption.ts`:
+- [ ] **Step 3: 구현** — `features/ui/orb/lib/orbCaption.ts`:
 ```ts
-import type { Emotion } from './emotionAnalysis'
+import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
 export const EMOTION_CAPTIONS: Record<Emotion, string> = {
   calm: '마음이 잔잔해요 🌿',
@@ -373,11 +375,11 @@ export function captionFor(dominant: Emotion): string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/lib/orbCaption.test.ts` → PASS
+- [ ] **Step 4: 통과 확인** — Run: `npx vitest run tests/ui/orb/lib/orbCaption.test.ts` → PASS
 - [ ] **Step 5: 전체 스위트 + 커밋**
 ```bash
 npx vitest run
-git add lib/orbCaption.ts tests/lib/orbCaption.test.ts
+git add features/ui/orb/lib/orbCaption.ts tests/ui/orb/lib/orbCaption.test.ts
 git commit -m "feat(orbCaption): 토스 톤 한 줄 카피 (TDD)"
 ```
 
@@ -386,11 +388,11 @@ git commit -m "feat(orbCaption): 토스 톤 한 줄 카피 (TDD)"
 ## Task 6: "또렷" 글래스+오로라 캔버스 컴포넌트 (시각 검증)
 
 **Files:**
-- Modify: `components/ReactiveOrb.tsx` (엔진 소비 + crisp 렌더)
+- Modify: `features/ui/orb/ReactiveOrb.tsx` (엔진 소비 + crisp 렌더)
 
 > 캔버스 렌더는 단위 테스트가 어려우므로 **시각 검증**으로 확인한다(run 스킬 또는 비주얼 컴패니언). 협업 체크포인트: 사용자와 함께 본다.
 
-- [ ] **Step 1: 컴포넌트 구현** — `components/ReactiveOrb.tsx`를 다음 props 기반으로 교체:
+- [ ] **Step 1: 컴포넌트 구현** — `features/ui/orb/ReactiveOrb.tsx`를 다음 props 기반으로 교체:
   - props: `{ positive: number; stress: number; emotions: EmotionResult; recordCount: number; className?: string }`
   - `gradientColors(emotions)`로 from/to 색, `topTwoEmotions`의 지배 감정으로 `motionFor()` 호출, `opacityFromCount(recordCount)`로 채움, crisp 렌더(blur 최소, 채도↑, 작고 선명한 하이라이트, 또렷한 rim — spec §5).
   - 비주얼 컴패니언에서 확정한 스타일(글래스+오로라, 또렷)을 캔버스 2D로 구현. `prefers-reduced-motion` 시 호흡 정지.
@@ -399,7 +401,7 @@ git commit -m "feat(orbCaption): 토스 톤 한 줄 카피 (TDD)"
 
 - [ ] **Step 3: 커밋**
 ```bash
-git add components/ReactiveOrb.tsx
+git add features/ui/orb/ReactiveOrb.tsx
 git commit -m "feat(ReactiveOrb): 또렷 글래스+오로라 + 엔진 소비 (시각 검증)"
 ```
 

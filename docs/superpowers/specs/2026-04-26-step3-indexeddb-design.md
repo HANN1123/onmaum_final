@@ -1,5 +1,7 @@
 # Step 3 — IndexedDB 저장 (1분 집계) 설계
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 - **작성일**: 2026-04-26
 - **대상 단계**: Step 3 (9단계 로드맵 중)
 - **선행 단계**: Step 2 (웹캠 + 실시간 감정 분석) — 완료
@@ -87,7 +89,7 @@ app/page.tsx                    ← useEmotionRecorder 사용으로 단순화
 ```
 app/page.tsx
    ↓ uses
-hooks/useEmotionRecorder.ts
+features/camera/hooks/useEmotionRecorder.ts
    ↓ uses
 emotionAnalysis (분석)  +  emotionAggregator (집계)  +  emotionRepository (저장)
                                                         ↓ uses
@@ -96,11 +98,11 @@ emotionAnalysis (분석)  +  emotionAggregator (집계)  +  emotionRepository (�
 
 ### 모듈 인터페이스
 
-#### `lib/db.ts`
+#### `shared/storage/db.ts`
 
 ```typescript
 import Dexie, { type EntityTable } from 'dexie'
-import type { Emotion } from './emotionAnalysis'
+import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
 export interface EmotionRecord {
   id: number
@@ -127,7 +129,7 @@ export const db = new OnmaumDB()
 
 **책임:** 인프라(연결, 스키마, 버전). 비즈니스 로직 없음.
 
-#### `lib/emotionRepository.ts`
+#### `shared/storage/emotionRepository.ts`
 
 ```typescript
 export type EmotionRecordInput = Omit<EmotionRecord, 'id'>
@@ -140,7 +142,7 @@ export async function deleteAllEmotions(): Promise<void>                        
 
 **책임:** DB 접근의 유일한 경로. 다른 모듈은 직접 `db.emotions.xxx`를 호출하지 않음.
 
-#### `lib/emotionAggregator.ts`
+#### `features/algorithm/emotion/emotionAggregator.ts`
 
 ```typescript
 export interface EmotionSample {
@@ -161,7 +163,7 @@ export function aggregate(
 
 **책임:** 순수 계산. side-effect 없음. TDD 주 적용 대상.
 
-#### `hooks/useEmotionRecorder.ts`
+#### `features/camera/hooks/useEmotionRecorder.ts`
 
 ```typescript
 interface Options {

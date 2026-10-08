@@ -1,10 +1,12 @@
 # Living Orb + 톤 통합 Implementation Plan
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 랜딩(`/`) ↔ 앱(`/measure`, `/stats`)의 시각·타이포·모션 언어를 통일하고, 시간이 쌓일수록 자라나는 "Living Orb"를 도입해 사용자에게 "내 구"라는 정체성을 부여한다.
 
-**Architecture:** 4계층 분리 — (1) 순수 함수(`lib/orbStages.ts`, `lib/orbAxes.ts`, `lib/weeklyEmotion.ts`)는 TDD 엄격, (2) 상태/사이드이펙트 hook(`useTheme`, `useLivingOrb`, `useMilestone`)도 TDD, (3) 시각 컴포넌트(`LivingOrb` SVG, `ThemeToggle`, `MilestoneToast`)는 props/렌더 테스트, (4) 통합(layout, page, 기존 컴포넌트 톤 정리)은 best-effort 수동 검증. CSS Variables + `data-theme` 토큰으로 다크/라이트 한 페이지에서 둘 다.
+**Architecture:** 4계층 분리 — (1) 순수 함수(`features/ui/orb/lib/orbStages.ts`, `lib/orbAxes.ts`, `lib/weeklyEmotion.ts`)는 TDD 엄격, (2) 상태/사이드이펙트 hook(`useTheme`, `useLivingOrb`, `useMilestone`)도 TDD, (3) 시각 컴포넌트(`LivingOrb` SVG, `ThemeToggle`, `MilestoneToast`)는 props/렌더 테스트, (4) 통합(layout, page, 기존 컴포넌트 톤 정리)은 best-effort 수동 검증. CSS Variables + `data-theme` 토큰으로 다크/라이트 한 페이지에서 둘 다.
 
 **Tech Stack:** TypeScript 5, Next.js 16.2 (App Router), React 19.2, Tailwind v4 (`@theme inline`), CSS Variables, SVG, Dexie 4.4 + dexie-react-hooks, Vitest 4.1 + @testing-library/react + happy-dom + fake-indexeddb. Three.js·복잡한 Canvas 회피.
 
@@ -95,16 +97,16 @@ git checkout -b living-orb
 
 ---
 
-## Task 1: `lib/orbStages.ts` — 5단계 정의 (TDD)
+## Task 1: `features/ui/orb/lib/orbStages.ts` — 5단계 정의 (TDD)
 
 **Files:**
-- Create: `lib/orbStages.ts`
-- Create: `tests/lib/orbStages.test.ts`
+- Create: `features/ui/orb/lib/orbStages.ts`
+- Create: `tests/ui/orb/lib/orbStages.test.ts`
 
 - [ ] **Step 1: 실패 테스트 작성**
 
 ```ts
-// tests/lib/orbStages.test.ts
+// tests/ui/orb/lib/orbStages.test.ts
 import { describe, it, expect } from 'vitest'
 import {
   STAGE_THRESHOLDS,
@@ -113,7 +115,7 @@ import {
   stageFromCount,
   isStageHigher,
   type OrbStage,
-} from '@/lib/orbStages'
+} from '@/features/ui/orb/lib/orbStages'
 
 describe('orbStages', () => {
   it('STAGE_THRESHOLDS 가 spec 합의값', () => {
@@ -172,7 +174,7 @@ describe('orbStages', () => {
 - [ ] **Step 2: 테스트 실행 — FAIL 예상**
 
 ```bash
-npm run test:run -- tests/lib/orbStages.test.ts
+npm run test:run -- tests/ui/orb/lib/orbStages.test.ts
 ```
 
 Expected: 모든 테스트 FAIL (모듈 없음).
@@ -180,7 +182,7 @@ Expected: 모든 테스트 FAIL (모듈 없음).
 - [ ] **Step 3: 구현 작성**
 
 ```ts
-// lib/orbStages.ts
+// features/ui/orb/lib/orbStages.ts
 export type OrbStage = 'empty' | 'awakening' | 'forming' | 'settled' | 'living'
 
 export const STAGE_THRESHOLDS: Record<OrbStage, number> = {
@@ -223,7 +225,7 @@ export function isStageHigher(a: OrbStage, b: OrbStage): boolean {
 - [ ] **Step 4: 테스트 PASS 확인**
 
 ```bash
-npm run test:run -- tests/lib/orbStages.test.ts
+npm run test:run -- tests/ui/orb/lib/orbStages.test.ts
 ```
 
 Expected: 모두 PASS.
@@ -231,7 +233,7 @@ Expected: 모두 PASS.
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add lib/orbStages.ts tests/lib/orbStages.test.ts
+git add features/ui/orb/lib/orbStages.ts tests/ui/orb/lib/orbStages.test.ts
 git commit -m "feat: lib/orbStages — 5단계 정의 + count→stage TDD"
 ```
 
@@ -366,7 +368,7 @@ npm run test:run -- tests/lib/orbAxes.test.ts
 
 ```ts
 // lib/orbAxes.ts
-import type { Emotion, EmotionResult } from './emotionAnalysis'
+import type { Emotion, EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 
 const HUE_COLORS: Record<Emotion, [number, number, number]> = {
   happy: [242, 201, 76],
@@ -442,7 +444,7 @@ git commit -m "feat: lib/orbAxes — opacity/hue/saturation/motion 4축 매핑 T
 // tests/lib/weeklyEmotion.test.ts
 import { describe, it, expect } from 'vitest'
 import { aggregateWeeklyEmotion } from '@/lib/weeklyEmotion'
-import type { EmotionRecord } from '@/lib/db'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 function rec(
   partial: Partial<EmotionRecord> & { id: number; timestamp: Date; duration: number },
@@ -583,9 +585,9 @@ npm run test:run -- tests/lib/weeklyEmotion.test.ts
 
 ```ts
 // lib/weeklyEmotion.ts
-import type { EmotionRecord } from './db'
-import type { EmotionResult } from './emotionAnalysis'
-import { ANGRY_WEIGHT } from './riskCalculator'
+import type { EmotionRecord } from '@/shared/storage/db'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { ANGRY_WEIGHT } from '@/features/algorithm/stress/riskCalculator'
 
 export interface WeeklyEmotionAggregate {
   emotions: EmotionResult
@@ -1196,8 +1198,8 @@ git commit -m "feat: ThemeToggle — 3-mode 순환 버튼 TDD"
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useLivingOrb } from '@/hooks/useLivingOrb'
-import { db } from '@/lib/db'
-import type { EmotionRecord } from '@/lib/db'
+import { db } from '@/shared/storage/db'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 function rec(partial: Partial<EmotionRecord> & { timestamp: Date; duration: number }): Omit<EmotionRecord, 'id'> {
   return {
@@ -1294,16 +1296,16 @@ npm run test:run -- tests/hooks/useLivingOrb.test.tsx
 
 import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '@/lib/db'
+import { db } from '@/shared/storage/db'
 import {
   hueFromWeeklyEmotion,
   motionFromFrequency,
   opacityFromCount,
   saturationFromIntensity,
 } from '@/lib/orbAxes'
-import { stageFromCount, type OrbStage } from '@/lib/orbStages'
+import { stageFromCount, type OrbStage } from '@/features/ui/orb/lib/orbStages'
 import { aggregateWeeklyEmotion } from '@/lib/weeklyEmotion'
-import type { EmotionResult } from '@/lib/emotionAnalysis'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000
 const NEUTRAL_HUE = 'rgb(107,171,154)'
@@ -1536,7 +1538,7 @@ npm run test:run -- tests/components/LivingOrb.test.tsx
 // components/LivingOrb.tsx
 'use client'
 
-import type { OrbStage } from '@/lib/orbStages'
+import type { OrbStage } from '@/features/ui/orb/lib/orbStages'
 
 interface Props {
   stage: OrbStage
@@ -1658,7 +1660,7 @@ git commit -m "feat: LivingOrb SVG 컴포넌트 — 5단계 시각 + 4축 props 
 'use client'
 
 import { createContext, useContext, useState, useCallback } from 'react'
-import type { EmotionResult } from '@/lib/emotionAnalysis'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 
 interface Value {
   liveEmotion: EmotionResult | null
@@ -1820,7 +1822,7 @@ npm run test:run -- tests/hooks/useMilestone.test.ts
 'use client'
 
 import { useEffect, useState } from 'react'
-import { isStageHigher, STAGE_ORDER, type OrbStage } from '@/lib/orbStages'
+import { isStageHigher, STAGE_ORDER, type OrbStage } from '@/features/ui/orb/lib/orbStages'
 
 const STORAGE_KEY = 'onmaum_orb_stage_max'
 
@@ -1884,8 +1886,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import MilestoneToast from '@/components/MilestoneToast'
 import { LivingOrbProvider } from '@/components/LivingOrbProvider'
-import { db } from '@/lib/db'
-import type { EmotionRecord } from '@/lib/db'
+import { db } from '@/shared/storage/db'
+import type { EmotionRecord } from '@/shared/storage/db'
 
 beforeEach(async () => {
   localStorage.clear()
@@ -1967,7 +1969,7 @@ npm run test:run -- tests/components/MilestoneToast.test.tsx
 import { useEffect, useState } from 'react'
 import { useLivingOrb } from '@/hooks/useLivingOrb'
 import { useMilestone } from '@/hooks/useMilestone'
-import { STAGE_MESSAGES } from '@/lib/orbStages'
+import { STAGE_MESSAGES } from '@/features/ui/orb/lib/orbStages'
 import { useLivingOrbInput } from './LivingOrbProvider'
 
 const FADE_MS = 5000
@@ -2038,11 +2040,11 @@ git commit -m "feat: MilestoneToast — 단계 전환 toast 5초 fade + 시스�
 ## Task 13: `ReactiveOrb` 라이트 variant
 
 **Files:**
-- Modify: `components/ReactiveOrb.tsx`
+- Modify: `features/ui/orb/ReactiveOrb.tsx`
 
 - [ ] **Step 1: 현재 색 팔레트를 라이트/다크 두 벌로 분리**
 
-`components/ReactiveOrb.tsx` 의 `drawBlob` 함수 내부 색 리터럴들을 다음 패턴으로 추출. 파일 상단(컴포넌트 바깥)에 팔레트 추가:
+`features/ui/orb/ReactiveOrb.tsx` 의 `drawBlob` 함수 내부 색 리터럴들을 다음 패턴으로 추출. 파일 상단(컴포넌트 바깥)에 팔레트 추가:
 
 ```ts
 type Theme = 'light' | 'dark'
@@ -2156,7 +2158,7 @@ npm run dev &
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add components/ReactiveOrb.tsx
+git add features/ui/orb/ReactiveOrb.tsx
 git commit -m "feat: ReactiveOrb — light variant 팔레트 분기 (theme prop)"
 ```
 
@@ -2172,11 +2174,11 @@ git commit -m "feat: ReactiveOrb — light variant 팔레트 분기 (theme prop)
 ```tsx
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next'
-import AppChrome from '@/components/AppChrome'
+import AppChrome from '@/features/ui/common/AppChrome'
 import LivingOrbHost from '@/components/LivingOrbHost'
 import { LivingOrbProvider } from '@/components/LivingOrbProvider'
 import MilestoneToast from '@/components/MilestoneToast'
-import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
+import ServiceWorkerRegistrar from '@/features/ui/common/ServiceWorkerRegistrar'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import './globals.css'
 
@@ -2271,13 +2273,13 @@ git commit -m "feat: layout.tsx — 인라인 theme init + Provider + LivingOrbH
 ## Task 15: Navigation + LandingNav 톤 통일 + ThemeToggle
 
 **Files:**
-- Modify: `components/Navigation.tsx`
-- Modify: `components/LandingNav.tsx`
+- Modify: `features/ui/common/Navigation.tsx`
+- Modify: `features/ui/landing/LandingNav.tsx`
 
 - [ ] **Step 1: Navigation 교체**
 
 ```tsx
-// components/Navigation.tsx
+// features/ui/common/Navigation.tsx
 'use client'
 
 import Link from 'next/link'
@@ -2323,10 +2325,10 @@ export default function Navigation() {
 
 - [ ] **Step 2: LandingNav 라이트 모드 색 추가 + ThemeToggle**
 
-`components/LandingNav.tsx` 에서 하드코딩된 색을 CSS var 또는 라이트/다크 분기로 교체. 다음으로 전체 교체:
+`features/ui/landing/LandingNav.tsx` 에서 하드코딩된 색을 CSS var 또는 라이트/다크 분기로 교체. 다음으로 전체 교체:
 
 ```tsx
-// components/LandingNav.tsx
+// features/ui/landing/LandingNav.tsx
 'use client'
 
 import Link from 'next/link'
@@ -2423,7 +2425,7 @@ npm run test:run
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add components/Navigation.tsx components/LandingNav.tsx
+git add features/ui/common/Navigation.tsx features/ui/landing/LandingNav.tsx
 git commit -m "feat: Navigation + LandingNav — 톤 통일 + ThemeToggle 통합"
 ```
 
@@ -2432,13 +2434,13 @@ git commit -m "feat: Navigation + LandingNav — 톤 통일 + ThemeToggle 통합
 ## Task 16: Footer 톤 통일 (이모지 제거 + CSS var)
 
 **Files:**
-- Modify: `components/ContactsFooter.tsx`
-- Modify: `components/LandingFooter.tsx`
+- Modify: `features/ui/common/ContactsFooter.tsx`
+- Modify: `features/ui/landing/LandingFooter.tsx`
 
 - [ ] **Step 1: ContactsFooter 교체**
 
 ```tsx
-// components/ContactsFooter.tsx
+// features/ui/common/ContactsFooter.tsx
 export default function ContactsFooter() {
   return (
     <footer className="mt-8 border-t border-[var(--border)] pb-2 pt-4 text-center text-[11px] font-light uppercase tracking-[0.12em] text-[var(--fg-muted)]">
@@ -2466,7 +2468,7 @@ export default function ContactsFooter() {
 
 - [ ] **Step 2: LandingFooter 톤 유지 (랜딩은 다크 강제)**
 
-`components/LandingFooter.tsx` 는 현재 다크 톤 그대로 유지. 변경 없이 패스 가능. (다크 베이스 위에서만 표시되므로 라이트 분기 필요 없음)
+`features/ui/landing/LandingFooter.tsx` 는 현재 다크 톤 그대로 유지. 변경 없이 패스 가능. (다크 베이스 위에서만 표시되므로 라이트 분기 필요 없음)
 
 - [ ] **Step 3: 빌드 검증**
 
@@ -2477,7 +2479,7 @@ npx tsc --noEmit 2>&1 | tail -10
 - [ ] **Step 4: 커밋**
 
 ```bash
-git add components/ContactsFooter.tsx
+git add features/ui/common/ContactsFooter.tsx
 git commit -m "feat: ContactsFooter — 이모지 제거 + CSS var 톤 통일"
 ```
 
@@ -2641,10 +2643,10 @@ git commit -m "feat: page headers — 라벨 패턴 + 이모지 제거 + LivingO
 ## Task 18: 카드 컴포넌트 다크 톤 + 타이포 통일
 
 **Files:**
-- Modify: `components/EmotionDisplay.tsx`
+- Modify: `features/ui/measure/EmotionDisplay.tsx`
 - Modify: `components/DailyRiskCard.tsx`
-- Modify: `components/TrendChart.tsx`
-- Modify: `components/RecentRecords.tsx`
+- Modify: `features/ui/report/TrendChart.tsx`
+- Modify: `features/ui/report/RecentRecords.tsx`
 - Modify: `components/SelfCareTip.tsx`
 - Modify: `components/NotificationToggle.tsx`
 - 변경 없음: `components/RiskWarningModal.tsx` (위험 경고는 톤 유지가 의도 — spec §3 절제된 표현)
@@ -2654,7 +2656,7 @@ git commit -m "feat: page headers — 라벨 패턴 + 이모지 제거 + LivingO
 - [ ] **Step 1: EmotionDisplay 교체**
 
 ```tsx
-// components/EmotionDisplay.tsx
+// features/ui/measure/EmotionDisplay.tsx
 'use client'
 
 import {
@@ -2663,7 +2665,7 @@ import {
   getDominantEmotion,
   type Emotion,
   type EmotionResult,
-} from '@/lib/emotionAnalysis'
+} from '@/features/algorithm/emotion/emotionAnalysis'
 
 const EMOTION_COLOR: Record<Emotion, string> = {
   happy: 'var(--accent)',
@@ -2778,7 +2780,7 @@ npm run dev &
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/EmotionDisplay.tsx components/DailyRiskCard.tsx components/TrendChart.tsx components/RecentRecords.tsx components/SelfCareTip.tsx components/NotificationToggle.tsx
+git add features/ui/measure/EmotionDisplay.tsx components/DailyRiskCard.tsx features/ui/report/TrendChart.tsx features/ui/report/RecentRecords.tsx components/SelfCareTip.tsx components/NotificationToggle.tsx
 git commit -m "feat: 카드 컴포넌트 6종 — CSS var 기반 다크/라이트 양쪽 지원 + 타이포 통일"
 ```
 
@@ -2787,11 +2789,11 @@ git commit -m "feat: 카드 컴포넌트 6종 — CSS var 기반 다크/라이�
 ## Task 19: prefers-reduced-motion + 접근성 마무리
 
 **Files:**
-- Modify: `components/ReactiveOrb.tsx` (모션 정지)
+- Modify: `features/ui/orb/ReactiveOrb.tsx` (모션 정지)
 
 - [ ] **Step 1: ReactiveOrb 에 prefers-reduced-motion 감지 추가**
 
-`components/ReactiveOrb.tsx` 의 `useEffect` 시작 부분에:
+`features/ui/orb/ReactiveOrb.tsx` 의 `useEffect` 시작 부분에:
 
 ```ts
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -2819,7 +2821,7 @@ npx tsc --noEmit 2>&1 | tail -10
 - [ ] **Step 3: 커밋**
 
 ```bash
-git add components/ReactiveOrb.tsx
+git add features/ui/orb/ReactiveOrb.tsx
 git commit -m "feat: ReactiveOrb — prefers-reduced-motion 감지 시 정적 한 프레임"
 ```
 
@@ -2828,11 +2830,11 @@ git commit -m "feat: ReactiveOrb — prefers-reduced-motion 감지 시 정적 �
 ## Task 20: 통합 검증 + Living Orb 페이지 연결 점검
 
 **Files:**
-- Modify: `components/LandingHero.tsx` (ReactiveOrb theme prop 전달)
+- Modify: `features/ui/landing/LandingHero.tsx` (ReactiveOrb theme prop 전달)
 
 - [ ] **Step 1: LandingHero 가 ReactiveOrb 에 theme="dark" 명시 (랜딩은 강제 다크)**
 
-`components/LandingHero.tsx`:
+`features/ui/landing/LandingHero.tsx`:
 
 ```tsx
 <ReactiveOrb theme="dark" />
@@ -2897,7 +2899,7 @@ Expected: 에러 없이 빌드 성공.
 - [ ] **Step 5: 최종 커밋 + spec 참조**
 
 ```bash
-git add components/LandingHero.tsx
+git add features/ui/landing/LandingHero.tsx
 git commit -m "feat: LandingHero — ReactiveOrb theme=dark 명시 + Living Orb 통합 검증"
 ```
 

@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import CheckInCard from '@/components/report/CheckInCard'
-import DailyReport from '@/components/report/DailyReport'
-import NudgeSettings from '@/components/nudge/NudgeSettings'
-import RecentRecords from '@/components/report/RecentRecords'
-import TrendChart from '@/components/report/TrendChart'
-import { useCheckin } from '@/hooks/checkin/useCheckin'
-import { getEmotionsByDate, getEmotionsByDateRange } from '@/lib/emotion/emotionRepository'
-import { loadSettings } from '@/lib/storage/settings'
-import { BASELINE_WINDOW_DAYS } from '@/lib/stress/baseline'
+import CheckInCard from '@/features/feedback/components/CheckInCard'
+import DailyReport from '@/features/ui/report/DailyReport'
+import NudgeSettings from '@/features/feedback/components/NudgeSettings'
+import RecentRecords from '@/features/ui/report/RecentRecords'
+import TrendChart from '@/features/ui/report/TrendChart'
+import { useCheckin } from '@/features/feedback/hooks/useCheckin'
+import { getEmotionsByDate, getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
+import { loadSettings } from '@/shared/storage/settings'
+import { BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
 
 export default function StatsPage() {
   const today = new Date().toLocaleDateString('en-CA')

@@ -7,14 +7,18 @@
 | 작업 공간 | 기본 에이전트 | 역할 | 개발 서버 |
 |---|---|---|---|
 | ONMAUM - Integration | Gemini CLI 검토 탭, 필요할 때 사용 | 기준 코드, 통합 확인, 교차 리뷰 | `npm run dev` → 3000 |
-| ONMAUM - Core | Codex | 이정환의 분석·계산·저장 영역 | `npm run dev:core` → 3001 |
-| ONMAUM - UI | Claude Code | 김우빈의 화면·상호작용 영역 | `npm run dev:ui` → 3002 |
+| ONMAUM - Core | Codex | 이정환: ③ 서버·관리자 ⑤ 알고리즘 ⑥ 피드백, Shared 저장 주 관리 | `npm run dev:core` → 3001 |
+| ONMAUM - UI | Claude Code | 김우빈: ① 카메라 인식 ② Electron ④ UI 변경 | `npm run dev:ui` → 3002 |
 
 이 배치는 작업을 나누기 위한 기본값이며 특정 모델의 성능 우열을 뜻하지 않습니다. 두 사람 모두 필요에 따라 Claude와 Codex를 바꿔 사용해도 됩니다. 한 작업 공간에서 수정하는 에이전트는 동시에 하나만 둡니다.
+
+Core/UI는 이 PC에 이미 등록된 작업 공간 이름과 포트 실행 명령입니다. 실제 코드 소유권은 위 여섯 업무와 `features/<업무>`, `shared/storage` 경로를 따릅니다. 기존 작업 공간·브랜치·`dev:core`/`dev:ui` 명령은 재분류 때문에 자동 변경하지 않습니다. 새 기능은 `camera-task`, `electron-task`, `admin-task`, `ui-task`, `algorithm-task`, `feedback-task`처럼 한 업무를 드러내는 별도 브랜치에서 진행합니다.
 
 Orca의 작업 공간·터미널·로그인은 PC별 상태입니다. 이 PC에서 만든 작업 공간이 팀원의 PC에 자동 생성되지는 않습니다. 팀원과 코드는 GitHub 브랜치·PR로 공유하고, 각자 자신의 Claude·ChatGPT 계정으로 로그인합니다. 인증 파일이나 API 키를 저장소로 공유하지 않습니다.
 
 현재 준비 기준 브랜치는 `chore/orca-collaboration`입니다. 앞선 도메인 재분류 커밋을 포함합니다. 원격 `main`에 협업 설정이 반영되기 전까지 새 작업 공간은 이 준비 기준을 사용합니다. 원격 공유 저장소 선택·초대·보호 규칙은 실제 GitHub 설정과 별도로 확인합니다.
+
+6개 업무 기준 재분류는 `chore/reclassify-by-role`에서 진행합니다. 이 변경이 아직 합쳐지지 않은 기존 작업 공간에서는 경로가 다를 수 있습니다. 다른 작업 공간을 직접 고치지 말고 검토된 커밋/PR로 공유합니다. 재분류 검증과 범위는 [ROLE_RECLASSIFICATION.md](ROLE_RECLASSIFICATION.md)를 참고합니다.
 
 ## 설치와 검사
 
@@ -45,7 +49,7 @@ orca worktree list --repo name:onmaum_final --json
 일반 기능 작업은 다음처럼 독립된 작업 공간을 만듭니다. `--no-parent`는 작업 계보를 분리하며 Git 기준은 저장소의 기본 base ref를 따릅니다.
 
 ```bash
-orca worktree create --repo name:onmaum_final --name core-task-name --no-parent --agent codex --setup skip --json
+orca worktree create --repo name:onmaum_final --name algorithm-task-name --no-parent --agent codex --setup skip --json
 orca worktree create --repo name:onmaum_final --name ui-task-name --no-parent --agent claude --setup skip --json
 ```
 
@@ -98,7 +102,7 @@ orca terminal create --worktree "name:ONMAUM - Integration" --title "Gemini - Re
 1. Issue 또는 [TASK_BRIEF.md](TASK_BRIEF.md)를 이용해 담당자, 목표, 변경 경로, 완료 조건을 정합니다.
 2. 작업자가 현재 디렉터리·브랜치·`git status`를 확인한 뒤 자신의 작업 공간에서 구현합니다.
 3. 공유 타입·props·함수·저장 계약이 필요한 작업은 계약 변경을 먼저 작은 커밋으로 정리해 상대 작업이 어떤 기준을 사용하는지 명시합니다. 다른 사람의 작업 공간에 직접 파일을 써서 전달하지 않습니다.
-4. 구현 에이전트와 다른 에이전트로 diff를 읽기 전용 검토합니다. 예: Codex가 구현한 Core 변경을 Claude가 검토하고, Claude가 구현한 UI 변경을 Codex가 검토합니다.
+4. 구현 에이전트와 다른 에이전트로 diff를 읽기 전용 검토합니다. 예: Codex가 구현한 알고리즘·피드백 변경을 Claude가 검토하고, Claude가 구현한 카메라·UI 변경을 Codex가 검토합니다. 에이전트 검토와 상대 팀원의 PR 검토는 별개입니다.
 5. `npm run check`와 `git diff --check` 결과, 남은 위험, 화면 변경 확인 결과를 PR에 기록합니다.
 6. 상대 담당자가 PR을 확인하고 통합합니다. AI 리뷰 결과만으로 자동 병합하지 않습니다.
 

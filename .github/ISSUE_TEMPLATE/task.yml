@@ -13,9 +13,13 @@ body:
     attributes:
       label: 담당 영역
       options:
-        - Core
-        - UI
-        - 공동
+        - ① 카메라 인식 — 김우빈
+        - ② Electron — 김우빈
+        - ③ 서버·관리자 — 이정환
+        - ④ UI 변경 — 김우빈
+        - ⑤ 알고리즘 — 이정환
+        - ⑥ 피드백 — 이정환
+        - Shared — 공동
     validations:
       required: true
   - type: input

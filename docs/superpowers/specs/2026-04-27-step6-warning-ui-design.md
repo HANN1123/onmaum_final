@@ -1,5 +1,7 @@
 # Step 6 — 위험 경고 UI + 상담 연락처 설계
 
+> 과거 설계·구현 계획 기록입니다. 현존 모듈의 경로 참조만 2026-10-07 구조로 갱신했습니다. 당시 동작·폐기된 기능·미완료 체크리스트는 현재 구현이나 실행 지침이 아닙니다. 현재 지침은 [AGENTS.md](../../../AGENTS.md)와 [Code Ownership](../../collaboration/CODE_OWNERSHIP.md), 실제 파일은 [프로젝트 구조](../../architecture/PROJECT_STRUCTURE.md)를 따릅니다.
+
 - **작성일**: 2026-04-27
 - **대상 단계**: Step 6 (9단계 로드맵 중)
 - **선행 단계**: Step 5 (추세 그래프) — 완료
@@ -124,7 +126,7 @@ export default function RiskWarningModal(props: Props): JSX.Element | null
 - 연락처 2개 (`tel:1577-0199`, `tel:1393`)
 - 닫기 경로: "알겠어요" 버튼 / ESC 키 / 배경 클릭
 
-#### `components/ContactsFooter.tsx`
+#### `features/ui/common/ContactsFooter.tsx`
 
 ```typescript
 export default function ContactsFooter(): JSX.Element
