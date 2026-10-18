@@ -82,7 +82,7 @@ app/            라우트 — /, /measure, /stats, /demo, /orb-preview
 features/camera/     ① 카메라·모델·측정 루프 — 김우빈
 features/ui/         ④ 화면·오브·Document PiP — 김우빈
 features/algorithm/  ⑤ 감정·스트레스·기준선 — 이정환
-features/feedback/   ⑥ 체크인·넛지·알림·자기관리 제안 — 이정환
+features/feedback/   ⑥ 체크인·넛지·알림·자기관리 제안 — 이정환 (components는 공동)
 shared/storage/      공통 저장 기반 — 이정환 주 관리, 공동 주의
 public/         PWA(manifest, sw.js), face-api 모델
 tests/          camera, ui, algorithm, feedback, shared 및 tooling

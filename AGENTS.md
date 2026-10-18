@@ -26,19 +26,18 @@ they are common conflict points.
 
 ### Jung-hwan Lee
 
-- Personal Data Management (3)
-- Emotion and Personal State Analysis (5)
-- Personalized Feedback (6)
+- ③ 개인 데이터 관리
+- ⑤ 감정 및 개인 상태 분석
+- ⑥ 개인 맞춤 피드백
 - Shared storage primary maintainer; coordinate schema changes.
 
 ### Woo-bin Kim
 
-- Camera and rPPG (1), including the entire rPPG signal pipeline
-- Electron (2)
-- UI/UX (4)
+- ① 카메라·rPPG (rPPG 신호처리 전체 포함)
+- ② Electron
+- ④ UI/UX
 
-The admin page and organization/employee management are out of the current
-development scope.
+관리자 페이지와 조직·직원 관리는 현재 개발 범위에서 제외한다.
 
 Before editing a feature owned by the other contributor,
 check `docs/collaboration/CODE_OWNERSHIP.md`.
