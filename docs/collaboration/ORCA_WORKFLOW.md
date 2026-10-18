@@ -7,18 +7,18 @@
 | 작업 공간 | 기본 에이전트 | 역할 | 개발 서버 |
 |---|---|---|---|
 | ONMAUM - Integration | Gemini CLI 검토 탭, 필요할 때 사용 | 기준 코드, 통합 확인, 교차 리뷰 | `npm run dev` → 3000 |
-| ONMAUM - Core | Codex | 이정환: ③ 서버·관리자 ⑤ 알고리즘 ⑥ 피드백, Shared 저장 주 관리 | `npm run dev:core` → 3001 |
-| ONMAUM - UI | Claude Code | 김우빈: ① 카메라 인식 ② Electron ④ UI 변경 | `npm run dev:ui` → 3002 |
+| ONMAUM - Core | Codex | 이정환: ③ 개인 데이터 관리 ⑤ 감정 및 개인 상태 분석 ⑥ 개인 맞춤 피드백, Shared 저장 주 관리 | `npm run dev:core` → 3001 |
+| ONMAUM - UI | Claude Code | 김우빈: ① 카메라·rPPG ② Electron ④ UI/UX | `npm run dev:ui` → 3002 |
 
 이 배치는 작업을 나누기 위한 기본값이며 특정 모델의 성능 우열을 뜻하지 않습니다. 두 사람 모두 필요에 따라 Claude와 Codex를 바꿔 사용해도 됩니다. 한 작업 공간에서 수정하는 에이전트는 동시에 하나만 둡니다.
 
-Core/UI는 이 PC에 이미 등록된 작업 공간 이름과 포트 실행 명령입니다. 실제 코드 소유권은 위 여섯 업무와 `features/<업무>`, `shared/storage` 경로를 따릅니다. 기존 작업 공간·브랜치·`dev:core`/`dev:ui` 명령은 재분류 때문에 자동 변경하지 않습니다. 새 기능은 `camera-task`, `electron-task`, `admin-task`, `ui-task`, `algorithm-task`, `feedback-task`처럼 한 업무를 드러내는 별도 브랜치에서 진행합니다.
+Core/UI는 이 PC에 이미 등록된 작업 공간 이름과 포트 실행 명령입니다. 실제 코드 소유권은 위 여섯 업무와 `features/<업무>`, `shared/storage` 경로를 따릅니다. 기존 작업 공간·브랜치·`dev:core`/`dev:ui` 명령은 재분류 때문에 자동 변경하지 않습니다. 새 기능은 한 업무를 드러내는 별도 브랜치에서 진행하며, 브랜치 이름은 `<type>/<issue번호>-<업무>-<요약>` 형식을 따릅니다(예: `feat/12-rppg-measurement`, `feat/15-storage-session-export`). Issue가 없으면 번호를 빼고 `feat/rppg-measurement`처럼 씁니다. 세부 규칙은 `AGENTS.md`의 브랜치·커밋 규칙을 따릅니다.
 
 Orca의 작업 공간·터미널·로그인은 PC별 상태입니다. 이 PC에서 만든 작업 공간이 팀원의 PC에 자동 생성되지는 않습니다. 팀원과 코드는 GitHub 브랜치·PR로 공유하고, 각자 자신의 Claude·ChatGPT 계정으로 로그인합니다. 인증 파일이나 API 키를 저장소로 공유하지 않습니다.
 
-현재 준비 기준 브랜치는 `chore/orca-collaboration`입니다. 앞선 도메인 재분류 커밋을 포함합니다. 원격 `main`에 협업 설정이 반영되기 전까지 새 작업 공간은 이 준비 기준을 사용합니다. 원격 공유 저장소 선택·초대·보호 규칙은 실제 GitHub 설정과 별도로 확인합니다.
+공식 공동 저장소는 `https://github.com/HANN1123/onmaum_final`이고 기준 브랜치는 `main`입니다. 2026-10-18에 GitHub 기본 브랜치 이름을 `chore/reclassify-by-role`에서 `main`으로 바꿨으며, 원격에는 `main`만 있습니다. 새 작업 공간은 `origin/main`에서 만듭니다. 팀원 초대·보호 규칙은 실제 GitHub 설정과 별도로 확인합니다.
 
-6개 업무 기준 재분류는 `chore/reclassify-by-role`에서 진행합니다. 이 변경이 아직 합쳐지지 않은 기존 작업 공간에서는 경로가 다를 수 있습니다. 다른 작업 공간을 직접 고치지 말고 검토된 커밋/PR로 공유합니다. 재분류 검증과 범위는 [ROLE_RECLASSIFICATION.md](ROLE_RECLASSIFICATION.md)를 참고합니다.
+6개 업무 기준 재분류는 당시 `chore/reclassify-by-role` 브랜치에서 진행했고 현재 `main`에 포함되어 있습니다. 이 변경을 받기 전에 만든 기존 작업 공간에서는 경로가 다를 수 있습니다. 다른 작업 공간을 직접 고치지 말고 검토된 커밋/PR로 공유합니다. 재분류 당시의 검증과 범위는 [ROLE_RECLASSIFICATION.md](ROLE_RECLASSIFICATION.md)를 참고합니다.
 
 ## 설치와 검사
 
@@ -49,9 +49,11 @@ orca worktree list --repo name:onmaum_final --json
 일반 기능 작업은 다음처럼 독립된 작업 공간을 만듭니다. `--no-parent`는 작업 계보를 분리하며 Git 기준은 저장소의 기본 base ref를 따릅니다.
 
 ```bash
-orca worktree create --repo name:onmaum_final --name algorithm-task-name --no-parent --agent codex --setup skip --json
-orca worktree create --repo name:onmaum_final --name ui-task-name --no-parent --agent claude --setup skip --json
+orca worktree create --repo name:onmaum_final --name storage-session-export --no-parent --agent codex --setup skip --json
+orca worktree create --repo name:onmaum_final --name rppg-measurement --no-parent --agent claude --setup skip --json
 ```
+
+Orca는 작업 공간 이름 앞에 Git 사용자명을 붙여 브랜치를 만들 수 있습니다(예: `HANN1123/rppg-measurement`). 처음 push하기 전에 해당 작업 공간에서 `git branch -m feat/rppg-measurement`처럼 브랜치 규칙에 맞게 이름을 바꿉니다.
 
 생성 결과의 전체 worktree id와 터미널 handle을 사용합니다. 이미 `--agent`로 시작한 에이전트를 다시 만들지 않습니다. 설치는 해당 작업 공간의 별도 일반 터미널에서 `npm run setup:workspace`를 실행합니다. 현재 구성은 자동 setup hook에 의존하지 않으므로 새로 만든 작업 공간은 이 설치가 한 번 필요합니다.
 
@@ -103,7 +105,7 @@ orca terminal create --worktree "name:ONMAUM - Integration" --title "Gemini - Re
 2. 작업자가 현재 디렉터리·브랜치·`git status`를 확인한 뒤 자신의 작업 공간에서 구현합니다.
 3. 공유 타입·props·함수·저장 계약이 필요한 작업은 계약 변경을 먼저 작은 커밋으로 정리해 상대 작업이 어떤 기준을 사용하는지 명시합니다. 다른 사람의 작업 공간에 직접 파일을 써서 전달하지 않습니다.
 4. 구현 에이전트와 다른 에이전트로 diff를 읽기 전용 검토합니다. 예: Codex가 구현한 알고리즘·피드백 변경을 Claude가 검토하고, Claude가 구현한 카메라·UI 변경을 Codex가 검토합니다. 에이전트 검토와 상대 팀원의 PR 검토는 별개입니다.
-5. `npm run check`와 `git diff --check` 결과, 남은 위험, 화면 변경 확인 결과를 PR에 기록합니다.
+5. `npm run check`, `npx tsc --noEmit`, `git diff --check` 결과, 남은 위험, 화면 변경 확인 결과를 PR에 기록합니다.
 6. 상대 담당자가 PR을 확인하고 통합합니다. AI 리뷰 결과만으로 자동 병합하지 않습니다.
 
 검토 프롬프트 예시:
@@ -120,25 +122,28 @@ Orca에서 자동 작업 분배·메시지·완료 대기까지 운영할 때는
 
 ## GitHub로 두 사람 연결
 
-현재 로컬 `origin`은 `HANN1123/onmaum_final`, 원본 코드는 `woobin-01/onmaum`에서 가져왔습니다. 공유 기준 저장소를 정한 다음 그 저장소로 준비 브랜치를 게시합니다. 이 설정 작업은 원격 URL을 바꾸거나 코드를 자동 업로드하지 않습니다.
+공식 공동 저장소는 `HANN1123/onmaum_final`입니다. 원본 코드는 당시 `woobin-01/onmaum`에서 가져왔으며, `woobin-01/onmaum`과 `HANN1123/onmaum`은 협업 기준 저장소가 아닙니다.
 
-GitHub CLI를 사용할 때는 본인 계정으로 `gh auth login`을 완료합니다. 다른 Git 인증 도구를 사용해도 됩니다. 새 저장소와 기존 `main`이 있는 저장소의 초기 게시 절차는 다르므로, 첫 게시 전 원격 브랜치를 확인합니다.
+GitHub CLI를 사용할 때는 본인 계정으로 `gh auth login`을 완료합니다. 다른 Git 인증 도구를 사용해도 됩니다. 원격 상태는 로컬 `git branch -a`가 아니라 원격 조회 결과로 판단합니다.
 
 ```bash
 git remote -v
-git ls-remote --heads origin
+git fetch origin --prune
+git ls-remote --symref origin HEAD
 ```
 
-기존 `main`이 있다면 준비 브랜치를 올려 PR로 합칩니다. 비어 있는 저장소라면 기준 브랜치 게시·기본 브랜치 설정을 먼저 완료합니다. 기준 `main`이 준비되면 각자 다음 순서로 Orca의 기본 base ref를 바꿉니다.
+기본 브랜치 이름이 `main`으로 바뀌기 전에 저장소를 받은 PC에서는 각자 한 번 다음을 실행합니다. 로컬 기준 브랜치 이름이 다르면 첫 명령의 `chore/reclassify-by-role`을 실제 이름으로 바꿉니다.
 
 ```bash
-git fetch origin
+git fetch --prune
+git branch -m chore/reclassify-by-role main
+git branch -u origin/main main
 orca repo set-base-ref --repo name:onmaum_final --ref origin/main --json
 ```
 
-그 후 새 작업은 최신 `origin/main`에서 생성합니다. 이미 작업 중인 브랜치는 상대 변경을 확인한 뒤 통합하며 다른 사람의 브랜치에 강제 push하지 않습니다.
+그 후 새 작업은 최신 `origin/main`에서 생성합니다. 이미 작업 중인 브랜치는 상대 변경을 확인한 뒤 통합하며 다른 사람의 브랜치에 push하거나 강제 push하지 않습니다.
 
-추가한 `.github/workflows/ci.yml`은 PR, `main`과 준비 브랜치 push, 수동 실행에서 설치·전체 검사를 수행합니다. GitHub에 게시되기 전에는 원격 실행되지 않습니다. 관리자가 저장소 설정에서 `Tests, lint and build` 검사를 필수로 지정하고 상대 리뷰 1개를 요구하면 됩니다. 팀원 초대와 보호 규칙은 이 파일 자체로 활성화되지 않습니다.
+`.github/workflows/ci.yml`은 PR, `main` push, 수동 실행에서 설치·전체 검사를 수행합니다. 관리자가 저장소 설정에서 `Tests, lint and build` 검사를 필수로 지정하고 상대 리뷰 1개를 요구하면 됩니다. 팀원 초대와 보호 규칙은 이 파일 자체로 활성화되지 않습니다.
 
 ## 추가 AI 도입 기준
 
