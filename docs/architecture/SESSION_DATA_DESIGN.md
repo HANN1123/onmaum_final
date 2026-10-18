@@ -166,7 +166,7 @@ this.version(2).stores({
 |---|---|
 | `startSession(now?)` → `MeasurementSession` | `status: 'active'`로 생성 |
 | `touchSession(id, now?)` | `lastSeenAt` 갱신. 측정 중 **고정 주기(제안 30초) 타이머**로 호출하며, 감정 레코드 저장 여부와 무관하다. 잘못 복구된 세션(`interrupted` + `'recovered'`)이면 `active`로 되돌린다 |
-| `endSession(id, reason, now?)` | `active`일 때만 `completed`로 바꾸고 `endedAt` 기록. **중복 호출은 무시(멱등)** |
+| `endSession(id, reason, now?)` | `active` 또는 자동 복구된 `interrupted`(`endReason: 'recovered'`)이면 `completed`로 바꾸고 `endedAt`·`endReason` 기록. 이미 `completed`이면 무시(멱등). 호출 전에 생존 갱신 타이머를 먼저 멈춘다 |
 | `recoverInterruptedSessions(now?, staleMs?)` | `active`이면서 `lastSeenAt`이 `staleMs`(제안: 생존 갱신 주기의 4배, 2분)보다 오래된 세션을 `interrupted`로 바꾸고 `endedAt = lastSeenAt` 기록. 호출 시점은 4.4절 5번 |
 | `getSessionsByDateRange(start, end)` | `startedAt` 기준 조회 (일별·주별 목록) |
 | `getSessionDetail(id)` | 세션 + 연결된 감정·심박·자기보고 |
@@ -181,7 +181,7 @@ this.version(2).stores({
 2. **진행**: 1분 집계 저장 시 레코드에 `sessionId`를 붙인다. 생존 갱신(`touchSession`)은 저장과 분리해 30초 타이머로 한다. 얼굴이 계속 검출되지 않아 `aggregate()`가 `null`을 반환하고 저장이 생략되는 동안에도 세션이 살아 있는 것으로 유지되게 하기 위해서다.
 3. **종료**: 측정 정지 시 `endSession(id, 'user-stop')`. 레코더의 마지막 조각 저장은 비동기라 `endSession`보다 늦게 끝날 수 있다. 레코드에는 이미 `sessionId`가 붙으므로 연결은 깨지지 않고, 마지막 레코드의 `timestamp`가 `endedAt`보다 약간 늦을 수 있음을 조회·분석에서 허용한다.
 4. **카메라 오류**: `endSession(id, 'camera-error')`.
-5. **탭 닫힘·앱 중단과 복구**: 세션이 `active`로 남는다. `recoverInterruptedSessions()`는 (a) 앱 시작 시, (b) `startSession()` 직전, (c) 앱 시작 때 아직 신선해서 제외된 `active` 세션이 있으면 `staleMs` 뒤 한 번 더 호출한다. (c) 덕분에 중단 직후 빠르게 다시 열어도 그 세션이 계속 `active`로 남지 않는다. 판정은 `lastSeenAt`만 보므로, 다른 탭에서 측정 중이고 생존 갱신이 정상인 세션은 30초마다 갱신되어 복구 대상이 되지 않는다. 갱신 실패 등으로 살아 있는 세션이 잘못 `interrupted`로 바뀌면, 그 세션의 다음 `touchSession()` 성공 시 `endReason`이 `'recovered'`인 경우에 한해 `active`로 되돌리고 `endedAt`을 비운다. 사용자가 끝낸 세션(`completed`)은 되돌리지 않는다.
+5. **탭 닫힘·앱 중단과 복구**: 세션이 `active`로 남는다. `recoverInterruptedSessions()`는 (a) 앱 시작 시, (b) `startSession()` 직전, (c) 앱 시작 때 아직 신선해서 제외된 `active` 세션이 있으면 `staleMs` 뒤 한 번 더 호출한다. (c) 덕분에 중단 직후 빠르게 다시 열어도 그 세션이 계속 `active`로 남지 않는다. 판정은 `lastSeenAt`만 보므로, 다른 탭에서 측정 중이고 생존 갱신이 정상인 세션은 30초마다 갱신되어 복구 대상이 되지 않는다. 갱신 실패 등으로 살아 있는 세션이 잘못 `interrupted`로 바뀌면, 그 세션의 다음 `touchSession()` 성공 시 `endReason`이 `'recovered'`인 경우에 한해 `active`로 되돌리고 `endedAt`을 비운다. 사용자가 끝낸 세션(`completed`)은 되돌리지 않는다. 잘못 복구된 직후 사용자가 종료해도 `endSession()`이 그 세션을 `completed`로 확정하므로, 그 뒤 늦게 도착한 `touchSession()`이 세션을 되살리지 않는다.
 6. **세션 생성 실패**: 측정은 계속하고 레코드는 `sessionId` 없이 저장한다(기존 동작과 같음). 오류는 기존 `saveError`와 같은 방식으로 알린다. 측정 자체를 막지 않는다.
 7. **생존 갱신 실패**: `touchSession()` 실패는 기록(console)만 하고 측정·레코드 저장에 영향을 주지 않는다. 감정 레코드 저장과 생존 갱신은 원자적으로 묶지 않는다. 갱신이 계속 실패해 세션이 `interrupted`로 바뀌더라도 레코드의 `sessionId` 연결은 남으므로 데이터 손실은 없고, 세션 상태만 실제보다 이르게 끝난 것으로 보인다.
 8. **종료 후 마지막 저장 실패**: 기존과 같이 `saveError`로 표시하고 1차 구현에서는 재시도하지 않는다. 세션은 `completed`로 유지하며, 해당 1분 미만 조각만 빠진다.
@@ -230,7 +230,7 @@ this.version(2).stores({
 | Mock 데이터 | `tests/shared/storage/fixtures.ts` (제안) | `makeRppgResult(overrides)`, `makeSession(overrides)`, 고정 시드로 BPM 시퀀스·품질 변화(`good`→`poor`→`unusable`/`bpm: null`)를 만드는 `mockRppgStream()` |
 | v1 → v2 보존 | `tests/shared/storage/dbMigration.test.ts` | v1 schema로 DB를 만들고 레코드 저장 → 닫기 → `OnmaumDB`(v2)로 열기 → 개수·필드·`getEmotionsByDate` 결과 동일, `sessionId` 없음 확인 |
 | 세션 생명주기 | `tests/shared/storage/sessionRepository.test.ts` | 시작·종료, 중복 종료 무시, 오래된 `active` 복구, 최근 `lastSeenAt` 세션은 복구 제외 후 `staleMs` 뒤 재검사에서 복구, 레코드 저장 없이 생존 갱신만 있는 세션 유지, 자정 통과 세션의 날짜 귀속 |
-| 실패·경합 | 같은 파일 | `touchSession` 실패 시 레코드 저장 유지, 잘못 복구된 세션의 다음 갱신 시 `active` 복원(`completed`는 유지), 종료 후 늦게 끝난 마지막 저장의 `sessionId` 유지, 빠른 종료·재시작 시 두 세션 레코드 분리 |
+| 실패·경합 | 같은 파일 | `touchSession` 실패 시 레코드 저장 유지, 잘못 복구된 세션의 다음 갱신 시 `active` 복원(`completed`는 유지), 자동 복구된 세션에 대한 `endSession` 확정과 그 뒤 지연된 갱신 무시, 종료 후 늦게 끝난 마지막 저장의 `sessionId` 유지, 빠른 종료·재시작 시 두 세션 레코드 분리 |
 | 다운그레이드 | `dbMigration.test.ts` | v2 DB를 v1 schema 선언으로 열어 `emotions` 읽기·쓰기 가능 여부 확인 |
 | 체크인 추정 연결 | 후속(분석 Issue) | 후보 없음·하나·여러 개·동률 경우의 연결 결과 |
 | 연결 | 같은 파일 | `sessionId`가 붙은 감정·심박·자기보고를 `getSessionDetail`로 함께 조회, legacy 레코드는 세션 조회에서 제외 |
