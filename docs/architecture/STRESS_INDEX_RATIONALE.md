@@ -44,7 +44,7 @@
 ### 3.2 개인 기준선 대비 평가
 
 - 생리·행동 신호에는 개인차가 커서, 개인별 기준으로 정규화해야 한다는 결과가 반복된다. 운전 스트레스 연구에서 개인 간 정규화로 분류 정확도가 68%에서 73%로 올랐다는 보고가 있다(초록 확인).
-- 2026년 비교 연구는 정규화 방법의 선택보다 개인차를 보정하는 것 자체가 중요하다고 보고했다. 또 정규화 통계를 평가 데이터와 겹치게 만들면 성능이 부풀려진다고 경고했다.
+- 2026년 비교 연구(서지 미확인, 8절 참고)는 정규화 방법의 선택보다 개인차를 보정하는 것 자체가 중요하다고 보고했다. 또 정규화 통계를 평가 데이터와 겹치게 만들면 성능이 부풀려진다고 경고했다.
 - 함의: 현재 기준선은 오늘을 제외한 과거 기록으로 만들므로 이 경고를 지킨다. "평소 대비" 표현을 유지한다. 위 연구들은 주로 생리 신호를 다뤘으므로, 표정 점수에도 같은 효과가 있는지는 검증 대상이다.
 
 ### 3.3 시간 정보 활용 (검증할 가설)
@@ -120,12 +120,12 @@ v2 설계 문서와 과거 구현 계획(`docs/superpowers/**`)의 "×1.5" 표�
 - Kim, H.-J., & Choo, J. (2017). Emotional labor: Links to depression and work-related musculoskeletal disorders in call center workers. *Workplace Health & Safety*, 65(8), 346–354. https://doi.org/10.1177/2165079916667512
 - Kim, H.-G., Cheon, E.-J., Bai, D.-S., Lee, Y. H., & Koo, B.-H. (2018). Stress and heart rate variability: A meta-analysis and review of the literature. *Psychiatry Investigation*, 15(3), 235–245. https://doi.org/10.30773/pi.2017.08.17
 - Sabour, R. M. 외 (2021). UBFC-Phys: A multimodal database for psychophysiological studies of social stress. *IEEE Transactions on Affective Computing*. https://doi.org/10.1109/TAFFC.2021.3056960
-- 얼굴 특징과 원격 맥박 변이를 결합한 스트레스 상태 검출(UBFC-Phys, 91.07%): https://link.springer.com/chapter/10.1007/978-3-031-37745-7_10 (초록 확인)
+- Ouzar, Y. 외 (2023). Multimodal stress state detection from facial videos using physiological signals and facial features. *Lecture Notes in Computer Science* (ICPR 2022 워크숍). https://doi.org/10.1007/978-3-031-37745-7_10 (UBFC-Phys, 91.07%. 초록 확인, 공저자 목록 미확인)
 - Jeon, T., Bae, H. B., Lee, Y., Jang, S., & Lee, S. (2021). Deep-learning-based stress recognition with spatial-temporal facial information. *Sensors*, 21(22), 7498. https://doi.org/10.3390/s21227498
 - Schmidt, P., Reiss, A., Duerichen, R., Marberger, C., & Van Laerhoven, K. (2018). Introducing WESAD, a multimodal dataset for wearable stress and affect detection. *ICMI '18*. https://doi.org/10.1145/3242969.3242985
 - Dupré, D., Krumhuber, E. G., Küster, D., & McKeown, G. J. (2020). A performance comparison of eight commercially available automatic classifiers for facial affect recognition. *PLOS ONE*. https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7182192/
 - Krumhuber, E. G. 외 (2020). Human and machine validation of 14 databases of dynamic facial expressions. *Behavior Research Methods*. https://link.springer.com/article/10.3758/s13428-020-01443-y
-- 개인 정규화 비교 연구(2026): https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2026.1827279/full
-- 운전 스트레스 신호 정규화(68%→73%): https://doi.org/10.3390/eng6110288 (초록 확인)
+- Fruet, D., Barà, C., Pernice, R., Iovino, M., Faes, L., & Nollo, G. (2025). A signal normalization approach for robust driving stress assessment using multi-domain physiological data. *Eng*, 6(11), 288. https://doi.org/10.3390/eng6110288 (68%→73%, 초록 확인)
+- 개인 정규화 방법 비교 연구(Frontiers in Digital Health, 2026): https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2026.1827279/full (**제목·저자 미확인.** 검색 요약으로만 확인했으므로 인용 전 원문 확인 필요)
 
 수치 중 일부는 초록·요약 수준에서 확인했다. 발표·논문에 인용할 때는 원문에서 다시 확인한다.
