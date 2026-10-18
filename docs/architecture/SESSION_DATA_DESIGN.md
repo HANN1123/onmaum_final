@@ -109,7 +109,7 @@ export interface MeasurementSession {
   endedAt: Date | null
   status: SessionStatus
   endReason: SessionEndReason | null
-  /** 마지막으로 살아 있음을 확인한 시각. 비정상 종료 판별용 (집계 저장 때마다 갱신) */
+  /** 마지막으로 살아 있음을 확인한 시각. 비정상 종료 판별용. 레코드 저장 여부와 무관하게 측정 중 주기적으로 갱신 */
   lastSeenAt: Date
 }
 
@@ -165,9 +165,9 @@ this.version(2).stores({
 | 함수 | 동작 |
 |---|---|
 | `startSession(now?)` → `MeasurementSession` | `status: 'active'`로 생성 |
-| `touchSession(id, now?)` | `lastSeenAt` 갱신 (1분 집계 저장 시 호출) |
+| `touchSession(id, now?)` | `lastSeenAt` 갱신. 측정 중 **고정 주기(제안 30초) 타이머**로 호출하며, 감정 레코드 저장 여부와 무관하다 |
 | `endSession(id, reason, now?)` | `active`일 때만 `completed`로 바꾸고 `endedAt` 기록. **중복 호출은 무시(멱등)** |
-| `recoverInterruptedSessions(now?, staleMs?)` | `active`이면서 `lastSeenAt`이 `staleMs`(기본 2 × 집계 주기)보다 오래된 세션을 `interrupted`로 바꾸고 `endedAt = lastSeenAt` 기록. 앱 시작 시 호출 |
+| `recoverInterruptedSessions(now?, staleMs?)` | `active`이면서 `lastSeenAt`이 `staleMs`(제안: 생존 갱신 주기의 4배, 2분)보다 오래된 세션을 `interrupted`로 바꾸고 `endedAt = lastSeenAt` 기록. 호출 시점은 4.4절 5번 |
 | `getSessionsByDateRange(start, end)` | `startedAt` 기준 조회 (일별·주별 목록) |
 | `getSessionDetail(id)` | 세션 + 연결된 감정·심박·자기보고 |
 | `addHeartRateRecord(sessionId, result)` | `RppgResult` → `HeartRateRecord` 저장 |
@@ -178,18 +178,25 @@ this.version(2).stores({
 ### 4.4 생명주기와 예외 처리
 
 1. **시작**: 측정 시작 시 `startSession()` → 반환된 `id`를 레코더에 전달한다. 레코더 쪽 연결 방식(옵션 추가 또는 `saveRecord` 래핑)은 `useEmotionRecorder`가 공동 영역이므로 `[합의 필요]`. 래핑하면 레코더 수정 없이 연결할 수 있어 우선 제안한다.
-2. **진행**: 1분 집계 저장 시 `sessionId`를 붙이고 `touchSession()`.
+2. **진행**: 1분 집계 저장 시 레코드에 `sessionId`를 붙인다. 생존 갱신(`touchSession`)은 저장과 분리해 30초 타이머로 한다. 얼굴이 계속 검출되지 않아 `aggregate()`가 `null`을 반환하고 저장이 생략되는 동안에도 세션이 살아 있는 것으로 유지되게 하기 위해서다.
 3. **종료**: 측정 정지 시 `endSession(id, 'user-stop')`. 레코더의 마지막 조각 저장은 비동기라 `endSession`보다 늦게 끝날 수 있다. 레코드에는 이미 `sessionId`가 붙으므로 연결은 깨지지 않고, 마지막 레코드의 `timestamp`가 `endedAt`보다 약간 늦을 수 있음을 조회·분석에서 허용한다.
 4. **카메라 오류**: `endSession(id, 'camera-error')`.
-5. **탭 닫힘·앱 중단**: 세션이 `active`로 남는다. 다음 앱 시작 시 `recoverInterruptedSessions()`가 정리한다. `lastSeenAt` 기준이라 다른 탭에서 측정 중인 세션은 건드리지 않는다.
+5. **탭 닫힘·앱 중단과 복구**: 세션이 `active`로 남는다. `recoverInterruptedSessions()`는 (a) 앱 시작 시, (b) `startSession()` 직전, (c) 앱 시작 때 아직 신선해서 제외된 `active` 세션이 있으면 `staleMs` 뒤 한 번 더 호출한다. (c) 덕분에 중단 직후 빠르게 다시 열어도 그 세션이 계속 `active`로 남지 않는다. 판정은 `lastSeenAt`만 보므로, 다른 탭에서 실제로 측정 중인 세션은 30초마다 갱신되어 복구 대상이 되지 않는다.
 6. **세션 생성 실패**: 측정은 계속하고 레코드는 `sessionId` 없이 저장한다(기존 동작과 같음). 오류는 기존 `saveError`와 같은 방식으로 알린다. 측정 자체를 막지 않는다.
-7. **자정 통과**: 세션은 나누지 않는다. 세션 목록은 `startedAt` 날짜에 속하고, 일별 감정·스트레스 계산은 지금처럼 레코드 `timestamp` 기준이라 결과가 바뀌지 않는다.
+7. **생존 갱신 실패**: `touchSession()` 실패는 기록(console)만 하고 측정·레코드 저장에 영향을 주지 않는다. 감정 레코드 저장과 생존 갱신은 원자적으로 묶지 않는다. 갱신이 계속 실패해 세션이 `interrupted`로 바뀌더라도 레코드의 `sessionId` 연결은 남으므로 데이터 손실은 없고, 세션 상태만 실제보다 이르게 끝난 것으로 보인다.
+8. **종료 후 마지막 저장 실패**: 기존과 같이 `saveError`로 표시하고 1차 구현에서는 재시도하지 않는다. 세션은 `completed`로 유지하며, 해당 1분 미만 조각만 빠진다.
+9. **빠른 종료·재시작**: 정지 직후 다시 시작하면 새 세션을 만든다. 직전 세션의 늦게 끝난 마지막 저장은 직전 세션 `id`를 그대로 가진다(레코더가 시작 시점의 `id`를 캡처). 테스트로 두 세션의 레코드가 섞이지 않음을 확인한다.
+10. **자정 통과**: 세션은 나누지 않는다. 세션 목록은 `startedAt` 날짜에 속하고, 일별 감정·스트레스 계산은 지금처럼 레코드 `timestamp` 기준이라 결과가 바뀌지 않는다.
 
 ### 4.5 자기보고 구분
 
 - **일별 체크인**(`onmaum_checkin_*`, localStorage)은 보정용으로 그대로 둔다. 이번 단계에서 IndexedDB로 옮기거나 이중 저장하지 않는다.
 - **세션 자기보고**(`sessionSelfReports`)는 새 데이터다. 측정 전후 비교(⑤)와 휴식 전후 변화(⑥)에 쓴다.
-- 일별 체크인을 분석에 함께 쓸 때는 `atMs` 시각으로 가장 가까운 세션과 연결해 읽기만 한다. 이전(migration)이 필요해지면 별도 Issue로 다룬다.
+- 일별 체크인은 응답 대상 세션을 알 수 없다. 체크인 문구는 세션이 아니라 최근 구간 스트레스(`recentStress`, `RECENT_WINDOW_MS`)로 만들어지기 때문이다. 분석에 함께 쓸 때는 다음 규칙으로 **추정 연결**만 하고 저장하지 않는다.
+  - 체크인 시각(`atMs`) 이전 `RECENT_WINDOW_MS` 안에 감정 레코드가 있는 세션만 후보로 둔다.
+  - 후보가 하나면 연결, 여러 개면 체크인 시각과 겹치는 레코드가 가장 많은 세션 하나에 연결, 후보가 없으면 연결하지 않는다.
+  - 분석 결과에는 추정 연결임을 표시해 세션 자기보고(직접 연결)와 구분한다.
+- 이전(migration)이 필요해지면 별도 Issue로 다룬다.
 
 ### 4.6 개인정보·보관·삭제·내보내기
 
@@ -208,7 +215,7 @@ this.version(2).stores({
 | 계산·화면 타입 | `sessionId`가 선택 필드라 `dailyStress`, `DailyReport`, `aggregate()` 타입 호환 | `npx tsc --noEmit` |
 | 직접 접근 | `RecentRecords`, `/measure`의 `db.emotions` 직접 사용은 v2에서도 동작 | 영향 범위로 PR에 명시 |
 | 여러 탭 동시 실행 | 구 버전 탭이 열려 있으면 v2 업그레이드가 대기(blocked)될 수 있다. Dexie 4는 기본적으로 versionchange 시 기존 연결을 닫는다 | `blocked`/`versionchange` 동작을 테스트로 확인하고, 필요하면 새로고침 안내 문구(UI 협의) |
-| 다운그레이드 | v2 DB를 v1 코드가 열면 `VersionError`. `public/sw.js`는 HTML·`/_next/`를 network-first로 받아 구 번들이 남을 가능성은 낮지만, 오프라인 캐시 폴백 시 가능 | 배포 후 되돌리기를 하지 않는 원칙. 오프라인 폴백 시나리오를 수동 확인 |
+| 다운그레이드 | 설치된 Dexie 4.4.2는 `VersionError`가 나면 버전을 지정하지 않고 다시 연다(`dexie.mjs`의 `tryOpenDB` 재시도). 따라서 v1 코드가 v2 DB를 열어도 기존 `emotions` 테이블은 쓸 수 있을 것으로 보인다. 다만 v1 코드가 저장하는 레코드에는 `sessionId`가 없다. `public/sw.js`는 HTML·`/_next/`를 network-first로 받아 구 번들이 남을 가능성은 낮고 오프라인 캐시 폴백 때만 생긴다 | v2 DB를 v1 schema로 여는 동작을 테스트로 확인. 배포 후 되돌리기는 하지 않는 원칙 |
 | 저장 키 | localStorage 키는 바꾸지 않는다 | — |
 
 결론: **v1 데이터와 호환되는 확장이 가능하다.** schema 변경은 계약 변경이므로 김우빈에게 먼저 공유하고, Dexie v2 확장만 담은 작은 PR로 분리한다.
@@ -221,7 +228,10 @@ this.version(2).stores({
 |---|---|---|
 | Mock 데이터 | `tests/shared/storage/fixtures.ts` (제안) | `makeRppgResult(overrides)`, `makeSession(overrides)`, 고정 시드로 BPM 시퀀스·품질 변화(`good`→`poor`→`unusable`/`bpm: null`)를 만드는 `mockRppgStream()` |
 | v1 → v2 보존 | `tests/shared/storage/dbMigration.test.ts` | v1 schema로 DB를 만들고 레코드 저장 → 닫기 → `OnmaumDB`(v2)로 열기 → 개수·필드·`getEmotionsByDate` 결과 동일, `sessionId` 없음 확인 |
-| 세션 생명주기 | `tests/shared/storage/sessionRepository.test.ts` | 시작·종료, 중복 종료 무시, 오래된 `active` 복구, 최근 `lastSeenAt` 세션은 복구 제외, 자정 통과 세션의 날짜 귀속 |
+| 세션 생명주기 | `tests/shared/storage/sessionRepository.test.ts` | 시작·종료, 중복 종료 무시, 오래된 `active` 복구, 최근 `lastSeenAt` 세션은 복구 제외 후 `staleMs` 뒤 재검사에서 복구, 레코드 저장 없이 생존 갱신만 있는 세션 유지, 자정 통과 세션의 날짜 귀속 |
+| 실패·경합 | 같은 파일 | `touchSession` 실패 시 레코드 저장 유지, 종료 후 늦게 끝난 마지막 저장의 `sessionId` 유지, 빠른 종료·재시작 시 두 세션 레코드 분리 |
+| 다운그레이드 | `dbMigration.test.ts` | v2 DB를 v1 schema 선언으로 열어 `emotions` 읽기·쓰기 가능 여부 확인 |
+| 체크인 추정 연결 | 후속(분석 Issue) | 후보 없음·하나·여러 개 경우의 연결 결과 |
 | 연결 | 같은 파일 | `sessionId`가 붙은 감정·심박·자기보고를 `getSessionDetail`로 함께 조회, legacy 레코드는 세션 조회에서 제외 |
 | 심박 저장 | 같은 파일 | `RppgResult` → `HeartRateRecord` 변환, `bpm: null` 보존 |
 | 입력 검증 | `tests/shared/storage/rppgResult.test.ts` | 계약 합의 후 `isValidRppgResult()` — 범위 밖 BPM(예: 30 미만·220 초과), 0~1 밖 비율, `windowEnd < windowStart` 거부 |
