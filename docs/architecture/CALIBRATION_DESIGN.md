@@ -38,7 +38,7 @@ Taylor 외, Wang 외, Leys 외, Eisele 외, Neubauer 외, Shrout 외, Cerino 외
 
 ### 3.1 방법
 
-실제 판정 함수(`classifyStress`)와 보정 함수(`applyOffset`, `nextOffset`)를 그대로 쓰는 합성 사용자 시뮬레이션이다. 코드는 `tests/algorithm/baseline/calibrationSimulation.test.ts`에 있고 CI에서 매번 돈다.
+실제 판정 함수(`classifyStress`)와 보정 함수(`applyOffset`, `nextOffset`)를 그대로 쓰는 합성 사용자 시뮬레이션이다. 코드는 `tests/algorithm/baseline/calibrationSimulation.test.ts`에 있고 CI에서 매번 돈다. 아래 표의 수치는 같은 모델로 여러 방식을 비교한 탐색용 스크립트의 결과이며(난수 시드가 달라 CI 테스트 값과 소수점이 조금 다를 수 있다), CI 테스트는 3.4절의 조건만 확인한다.
 
 - 사용자 2,500명분: 평소 부정 정서 B ∈ {8, 15, 25, 40, 60} × 측정과 체감의 어긋남 ∈ {−30%, −15%, 0, +15%, +30%} × 반복 20
 - 하루 측정값: B × 로그정규 잡음(σ = 0.3), 30일, 하루 체크인 2회
