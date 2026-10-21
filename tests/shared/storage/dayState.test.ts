@@ -59,6 +59,27 @@ describe('dayState 손상 데이터 방어', () => {
     expect(loadCheckinDone('2026-06-12')).toEqual([])
   })
 
+  it('체크인 항목의 슬롯·응답·시각이 맞지 않으면 건너뛰고, context만 깨졌으면 응답은 남긴다', () => {
+    const good = { slot: 'morning', report: 'worse', atMs: 1000 }
+    localStorage.setItem(
+      'onmaum_checkin_2026-06-12',
+      JSON.stringify([
+        good,
+        { slot: 'evening', report: 'agree', atMs: 1 }, // 없는 슬롯
+        { slot: 'afternoon', report: 'maybe', atMs: 1 }, // 없는 응답
+        { slot: 'afternoon', report: 'agree' }, // 시각 없음
+        { slot: 'afternoon', report: 'agree', atMs: 2000, context: 'broken' }, // context만 손상
+        { slot: 'afternoon', report: 'agree', atMs: 3000, context: { level: 'high', mode: 'relative', recentStress: 'x' } },
+      ]),
+    )
+    const entries = loadCheckinEntries('2026-06-12')
+    expect(entries).toEqual([
+      good,
+      { slot: 'afternoon', report: 'agree', atMs: 2000 },
+      { slot: 'afternoon', report: 'agree', atMs: 3000 },
+    ])
+  })
+
   it('nudge 부분/손상 객체 → 기본값으로 보정', () => {
     localStorage.setItem('onmaum_nudge_2026-06-12', JSON.stringify({ count: 'x' }))
     expect(loadNudgeDayState('2026-06-12')).toEqual({ count: 0, lastAtMs: null })

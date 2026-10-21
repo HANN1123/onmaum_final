@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import 'fake-indexeddb/auto'
 import { db } from '@/shared/storage/db'
 import { useCheckin } from '@/features/feedback/hooks/useCheckin'
-import { loadSettings } from '@/shared/storage/settings'
+import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/shared/storage/settings'
 import { loadCheckinDone, loadCheckinEntries } from '@/shared/storage/dayState'
 
 async function seedToday(now: Date) {
@@ -57,7 +57,8 @@ describe('useCheckin', () => {
     } as never)
     const date = now.toLocaleDateString('en-CA')
     const { result } = renderHook(() => useCheckin({ now }))
-    await vi.waitFor(() => expect(result.current.due).toBe(true))
+    // 두 조회가 모두 끝나 판정 문구(=context)가 준비될 때까지 기다린다
+    await vi.waitFor(() => expect(result.current.line.length).toBeGreaterThan(0))
 
     await act(async () => {
       result.current.submit('agree')
@@ -71,6 +72,39 @@ describe('useCheckin', () => {
       mode: 'absolute',
       baselineN: null,
       offsetBefore: 0,
+    })
+  })
+
+  it('평소 대비 판정에서 보정값이 있을 때 "맞아요"는 보정을 유지하고 근거를 저장한다', async () => {
+    const now = new Date('2026-06-12T10:30:00')
+    const sadRecord = (timestamp: Date, sad: number, duration: number) =>
+      ({
+        timestamp, duration, detectionRate: 1,
+        happy: 0, calm: 1 - sad, sad, angry: 0,
+        dominantEmotion: sad >= 0.5 ? 'sad' : 'calm', flatAffectScore: 0,
+      }) as never
+    // 지난 3일, 하루 6분씩 슬픔 0.3 → 기준선 30 (평소 대비 판정)
+    for (const day of ['2026-06-09', '2026-06-10', '2026-06-11']) {
+      await db.emotions.add(sadRecord(new Date(`${day}T10:00:00`), 0.3, 6 * 60000))
+    }
+    await db.emotions.add(sadRecord(new Date(now.getTime() - 5 * 60 * 1000), 0.6, 60000))
+    saveSettings({ ...DEFAULT_SETTINGS, calibrationOffset: 6 })
+
+    const date = now.toLocaleDateString('en-CA')
+    const { result } = renderHook(() => useCheckin({ now }))
+    await vi.waitFor(() => expect(result.current.line.length).toBeGreaterThan(0))
+    await act(async () => {
+      result.current.submit('agree')
+    })
+
+    expect(loadSettings().calibrationOffset).toBe(6)
+    expect(loadCheckinEntries(date)[0].context).toEqual({
+      level: 'veryHigh', // (60 + 6) / 30 = 2.2
+      recentStress: 60,
+      adjusted: 66,
+      mode: 'relative',
+      baselineN: 30,
+      offsetBefore: 6,
     })
   })
 

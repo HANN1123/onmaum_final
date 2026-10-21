@@ -49,14 +49,48 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
-/** 그 날짜의 체크인 기록. 손상된 항목은 건너뛴다 */
+const SLOTS: readonly string[] = ['morning', 'afternoon']
+const REPORTS: readonly string[] = ['agree', 'worse', 'better']
+const LEVELS: readonly string[] = ['low', 'typical', 'high', 'veryHigh']
+const MODES: readonly string[] = ['absolute', 'relative']
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
+function toContext(v: unknown): CheckinContext | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const c = v as Record<string, unknown>
+  const ok =
+    LEVELS.includes(c.level as string) &&
+    MODES.includes(c.mode as string) &&
+    isFiniteNumber(c.recentStress) &&
+    isFiniteNumber(c.adjusted) &&
+    isFiniteNumber(c.offsetBefore) &&
+    (c.baselineN === null || isFiniteNumber(c.baselineN))
+  return ok ? (c as unknown as CheckinContext) : undefined
+}
+
+/**
+ * 그 날짜의 체크인 기록. 슬롯·응답·시각이 맞지 않는 항목은 건너뛴다.
+ * context만 손상됐으면 응답은 남기고 context를 버린다.
+ */
 export function loadCheckinEntries(date: string): CheckinEntry[] {
-  const entries = readJson<unknown>(checkinKey(date), [])
-  if (!Array.isArray(entries)) return []
-  return entries.filter(
-    (e): e is CheckinEntry =>
-      typeof e === 'object' && e !== null && typeof (e as { slot?: unknown }).slot === 'string',
-  )
+  const raw = readJson<unknown>(checkinKey(date), [])
+  if (!Array.isArray(raw)) return []
+  const out: CheckinEntry[] = []
+  for (const e of raw) {
+    if (typeof e !== 'object' || e === null) continue
+    const r = e as Record<string, unknown>
+    if (!SLOTS.includes(r.slot as string) || !REPORTS.includes(r.report as string) || !isFiniteNumber(r.atMs)) {
+      continue
+    }
+    const entry: CheckinEntry = { slot: r.slot as CheckinSlot, report: r.report as SelfReport, atMs: r.atMs }
+    const context = toContext(r.context)
+    if (context) entry.context = context
+    out.push(entry)
+  }
+  return out
 }
 
 export function loadCheckinDone(date: string): CheckinSlot[] {
