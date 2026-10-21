@@ -9,7 +9,7 @@ import { checkinDue, type CheckinSlot } from '@/features/feedback/lib/checkin'
 import { checkinLine } from '@/features/feedback/lib/checkinCopy'
 import { applyOffset, nextOffset, type SelfReport } from '@/features/algorithm/baseline/calibration'
 import { loadSettings, saveSettings } from '@/shared/storage/settings'
-import { loadCheckinDone, saveCheckinEntry } from '@/shared/storage/dayState'
+import { loadCheckinDone, saveCheckinEntry, type CheckinContext } from '@/shared/storage/dayState'
 
 interface Args {
   now?: Date
@@ -48,6 +48,7 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
   })
 
   let line = ''
+  let context: CheckinContext | undefined
   if (due && todayRecords && rangeRecords) {
     const current = recentStress(todayRecords, now)
     const baseline = computeBaselineState(
@@ -55,7 +56,16 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
     )
     if (current) {
       const adjusted = applyOffset(current.stress, settings.calibrationOffset)
-      line = checkinLine(classifyStress(adjusted, baseline), baseline.mode)
+      const level = classifyStress(adjusted, baseline)
+      line = checkinLine(level, baseline.mode)
+      context = {
+        level,
+        recentStress: current.stress,
+        adjusted,
+        mode: baseline.mode,
+        baselineN: baseline.baselineN,
+        offsetBefore: settings.calibrationOffset,
+      }
     }
   }
 
@@ -64,9 +74,9 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
       if (!slot) return
       const s = loadSettings()
       saveSettings({ ...s, calibrationOffset: nextOffset(s.calibrationOffset, report) })
-      saveCheckinEntry(date, slot, report, nowMs)
+      saveCheckinEntry(date, slot, report, nowMs, context)
     },
-    [slot, date, nowMs],
+    [slot, date, nowMs, context],
   )
 
   return { due, slot, line, submit }

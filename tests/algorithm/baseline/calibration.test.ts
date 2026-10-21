@@ -7,9 +7,9 @@ describe('nextOffset', () => {
     expect(nextOffset(0, 'better')).toBe(-OFFSET_STEP)
   })
 
-  it("'agree' → 0 방향 감쇠", () => {
-    expect(nextOffset(5, 'agree')).toBe(4)
-    expect(nextOffset(-5, 'agree')).toBe(-4)
+  it("'agree' → 보정값 유지 (보정된 판정이 맞다는 응답)", () => {
+    expect(nextOffset(6, 'agree')).toBe(6)
+    expect(nextOffset(-6, 'agree')).toBe(-6)
     expect(nextOffset(0, 'agree')).toBe(0)
   })
 

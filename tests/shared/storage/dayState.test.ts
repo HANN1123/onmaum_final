@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   loadCheckinDone,
+  loadCheckinEntries,
   saveCheckinEntry,
   loadNudgeDayState,
   saveNudgeDayState,
@@ -19,6 +20,15 @@ describe('checkin dayState', () => {
     expect(loadCheckinDone('2026-06-13')).toEqual([])
     saveCheckinEntry('2026-06-12', 'afternoon', 'worse', 2000)
     expect(loadCheckinDone('2026-06-12').sort()).toEqual(['afternoon', 'morning'])
+  })
+
+  it('판정 근거(context)를 함께 저장하고 읽는다. 근거 없이 저장한 이전 형식도 그대로 읽힌다', () => {
+    const context = { level: 'high' as const, recentStress: 42, adjusted: 45, mode: 'relative' as const, baselineN: 30, offsetBefore: 3 }
+    saveCheckinEntry('2026-06-12', 'morning', 'worse', 1000, context)
+    saveCheckinEntry('2026-06-12', 'afternoon', 'agree', 2000)
+    const entries = loadCheckinEntries('2026-06-12')
+    expect(entries.find((e) => e.slot === 'morning')?.context).toEqual(context)
+    expect(entries.find((e) => e.slot === 'afternoon')?.context).toBeUndefined()
   })
 })
 
