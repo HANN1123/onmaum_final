@@ -29,7 +29,8 @@ function makeRandom(seed) {
 const SHOWN = {
   none: (n, b) => level(n, b),
   points: (n, b, o) => level(clamp(n + o), b),
-  ratio: (n, b, o) => level(n * (1 + o / 50), b, n), // 비율 보정, 바닥 조건은 원래 측정값
+  ratio: (n, b, o) => level(n * (1 + o / 50), b, n), // 곱셈형 비율 보정 (N/B)×(1+c), 바닥 조건은 원래 측정값
+  ratioAdd: (n, b, o) => level(n + (o / 50) * b, b, n), // 덧셈형 비율 보정 N/B + c, 바닥 조건은 원래 측정값
   ratioAdjFloor: (n, b, o) => { const v = clamp(n * (1 + o / 50)); return level(v, b) },
   hybrid: (n, b, o) => level(clamp(n * (1 + o / 50) + o / 2), b),
 }
@@ -41,9 +42,12 @@ function nextOffset(o, report, { step, max, decay }) {
   return o
 }
 
-/** 체감 판정. ratio: 측정 × (1 + 어긋남), points: 측정 + 어긋남 × 50 */
+/**
+ * 체감 판정. ratio: 측정 × (1 + 어긋남), points: 측정 + 어긋남 × 50.
+ * CI 테스트와 같게, 체감값 자체에 classifyStress와 같은 규칙(바닥 조건 포함)을 적용한다.
+ */
 function felt(n, b, model, bias) {
-  return model === 'ratio' ? level(n * (1 + bias), b, n) : level(clamp(n + bias * 50), b)
+  return model === 'ratio' ? level(clamp(n * (1 + bias)), b) : level(clamp(n + bias * 50), b)
 }
 
 function simulate({ shown, decay = false, step = 3, max = 15 }, model, { biases, noise, nonresp }) {
@@ -77,15 +81,16 @@ for (const cond of [{ noise: 0.15, nonresp: 0.4 }, { noise: 0.3, nonresp: 0.7 }]
     ['보정 없음', { shown: 'none' }],
     ['이전 규칙 (점수, 감쇠)', { shown: 'points', decay: true }],
     ['현재 규칙 (점수, 유지)', { shown: 'points' }],
-    ['비율 + 감쇠', { shown: 'ratio', decay: true }],
-    ['비율 + 유지', { shown: 'ratio' }],
-    ['비율 + 유지 + 보정값 바닥', { shown: 'ratioAdjFloor' }],
+    ['곱셈형 비율 + 감쇠', { shown: 'ratio', decay: true }],
+    ['곱셈형 비율 + 유지', { shown: 'ratio' }],
+    ['덧셈형 비율 + 유지', { shown: 'ratioAdd' }],
+    ['곱셈형 비율 + 유지 + 보정값 바닥', { shown: 'ratioAdjFloor' }],
     ['비율·점수 혼합 + 유지', { shown: 'hybrid' }],
   ]
   for (const [name, m] of methods) {
     const a = simulate(m, 'ratio', { ...cond, biases: BIAS_30 })
     const b = simulate(m, 'points', { ...cond, biases: BIAS_30 })
-    console.log(`${name.padEnd(28)} | ${pct(a.agree)} | ${pct(b.agree)} | ${pct(Math.max(a.severe, b.severe))}`)
+    console.log(`${name.padEnd(30)} | ${pct(a.agree)} | ${pct(b.agree)} | ${pct(Math.max(a.severe, b.severe))}`)
   }
 }
 
