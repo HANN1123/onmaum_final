@@ -17,7 +17,7 @@ describe('DailyReport v2', () => {
 
   it('힘들었던 시간대 표시', () => {
     const now = new Date('2026-06-12T18:00:00')
-    const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 60000, angry: 0.4 })]
+    const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 5 * 60000, angry: 0.4 })] // 시간대 표시는 5분 이상 측정 필요
     render(<DailyReport records={records} historyRecords={records} offset={0} now={now} />)
     expect(screen.getByText(/시/)).toBeTruthy() // "14–16시" 형태 시간대 표기
   })
