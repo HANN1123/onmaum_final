@@ -28,5 +28,6 @@ describe('DailyReport v2', () => {
     render(<DailyReport records={records} historyRecords={records} offset={0} now={now} />)
     expect(screen.queryByText(/힘들었던 시간대/)).toBeNull()
     expect(screen.queryByText(/충분하지 않아요/)).toBeNull()
+    expect(screen.getByText('스트레스')).toBeTruthy() // 게이지는 그대로 보인다
   })
 })
