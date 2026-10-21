@@ -45,6 +45,21 @@ describe('updateSustain', () => {
     expect(b.highSinceMs).toBe(resumed)
   })
 
+  it('경계: 간격이 MAX_EVAL_GAP_MS를 1ms라도 넘으면 새로 센다', () => {
+    const t = 1_000_000
+    const a = updateSustain(null, 'high', t)
+    const b = updateSustain(a, 'high', t + MAX_EVAL_GAP_MS + 1)
+    expect(b.highSinceMs).toBe(t + MAX_EVAL_GAP_MS + 1)
+  })
+
+  it('재개 후 1분마다 높음이 이어지면 sustainMs 뒤에 넛지가 뜬다', () => {
+    const resumeAt = now.getTime() - 6 * 60 * 1000
+    let s = updateSustain(updateSustain(null, 'high', resumeAt - 40 * 60 * 1000), 'high', resumeAt)
+    for (let m = 1; m <= 6; m++) s = updateSustain(s, 'high', resumeAt + m * 60 * 1000)
+    expect(s.highSinceMs).toBe(resumeAt)
+    expect(shouldNudge({ settings, sustain: s, dayState: fresh, now })).toBe(true)
+  })
+
   it('측정 재개 직후 첫 평가에서는 넛지가 뜨지 않는다', () => {
     const t = now.getTime() - 40 * 60 * 1000
     const before = updateSustain(null, 'high', t)
