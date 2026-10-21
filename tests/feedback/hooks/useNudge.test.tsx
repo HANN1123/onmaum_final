@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import 'fake-indexeddb/auto'
 import { db } from '@/shared/storage/db'
@@ -6,8 +6,18 @@ import { useNudge } from '@/features/feedback/hooks/useNudge'
 import { saveSettings, DEFAULT_SETTINGS } from '@/shared/storage/settings'
 import { loadNudgeDayState } from '@/shared/storage/dayState'
 
+// 실제 시각을 쓰면 자정 직후에 "1분 전" 기록이 전날로 넘어가 오늘 기록 조회에서 빠진다.
+// Date만 고정하고 타이머는 실제로 두어 useLiveQuery·waitFor 동작을 유지한다.
+const FIXED_NOW = new Date('2026-06-12T14:00:00')
+
 describe('useNudge', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(FIXED_NOW)
     localStorage.clear()
     await db.emotions.clear()
     vi.unstubAllGlobals()
