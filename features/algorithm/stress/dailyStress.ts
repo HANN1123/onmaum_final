@@ -3,7 +3,11 @@ import { aggregateStress, type StressScores } from './stressIndex'
 
 export const RECENT_WINDOW_MS = 30 * 60 * 1000
 export const PERIOD_BUCKET_HOURS = 2
-/** "가장 힘든 시간대"로 고를 수 있는 시간대의 최소 측정 시간. 하루 유효 측정 기준(5분)과 같다 */
+/**
+ * "가장 힘든 시간대"로 고를 수 있는 시간대의 최소 측정 시간. 하루 유효 측정 기준(5분)과 같은 보수적 기준이며
+ * 정확도를 검증한 값은 아니다. 저장된 duration 합계로 판단하므로, duration이 실제 경과 시간보다 짧게
+ * 기록되는 문제(EMOTION_STRESS_REVIEW F4)가 있으면 실제로 5분을 측정해도 제외될 수 있다.
+ */
 export const MIN_PERIOD_DURATION_MS = 5 * 60 * 1000
 
 function localDateKey(d: Date): string {

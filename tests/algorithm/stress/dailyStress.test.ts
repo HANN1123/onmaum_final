@@ -97,6 +97,20 @@ describe('hardestPeriod 최소 측정 시간', () => {
     expect(hardestPeriod(records)?.startHour).toBe(14)
   })
 
+  it('경계: 1ms 모자라면 제외, 정확히 MIN_PERIOD_DURATION_MS면 포함', () => {
+    const at = new Date('2026-06-12T15:10:00')
+    expect(hardestPeriod([rec({ timestamp: at, duration: MIN_PERIOD_DURATION_MS - 1, sad: 0.5 })])).toBeNull()
+    expect(hardestPeriod([rec({ timestamp: at, duration: MIN_PERIOD_DURATION_MS, sad: 0.5 })])?.startHour).toBe(14)
+  })
+
+  it('하루 합계가 5분이어도 시간대마다 5분 미만이면 null', () => {
+    const third = MIN_PERIOD_DURATION_MS / 3
+    const records = ['09:10', '13:10', '17:10'].map((t) =>
+      rec({ timestamp: new Date(`2026-06-12T${t}:00`), duration: third, sad: 0.5 }),
+    )
+    expect(hardestPeriod(records)).toBeNull()
+  })
+
   it('조건을 채우는 시간대가 없으면 null', () => {
     const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 60 * 1000, sad: 0.9 })]
     expect(hardestPeriod(records)).toBeNull()
