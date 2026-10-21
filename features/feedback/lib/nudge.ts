@@ -17,7 +17,16 @@ export interface NudgeDayState {
 export interface SustainState {
   level: StressLevel
   highSinceMs: number | null
+  /** 마지막으로 평가한 시각. 측정 공백 판별용 */
+  lastEvalMs?: number
 }
+
+/**
+ * 평가는 감정 레코드 저장(측정 중 약 1분 주기)마다 일어난다.
+ * 직전 평가와의 간격이 이 값을 넘으면 측정이 끊겼던 것으로 보고 "높음 지속"을 새로 센다.
+ * 1분 집계 주기의 2배로 잡아, 저장이 한 번 늦어지는 정도는 공백으로 보지 않는다.
+ */
+export const MAX_EVAL_GAP_MS = 2 * 60 * 1000
 
 export function updateSustain(
   prev: SustainState | null,
@@ -25,8 +34,10 @@ export function updateSustain(
   nowMs: number,
 ): SustainState {
   const isHigh = level === 'high' || level === 'veryHigh'
-  if (!isHigh) return { level, highSinceMs: null }
-  return { level, highSinceMs: prev?.highSinceMs ?? nowMs }
+  if (!isHigh) return { level, highSinceMs: null, lastEvalMs: nowMs }
+  const gapped = prev?.lastEvalMs !== undefined && nowMs - prev.lastEvalMs > MAX_EVAL_GAP_MS
+  const highSinceMs = gapped ? nowMs : (prev?.highSinceMs ?? nowMs)
+  return { level, highSinceMs, lastEvalMs: nowMs }
 }
 
 function inDnd(hour: number, start: number | null, end: number | null): boolean {

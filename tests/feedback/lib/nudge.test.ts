@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { updateSustain, shouldNudge, type NudgeSettings, type NudgeDayState } from '@/features/feedback/lib/nudge'
+import {
+  updateSustain,
+  shouldNudge,
+  MAX_EVAL_GAP_MS,
+  type NudgeSettings,
+  type NudgeDayState,
+} from '@/features/feedback/lib/nudge'
 
 const settings: NudgeSettings = {
   enabled: true,
@@ -22,6 +28,28 @@ describe('updateSustain', () => {
     expect(b.highSinceMs).toBe(t) // 진입 시각 유지
     const c = updateSustain(b, 'typical', t + 800)
     expect(c.highSinceMs).toBeNull() // 떨어지면 리셋
+  })
+
+  it('평가 공백이 MAX_EVAL_GAP_MS 이하면 진입 시각 유지', () => {
+    const t = 1_000_000
+    const a = updateSustain(null, 'high', t)
+    const b = updateSustain(a, 'high', t + MAX_EVAL_GAP_MS)
+    expect(b.highSinceMs).toBe(t)
+  })
+
+  it('측정 공백(평가 간격 > MAX_EVAL_GAP_MS) 뒤에는 진입 시각을 새로 잡는다', () => {
+    const t = 1_000_000
+    const a = updateSustain(null, 'high', t)
+    const resumed = t + 30 * 60 * 1000 // 30분 쉬고 재개
+    const b = updateSustain(a, 'high', resumed)
+    expect(b.highSinceMs).toBe(resumed)
+  })
+
+  it('측정 재개 직후 첫 평가에서는 넛지가 뜨지 않는다', () => {
+    const t = now.getTime() - 40 * 60 * 1000
+    const before = updateSustain(null, 'high', t)
+    const afterGap = updateSustain(before, 'high', now.getTime())
+    expect(shouldNudge({ settings, sustain: afterGap, dayState: fresh, now })).toBe(false)
   })
 })
 
