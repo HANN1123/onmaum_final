@@ -33,8 +33,19 @@ export default function WeeklyRecords({ now }: Props) {
   // 날짜는 사용자 기기의 시간대로 계산해야 하므로, 사전 렌더 결과와 어긋나지 않게 화면이 열린 뒤에 정한다
   const [today, setToday] = useState<Date | null>(now ?? null)
   useEffect(() => {
+    if (now) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!now) setToday(new Date())
+    setToday(new Date())
+    // 화면을 열어 둔 채 날짜가 바뀌어도 다시 볼 때 "이번 주"가 맞도록 새로 계산한다
+    const refresh = () => {
+      if (document.visibilityState === 'visible') setToday(new Date())
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
   }, [now])
 
   const range = (() => {

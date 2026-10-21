@@ -63,15 +63,21 @@ export async function getPersonalRecordsByRange(start: Date, end: Date): Promise
   return { emotions, sessions }
 }
 
-function onmaumKeys(): string[] {
+/** localStorage의 onmaum_ 키 목록. 저장소에 접근할 수 없으면 예외를 그대로 던진다 */
+function listOnmaumKeys(): string[] {
   if (typeof window === 'undefined') return []
+  const keys: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (k?.startsWith(KEY_PREFIX)) keys.push(k)
+  }
+  return keys
+}
+
+/** 내보내기용. 저장소에 접근할 수 없으면 빈 목록 */
+function onmaumKeys(): string[] {
   try {
-    const keys: string[] = []
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)
-      if (k?.startsWith(KEY_PREFIX)) keys.push(k)
-    }
-    return keys
+    return listOnmaumKeys()
   } catch {
     return []
   }
@@ -157,7 +163,13 @@ export async function deleteAllPersonalData(
     await db.sessions.clear()
   })
 
-  const targets = onmaumKeys().filter((k) => includePreferences || !PREFERENCE_KEYS.includes(k))
+  // 키 목록을 읽지 못하면 무엇이 남았는지 알 수 없으므로 실패로 알린다
+  let targets: string[]
+  try {
+    targets = listOnmaumKeys().filter((k) => includePreferences || !PREFERENCE_KEYS.includes(k))
+  } catch {
+    throw new PartialDeleteError([])
+  }
   try {
     for (const k of targets) localStorage.removeItem(k)
     if (!includePreferences && localStorage.getItem(SETTINGS_KEY) !== null) {
@@ -168,7 +180,12 @@ export async function deleteAllPersonalData(
     // 아래 확인에서 남은 키로 실패를 알린다
   }
 
-  const remaining = onmaumKeys().filter((k) => targets.includes(k))
+  let remaining: string[]
+  try {
+    remaining = listOnmaumKeys().filter((k) => targets.includes(k))
+  } catch {
+    throw new PartialDeleteError(targets)
+  }
   const offsetLeft = !includePreferences && loadSettings().calibrationOffset !== 0
   if (remaining.length > 0 || offsetLeft) {
     throw new PartialDeleteError(offsetLeft ? [...remaining, SETTINGS_KEY] : remaining)

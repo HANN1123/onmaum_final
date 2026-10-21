@@ -162,6 +162,22 @@ describe('deleteAllPersonalData', () => {
   })
 })
 
+describe('deleteAllPersonalData 저장소 접근 실패', () => {
+  it('키 목록을 읽지 못하면 성공으로 끝내지 않는다', async () => {
+    localStorage.setItem('onmaum_profile', '{"reliefs":[]}')
+    const spy = vi.spyOn(localStorage, 'key').mockImplementation(() => {
+      throw new Error('SecurityError')
+    })
+    try {
+      await expect(
+        deleteAllPersonalData({ includePreferences: true }, new Date('2026-10-22T09:00:00')),
+      ).rejects.toBeInstanceOf(PartialDeleteError)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
 describe('측정 중 삭제 방지', () => {
   const NOW = new Date('2026-10-21T12:00:00')
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import WeeklyRecords from '@/features/ui/records/WeeklyRecords'
 import { db, type EmotionRecord } from '@/shared/storage/db'
@@ -55,6 +55,21 @@ describe('WeeklyRecords', () => {
     fireEvent.click(screen.getByRole('button', { name: '이전 주' }))
     await waitFor(() => expect(screen.getByText(/^이 주 1일 기록/)).toBeTruthy())
     expect((screen.getByRole('button', { name: '다음 주' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('화면을 다시 볼 때 날짜를 새로 계산해 바뀐 주를 보여 준다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-10-25T23:00:00')) // 일요일
+      render(<WeeklyRecords />)
+      await waitFor(() => expect(screen.getByText(/10\. 19\./)).toBeTruthy())
+
+      vi.setSystemTime(new Date('2026-10-26T09:00:00')) // 다음 날 월요일
+      fireEvent(window, new Event('focus'))
+      await waitFor(() => expect(screen.getByText(/10\. 26\./)).toBeTruthy())
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('표정 기록 없이 측정 세션만 있는 날도 측정 횟수를 보여 준다', async () => {
