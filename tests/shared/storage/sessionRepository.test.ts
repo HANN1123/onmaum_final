@@ -129,7 +129,7 @@ describe('touchSession', () => {
     expect(r.recovered).toBe(0)
   })
 
-  it('복구 시점보다 이른 갱신은 복구된 세션을 되살리지 않는다', async () => {
+  it('저장된 lastSeenAt 이하 시각의 갱신은 복구된 세션을 되살리지 않는다', async () => {
     const s = await startSession(T0)
     await recoverInterruptedSessions(at(STALE_SESSION_MS + MIN))
     await touchSession(s.id, T0)
