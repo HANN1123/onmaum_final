@@ -1,5 +1,5 @@
 import { db, type EmotionRecord, type MeasurementSession } from './db'
-import { loadSettings, saveSettings, SETTINGS_KEY } from './settings'
+import { loadSettings, SETTINGS_KEY } from './settings'
 import { PROFILE_KEY } from './profile'
 
 /** 내보내기 파일 형식 버전. DB schema 버전과 맞춘다 */
@@ -110,24 +110,67 @@ export function serializeExport(data: PersonalDataExport): string {
   return JSON.stringify(data, null, 2)
 }
 
+/** 측정이 진행 중이라 지금 지우면 기록이 다시 생길 수 있을 때 */
+export class MeasurementActiveError extends Error {
+  constructor() {
+    super('측정이 진행 중입니다')
+    this.name = 'MeasurementActiveError'
+  }
+}
+
+/** 기록을 지웠지만 기기 저장소 일부를 지우지 못했을 때 */
+export class PartialDeleteError extends Error {
+  constructor(readonly remainingKeys: string[]) {
+    super('일부 기록을 지우지 못했습니다')
+    this.name = 'PartialDeleteError'
+  }
+}
+
+/** 이 시간 안에 감정 기록이 저장됐거나 세션이 갱신됐으면 측정 중으로 본다 (1분 집계 주기의 2배) */
+export const MEASUREMENT_ACTIVE_WINDOW_MS = 2 * 60 * 1000
+
+/**
+ * 이 기기 어느 탭에서든 측정이 진행 중인지 추정한다.
+ * 갱신이 최근인 active 세션이 있거나, 최근 감정 기록이 있으면 true.
+ */
+export async function isMeasurementActive(now: Date = new Date()): Promise<boolean> {
+  const since = new Date(now.getTime() - MEASUREMENT_ACTIVE_WINDOW_MS)
+  const active = await db.sessions.where('status').equals('active').toArray()
+  if (active.some((s) => s.lastSeenAt >= since)) return true
+  return (await db.emotions.where('timestamp').aboveOrEqual(since).count()) > 0
+}
+
 /**
  * 측정 기록(감정·세션)과 체크인·넛지 기록을 지운다.
  * 기본은 설정·설문·온보딩 여부를 남기지만, 체크인으로 쌓인 보정값은 기록에서 나온 값이므로 0으로 되돌린다.
+ * 측정 중이면 MeasurementActiveError, 기기 저장소 일부를 지우지 못하면 PartialDeleteError를 던진다.
  */
-export async function deleteAllPersonalData(options: DeleteOptions = {}): Promise<void> {
+export async function deleteAllPersonalData(
+  options: DeleteOptions = {},
+  now: Date = new Date(),
+): Promise<void> {
   const { includePreferences = false } = options
+  if (await isMeasurementActive(now)) throw new MeasurementActiveError()
+
   await db.transaction('rw', db.emotions, db.sessions, async () => {
     await db.emotions.clear()
     await db.sessions.clear()
   })
 
-  const keys = onmaumKeys().filter((k) => includePreferences || !PREFERENCE_KEYS.includes(k))
+  const targets = onmaumKeys().filter((k) => includePreferences || !PREFERENCE_KEYS.includes(k))
   try {
-    for (const k of keys) localStorage.removeItem(k)
+    for (const k of targets) localStorage.removeItem(k)
     if (!includePreferences && localStorage.getItem(SETTINGS_KEY) !== null) {
-      saveSettings({ ...loadSettings(), calibrationOffset: 0 })
+      // saveSettings는 실패를 무시하므로 직접 써서 실패를 알 수 있게 한다
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...loadSettings(), calibrationOffset: 0 }))
     }
   } catch {
-    // 저장소 접근이 막힌 환경은 IndexedDB 삭제만 반영된다
+    // 아래 확인에서 남은 키로 실패를 알린다
+  }
+
+  const remaining = onmaumKeys().filter((k) => targets.includes(k))
+  const offsetLeft = !includePreferences && loadSettings().calibrationOffset !== 0
+  if (remaining.length > 0 || offsetLeft) {
+    throw new PartialDeleteError(offsetLeft ? [...remaining, SETTINGS_KEY] : remaining)
   }
 }

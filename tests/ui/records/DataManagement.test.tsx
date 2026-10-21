@@ -14,9 +14,11 @@ vi.mock('@/shared/storage/personalData', () => ({
   deleteAllPersonalData: (...args: unknown[]) => deleteAllPersonalData(...(args as [])),
   exportPersonalData: () => exportPersonalData(),
   serializeExport: (d: unknown) => JSON.stringify(d),
+  MeasurementActiveError: class MeasurementActiveError extends Error {},
 }))
 
 import DataManagement from '@/features/ui/records/DataManagement'
+import { MeasurementActiveError } from '@/shared/storage/personalData'
 
 beforeEach(() => {
   deleteAllPersonalData.mockClear()
@@ -62,11 +64,27 @@ describe('DataManagement', () => {
     render(<DataManagement />)
     fireEvent.click(screen.getByRole('button', { name: '기록 파일로 내보내기 (JSON)' }))
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('기록 3개를 파일로 저장했어요'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/기록 3개로 파일 다운로드를 시작했어요/))
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(click).toHaveBeenCalledTimes(1)
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock'), { timeout: 2000 })
     click.mockRestore()
+  })
+
+  it('확인 단계를 열면 취소에, 닫으면 지우기 버튼에 포커스가 간다', () => {
+    render(<DataManagement />)
+    fireEvent.click(screen.getByRole('button', { name: '모든 기록 지우기' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '취소' }))
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '모든 기록 지우기' }))
+  })
+
+  it('측정 중이면 지우지 않고 측정을 멈추라고 알려 준다', async () => {
+    deleteAllPersonalData.mockRejectedValueOnce(new MeasurementActiveError())
+    render(<DataManagement />)
+    fireEvent.click(screen.getByRole('button', { name: '모든 기록 지우기' }))
+    fireEvent.click(screen.getByRole('button', { name: '지우기' }))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/측정이 진행 중이에요/))
   })
 
   it('삭제에 실패하면 이유와 다음 행동을 알려 준다', async () => {

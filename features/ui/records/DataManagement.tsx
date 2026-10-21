@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   deleteAllPersonalData,
   exportPersonalData,
   serializeExport,
+  MeasurementActiveError,
 } from '@/shared/storage/personalData'
 
 type Status = { kind: 'idle' } | { kind: 'done'; text: string } | { kind: 'error'; text: string }
@@ -15,7 +16,8 @@ function downloadJson(json: string, fileName: string): void {
   a.href = url
   a.download = fileName
   a.click()
-  URL.revokeObjectURL(url)
+  // 일부 브라우저는 클릭 직후 해제하면 다운로드를 시작하지 못하므로 잠시 뒤에 해제한다
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export default function DataManagement() {
@@ -23,6 +25,16 @@ export default function DataManagement() {
   const [confirming, setConfirming] = useState(false)
   const [includePreferences, setIncludePreferences] = useState(false)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const deleteButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  const wasConfirming = useRef(false)
+
+  // 확인 단계를 열면 안전한 "취소"로, 닫으면 원래 "지우기" 버튼으로 포커스를 옮긴다
+  useEffect(() => {
+    if (confirming) cancelButtonRef.current?.focus()
+    else if (wasConfirming.current) deleteButtonRef.current?.focus()
+    wasConfirming.current = confirming
+  }, [confirming])
 
   const handleExport = async () => {
     setBusy(true)
@@ -30,7 +42,10 @@ export default function DataManagement() {
       const data = await exportPersonalData()
       const date = new Date().toLocaleDateString('en-CA')
       downloadJson(serializeExport(data), `onmaum-records-${date}.json`)
-      setStatus({ kind: 'done', text: `기록 ${data.emotions.length}개를 파일로 저장했어요` })
+      setStatus({
+        kind: 'done',
+        text: `기록 ${data.emotions.length}개로 파일 다운로드를 시작했어요. 다운로드 폴더에서 확인해 주세요`,
+      })
     } catch {
       setStatus({ kind: 'error', text: '파일을 만들지 못했어요. 잠시 후 다시 시도해 주세요' })
     } finally {
@@ -45,8 +60,14 @@ export default function DataManagement() {
       setConfirming(false)
       setIncludePreferences(false)
       setStatus({ kind: 'done', text: '모든 기록을 지웠어요' })
-    } catch {
-      setStatus({ kind: 'error', text: '기록을 지우지 못했어요. 측정 중이라면 멈춘 뒤 다시 시도해 주세요' })
+    } catch (err) {
+      setStatus({
+        kind: 'error',
+        text:
+          err instanceof MeasurementActiveError
+            ? '측정이 진행 중이에요. 다른 탭이나 창의 측정을 멈추고 2분 뒤에 다시 시도해 주세요'
+            : '일부 기록을 지우지 못했어요. 앱을 새로 고친 뒤 다시 시도해 주세요',
+      })
     } finally {
       setBusy(false)
     }
@@ -71,6 +92,7 @@ export default function DataManagement() {
 
         {!confirming ? (
           <button
+            ref={deleteButtonRef}
             type="button"
             onClick={() => {
               setConfirming(true)
@@ -97,6 +119,7 @@ export default function DataManagement() {
             </label>
             <div className="flex gap-2">
               <button
+                ref={cancelButtonRef}
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={busy}

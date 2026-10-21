@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
 import { getPersonalRecordsByRange, weekRange } from '@/shared/storage/personalData'
@@ -24,20 +24,33 @@ function formatMinutes(ms: number): string {
 }
 
 interface Props {
-  /** 테스트·미리보기용. 기본은 현재 시각 */
+  /** 테스트·미리보기용. 기본은 화면이 열린 뒤의 현재 시각 */
   now?: Date
 }
 
 export default function WeeklyRecords({ now }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
-  const anchor = new Date(now ?? new Date())
-  anchor.setDate(anchor.getDate() + weekOffset * 7)
-  const { start, end } = weekRange(anchor)
-  const startKey = localDateKey(start)
+  // 날짜는 사용자 기기의 시간대로 계산해야 하므로, 사전 렌더 결과와 어긋나지 않게 화면이 열린 뒤에 정한다
+  const [today, setToday] = useState<Date | null>(now ?? null)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!now) setToday(new Date())
+  }, [now])
 
-  const records = useLiveQuery(() => getPersonalRecordsByRange(start, end), [startKey])
+  const range = (() => {
+    if (!today) return null
+    const anchor = new Date(today)
+    anchor.setDate(anchor.getDate() + weekOffset * 7)
+    return weekRange(anchor)
+  })()
+  const startKey = range ? localDateKey(range.start) : null
 
-  const days = records ? dailyStressHistory(records.emotions, 7, end) : []
+  const records = useLiveQuery(
+    () => (range ? getPersonalRecordsByRange(range.start, range.end) : undefined),
+    [startKey],
+  )
+
+  const days = records && range ? dailyStressHistory(records.emotions, 7, range.end) : []
   const sessionsPerDay = new Map<string, number>()
   for (const s of records?.sessions ?? []) {
     const k = localDateKey(s.startedAt)
@@ -45,6 +58,7 @@ export default function WeeklyRecords({ now }: Props) {
   }
   const weekTotal = days.reduce((sum, d) => sum + d.totalDuration, 0)
   const recordedDays = days.filter((d) => d.totalDuration > 0).length
+  const weekLabel = weekOffset === 0 ? '이번 주' : '이 주'
 
   return (
     <div className="space-y-3 rounded-2xl border border-ink-200 bg-white p-4">
@@ -52,18 +66,19 @@ export default function WeeklyRecords({ now }: Props) {
         <button
           type="button"
           onClick={() => setWeekOffset((w) => w - 1)}
+          disabled={!range}
           className="rounded-lg px-2 py-1 text-sm text-ink-500 hover:text-ink-800"
           aria-label="이전 주"
         >
           ‹ 이전 주
         </button>
         <p className="text-sm font-medium text-ink-900">
-          {formatDay(startKey)} – {formatDay(localDateKey(end))}
+          {range ? `${formatDay(localDateKey(range.start))} – ${formatDay(localDateKey(range.end))}` : ' '}
         </p>
         <button
           type="button"
           onClick={() => setWeekOffset((w) => w + 1)}
-          disabled={weekOffset >= 0}
+          disabled={!range || weekOffset >= 0}
           className="rounded-lg px-2 py-1 text-sm text-ink-500 hover:text-ink-800 disabled:invisible"
           aria-label="다음 주"
         >
@@ -76,23 +91,30 @@ export default function WeeklyRecords({ now }: Props) {
       ) : (
         <>
           <p className="text-xs text-ink-500">
-            이번 주 {recordedDays}일 기록 · 총 {formatMinutes(weekTotal)}
+            {weekLabel} {recordedDays}일 기록 · 총 {formatMinutes(weekTotal)}
           </p>
           <ul className="divide-y divide-ink-100">
             {days.map((d) => {
               const sessions = sessionsPerDay.get(d.date) ?? 0
+              const empty = !d.scores && sessions === 0
               return (
                 <li key={d.date} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <span className="w-20 shrink-0 text-ink-700">{formatDay(d.date)}</span>
-                  {d.scores ? (
+                  {empty ? (
+                    <span className="text-xs text-ink-400">기록 없음</span>
+                  ) : (
                     <span className="flex flex-1 flex-wrap justify-end gap-x-3 gap-y-0.5 text-xs tabular-nums text-ink-600">
-                      <span>{formatMinutes(d.totalDuration)}</span>
-                      <span className="text-risk-good">긍정 {Math.round(d.scores.positive)}</span>
-                      <span className="text-risk-warning">스트레스 {Math.round(d.scores.stress)}</span>
+                      {d.scores ? (
+                        <>
+                          <span>{formatMinutes(d.totalDuration)}</span>
+                          <span className="text-risk-good">긍정 {Math.round(d.scores.positive)}</span>
+                          <span className="text-risk-warning">스트레스 {Math.round(d.scores.stress)}</span>
+                        </>
+                      ) : (
+                        <span className="text-ink-400">표정 기록 없음</span>
+                      )}
                       {sessions > 0 && <span>측정 {sessions}회</span>}
                     </span>
-                  ) : (
-                    <span className="text-xs text-ink-400">기록 없음</span>
                   )}
                 </li>
               )

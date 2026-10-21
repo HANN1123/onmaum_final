@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { db, type EmotionRecord, type MeasurementSession } from '@/shared/storage/db'
 import {
   weekRange,
@@ -7,6 +7,9 @@ import {
   exportPersonalData,
   serializeExport,
   deleteAllPersonalData,
+  isMeasurementActive,
+  MeasurementActiveError,
+  PartialDeleteError,
   EXPORT_SCHEMA_VERSION,
 } from '@/shared/storage/personalData'
 import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/shared/storage/settings'
@@ -109,6 +112,8 @@ describe('exportPersonalData', () => {
 })
 
 describe('deleteAllPersonalData', () => {
+  const LATER = new Date('2026-10-22T09:00:00')
+
   beforeEach(async () => {
     await db.emotions.add(emotion('2026-10-21T10:01:00', 's1'))
     await db.sessions.add(session('s1', '2026-10-21T10:00:00'))
@@ -121,7 +126,7 @@ describe('deleteAllPersonalData', () => {
   })
 
   it('기본: 측정 기록·체크인·넛지 기록을 지우고, 설정·설문은 남기되 보정값은 0으로 되돌린다', async () => {
-    await deleteAllPersonalData()
+    await deleteAllPersonalData({}, LATER)
 
     expect(await db.emotions.count()).toBe(0)
     expect(await db.sessions.count()).toBe(0)
@@ -135,10 +140,48 @@ describe('deleteAllPersonalData', () => {
   })
 
   it('includePreferences: 설정·설문·온보딩 여부까지 모두 지운다', async () => {
-    await deleteAllPersonalData({ includePreferences: true })
+    await deleteAllPersonalData({ includePreferences: true }, LATER)
 
     expect(await db.emotions.count()).toBe(0)
     expect(Object.keys(localStorage).filter((k) => k.startsWith('onmaum_'))).toEqual([])
     expect(localStorage.getItem('other_app_key')).toBe('x')
+  })
+
+  it('기기 저장소 일부를 지우지 못하면 PartialDeleteError로 알린다', async () => {
+    const original = localStorage.removeItem.bind(localStorage)
+    const spy = vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+      if (key.startsWith('onmaum_checkin_')) throw new Error('quota')
+      original(key)
+    })
+    try {
+      await expect(deleteAllPersonalData({}, LATER)).rejects.toBeInstanceOf(PartialDeleteError)
+      expect(spy).toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('측정 중 삭제 방지', () => {
+  const NOW = new Date('2026-10-21T12:00:00')
+
+  it('최근 2분 안에 감정 기록이 저장됐으면 지우지 않는다', async () => {
+    await db.emotions.add(emotion('2026-10-21T11:59:00'))
+    await expect(deleteAllPersonalData({}, NOW)).rejects.toBeInstanceOf(MeasurementActiveError)
+    expect(await db.emotions.count()).toBe(1)
+  })
+
+  it('최근 갱신된 active 세션이 있으면 지우지 않는다', async () => {
+    await db.sessions.add({ ...session('s1', '2026-10-21T11:00:00'), lastSeenAt: new Date('2026-10-21T11:59:30') })
+    expect(await isMeasurementActive(NOW)).toBe(true)
+    await expect(deleteAllPersonalData({}, NOW)).rejects.toBeInstanceOf(MeasurementActiveError)
+  })
+
+  it('오래된 기록과 끊긴 세션만 있으면 측정 중이 아니다', async () => {
+    await db.emotions.add(emotion('2026-10-21T11:50:00'))
+    await db.sessions.add({ ...session('s1', '2026-10-21T11:00:00'), lastSeenAt: new Date('2026-10-21T11:50:00') })
+    expect(await isMeasurementActive(NOW)).toBe(false)
+    await deleteAllPersonalData({}, NOW)
+    expect(await db.emotions.count()).toBe(0)
   })
 })

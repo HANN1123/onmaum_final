@@ -53,7 +53,22 @@ describe('WeeklyRecords', () => {
     expect((screen.getByRole('button', { name: '다음 주' }) as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(screen.getByRole('button', { name: '이전 주' }))
-    await waitFor(() => expect(screen.getByText(/이번 주 1일 기록/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/^이 주 1일 기록/)).toBeTruthy())
     expect((screen.getByRole('button', { name: '다음 주' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('표정 기록 없이 측정 세션만 있는 날도 측정 횟수를 보여 준다', async () => {
+    await db.sessions.add({
+      id: 's2',
+      startedAt: new Date('2026-10-21T09:00:00'),
+      endedAt: new Date('2026-10-21T09:05:00'),
+      status: 'completed',
+      endReason: 'user-stop',
+      lastSeenAt: new Date('2026-10-21T09:05:00'),
+    })
+    render(<WeeklyRecords now={NOW} />)
+    await waitFor(() => expect(screen.getByText('측정 1회')).toBeTruthy())
+    expect(screen.getByText('표정 기록 없음')).toBeTruthy()
+    expect(screen.getAllByText('기록 없음')).toHaveLength(6)
   })
 })
