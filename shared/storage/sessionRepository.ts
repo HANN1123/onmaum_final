@@ -26,6 +26,19 @@ function isAutoRecovered(s: MeasurementSession): boolean {
 }
 
 /**
+ * 세션 id(UUID v4). crypto.randomUUID는 보안 컨텍스트(HTTPS·localhost)에서만 있으므로,
+ * 없으면 보안 컨텍스트가 아니어도 쓸 수 있는 getRandomValues로 만든다.
+ */
+export function newSessionId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
+
+/**
  * 오래 갱신되지 않은 active 세션을 interrupted로 정리한다.
  * 앱 시작 시, startSession 직전, 그리고 반환된 nextCheckAt에 호출한다.
  * 다른 탭에서 측정 중인 세션은 lastSeenAt이 계속 갱신되므로 건드리지 않는다.
@@ -61,7 +74,7 @@ export async function recoverInterruptedSessions(
 /** 새 측정 세션을 만든다. 만들기 전에 남아 있는 비정상 종료 세션을 정리한다 */
 export async function startSession(
   now: Date = new Date(),
-  id: string = crypto.randomUUID(),
+  id: string = newSessionId(),
 ): Promise<MeasurementSession> {
   await recoverInterruptedSessions(now)
   const session: MeasurementSession = {
@@ -79,11 +92,13 @@ export async function startSession(
 /**
  * 측정 중인 세션의 생존 시각을 갱신한다. 감정 기록 저장 여부와 무관하게 주기적으로 호출한다.
  * 잘못 복구된 세션(interrupted + 'recovered')은 active로 되돌린다. completed는 되살리지 않는다.
+ * 늦게 처리된 갱신이 시각을 뒤로 돌리지 않도록, 이미 저장된 lastSeenAt보다 이른 갱신은 무시한다.
  */
 export async function touchSession(id: string, now: Date = new Date()): Promise<void> {
   await db.transaction('rw', db.sessions, async () => {
     const s = await db.sessions.get(id)
     if (!s) return
+    if (now.getTime() <= s.lastSeenAt.getTime()) return
     if (s.status === 'active') {
       await db.sessions.update(id, { lastSeenAt: now })
     } else if (isAutoRecovered(s)) {

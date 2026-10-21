@@ -7,6 +7,7 @@ import {
   recoverInterruptedSessions,
   getSessionsByDateRange,
   getSessionDetail,
+  newSessionId,
   STALE_SESSION_MS,
 } from '@/shared/storage/sessionRepository'
 
@@ -52,6 +53,20 @@ describe('startSession', () => {
     const recovered = await db.sessions.get(old.id)
     expect(recovered?.status).toBe('interrupted')
     expect(recovered?.endReason).toBe('recovered')
+  })
+})
+
+describe('newSessionId', () => {
+  it('crypto.randomUUID가 없는 환경에서도 UUID v4 형식의 id를 만든다', () => {
+    const original = crypto.randomUUID
+    try {
+      Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })
+      const id = newSessionId()
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+      expect(newSessionId()).not.toBe(id)
+    } finally {
+      Object.defineProperty(crypto, 'randomUUID', { value: original, configurable: true })
+    }
   })
 })
 
@@ -105,6 +120,22 @@ describe('touchSession', () => {
     expect(revived?.endReason).toBeNull()
   })
 
+  it('늦게 처리된 이전 시각의 갱신은 lastSeenAt을 되돌리지 않는다', async () => {
+    const s = await startSession(T0)
+    await touchSession(s.id, at(2 * MIN))
+    await touchSession(s.id, at(30 * 1000))
+    expect((await db.sessions.get(s.id))?.lastSeenAt).toEqual(at(2 * MIN))
+    const r = await recoverInterruptedSessions(at(2 * MIN + STALE_SESSION_MS))
+    expect(r.recovered).toBe(0)
+  })
+
+  it('복구 시점보다 이른 갱신은 복구된 세션을 되살리지 않는다', async () => {
+    const s = await startSession(T0)
+    await recoverInterruptedSessions(at(STALE_SESSION_MS + MIN))
+    await touchSession(s.id, T0)
+    expect((await db.sessions.get(s.id))?.status).toBe('interrupted')
+  })
+
   it('completed 세션은 늦게 도착한 갱신으로 되살리지 않는다', async () => {
     const s = await startSession(T0)
     await recoverInterruptedSessions(at(STALE_SESSION_MS + MIN))
@@ -144,6 +175,14 @@ describe('recoverInterruptedSessions', () => {
     const first = await recoverInterruptedSessions(at(MIN))
     expect((await db.sessions.get(s.id))?.status).toBe('active')
     await recoverInterruptedSessions(first.nextCheckAt!)
+    expect((await db.sessions.get(s.id))?.status).toBe('interrupted')
+  })
+
+  it('경계: 갱신 없이 정확히 STALE_SESSION_MS면 유지, 1ms 넘으면 복구', async () => {
+    const s = await startSession(T0)
+    await recoverInterruptedSessions(at(STALE_SESSION_MS))
+    expect((await db.sessions.get(s.id))?.status).toBe('active')
+    await recoverInterruptedSessions(at(STALE_SESSION_MS + 1))
     expect((await db.sessions.get(s.id))?.status).toBe('interrupted')
   })
 
