@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie'
+import Dexie, { type EntityTable, type Table } from 'dexie'
 import type { Emotion } from '../../features/algorithm/emotion/emotionAnalysis'
 
 export interface EmotionRecord {
@@ -34,7 +34,8 @@ export interface MeasurementSession {
 
 export class OnmaumDB extends Dexie {
   emotions!: EntityTable<EmotionRecord, 'id'>
-  sessions!: EntityTable<MeasurementSession, 'id'>
+  /** id는 자동 생성하지 않으므로 저장할 때 반드시 넣는다 (EntityTable은 id를 선택으로 만든다) */
+  sessions!: Table<MeasurementSession, string>
 
   /** name은 테스트에서 DB를 분리할 때만 바꾼다 */
   constructor(name = 'onmaum') {
@@ -43,7 +44,8 @@ export class OnmaumDB extends Dexie {
       emotions: '++id, timestamp',
     })
     // v2: 인덱스·테이블 추가만 한다. 기존 기록을 바꾸지 않으므로 upgrade()가 필요 없다.
-    // 설계: docs/architecture/SESSION_DATA_DESIGN.md
+    // 설계: docs/architecture/SESSION_DATA_DESIGN.md. 설계의 heartRates·sessionSelfReports는
+    // rPPG 결과 형식·자기보고 문항 합의 후 다음 버전(v3)에서 추가한다.
     this.version(2).stores({
       emotions: '++id, timestamp, sessionId',
       sessions: 'id, startedAt, status',

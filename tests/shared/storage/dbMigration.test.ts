@@ -122,6 +122,23 @@ describe('Dexie v1 → v2 확장', () => {
     ).toBe(1)
   })
 
+  it('이전 코드가 v1으로 연 다른 탭이 있어도 v2 업그레이드가 끝나고 기록이 보존된다', async () => {
+    const name = uniqueName()
+    const otherTab = openAsV1(name)
+    opened.push(otherTab)
+    await otherTab.table('emotions').add(legacyRecord('2026-10-01T10:00:00'))
+    expect(otherTab.isOpen()).toBe(true)
+
+    const v2 = new OnmaumDB(name)
+    opened.push(v2)
+    await v2.open()
+
+    expect(v2.verno).toBe(2)
+    expect(await v2.emotions.count()).toBe(1)
+    // Dexie 기본 동작: versionchange를 받은 이전 연결은 스스로 닫혀 업그레이드를 막지 않는다
+    expect(otherTab.isOpen()).toBe(false)
+  })
+
   it('v2 DB를 v1 schema만 아는 이전 코드로 열어도 감정 기록을 읽고 쓸 수 있다', async () => {
     const name = uniqueName()
     const v2 = new OnmaumDB(name)
