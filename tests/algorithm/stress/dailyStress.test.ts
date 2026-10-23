@@ -5,6 +5,7 @@ import {
   recentStress,
   hardestPeriod,
   RECENT_WINDOW_MS,
+  MIN_PERIOD_DURATION_MS,
 } from '@/features/algorithm/stress/dailyStress'
 import type { EmotionRecord } from '@/shared/storage/db'
 
@@ -63,8 +64,8 @@ describe('recentStress', () => {
 describe('hardestPeriod', () => {
   it('N 최고 2시간 버킷 반환', () => {
     const records = [
-      rec({ timestamp: new Date('2026-06-12T10:30:00'), duration: 1000, happy: 1 }),
-      rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 1000, angry: 0.4 }),
+      rec({ timestamp: new Date('2026-06-12T10:30:00'), duration: MIN_PERIOD_DURATION_MS, happy: 1 }),
+      rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: MIN_PERIOD_DURATION_MS, angry: 0.4 }),
     ]
     const p = hardestPeriod(records)!
     expect(p.startHour).toBe(14) // floor(15/2)*2
@@ -73,5 +74,50 @@ describe('hardestPeriod', () => {
 
   it('빈 배열 → null', () => {
     expect(hardestPeriod([])).toBeNull()
+  })
+})
+
+describe('hardestPeriod 최소 측정 시간', () => {
+  it('측정 시간이 MIN_PERIOD_DURATION_MS보다 짧은 시간대는 고르지 않는다', () => {
+    const records = [
+      rec({ timestamp: new Date('2026-06-12T10:30:00'), duration: MIN_PERIOD_DURATION_MS, sad: 0.2 }),
+      rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 10 * 1000, sad: 0.9 }), // 10초뿐
+    ]
+    const p = hardestPeriod(records)!
+    expect(p.startHour).toBe(10)
+    expect(p.stress).toBeCloseTo(20)
+  })
+
+  it('한 시간대 안의 여러 기록 시간을 합쳐서 판단한다', () => {
+    const half = MIN_PERIOD_DURATION_MS / 2
+    const records = [
+      rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: half, sad: 0.6 }),
+      rec({ timestamp: new Date('2026-06-12T15:40:00'), duration: half, sad: 0.6 }),
+    ]
+    expect(hardestPeriod(records)?.startHour).toBe(14)
+  })
+
+  it('경계: 1ms 모자라면 제외, 정확히 MIN_PERIOD_DURATION_MS면 포함', () => {
+    const at = new Date('2026-06-12T15:10:00')
+    expect(hardestPeriod([rec({ timestamp: at, duration: MIN_PERIOD_DURATION_MS - 1, sad: 0.5 })])).toBeNull()
+    expect(hardestPeriod([rec({ timestamp: at, duration: MIN_PERIOD_DURATION_MS, sad: 0.5 })])?.startHour).toBe(14)
+  })
+
+  it('하루 합계가 5분이어도 시간대마다 5분 미만이면 null', () => {
+    const third = MIN_PERIOD_DURATION_MS / 3
+    const records = ['09:10', '13:10', '17:10'].map((t) =>
+      rec({ timestamp: new Date(`2026-06-12T${t}:00`), duration: third, sad: 0.5 }),
+    )
+    expect(hardestPeriod(records)).toBeNull()
+  })
+
+  it('조건을 채우는 시간대가 없으면 null', () => {
+    const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 60 * 1000, sad: 0.9 })]
+    expect(hardestPeriod(records)).toBeNull()
+  })
+
+  it('최소 시간을 직접 줄 수 있다', () => {
+    const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 60 * 1000, sad: 0.9 })]
+    expect(hardestPeriod(records, 0)?.startHour).toBe(14)
   })
 })
