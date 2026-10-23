@@ -1,5 +1,7 @@
 # 2026년 2학기 역할 기준 재분류
 
+> 이 문서는 2026-10-07 재분류 당시의 기록이다. 2026-10-18 역할 개정으로 ③ 서버·관리자는 ③ 개인 데이터 관리로 바뀌었고, 관리자 페이지와 조직·직원 관리는 현재 개발 범위에서 제외됐다. ①은 카메라·rPPG 전체를 포함한다. 현재 담당 기준은 [CODE_OWNERSHIP.md](CODE_OWNERSHIP.md)를 따른다.
+
 ## 작업 명세와 범위
 
 - 기준: `c39be13` (`chore/orca-collaboration`), 작업 브랜치: `chore/reclassify-by-role`.
@@ -80,6 +82,6 @@
 ### 다음 브랜치
 
 - 김우빈: `feat/camera-recognition`, `spike/electron-background`, `feat/ui-redesign`.
-- 이정환: `feat/admin-dashboard`, `refactor/emotion-algorithm`, `feat/feedback-system`.
+- 이정환: `feat/admin-dashboard`, `refactor/emotion-algorithm`, `feat/feedback-system`. (당시 제안이며 `feat/admin-dashboard`는 2026-10-18 개정으로 범위에서 제외됐다.)
 
 위 기능은 이번 작업에서 구현하지 않았다. GitHub 계정·리뷰 권한을 추정해 CODEOWNERS를 만들지 않았다. 이전 위치의 빈 디렉터리 정리는 자동 승인 정책이 차단하여 유지했다. 빈 디렉터리는 Git에 포함되지 않는다.

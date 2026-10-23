@@ -11,7 +11,7 @@
 
 1. 카메라 기반 인식 고도화 — DeepMedi류 rPPG/심박 참고, 웹캠 신호 안정화
 2. Electron — 브라우저 PWA 대신 PC 앱, 백그라운드(숨김 창)에서도 측정 가능
-3. 서버 연동 · 관리자 페이지 — 옵트인 · 로컬 우선. 원본은 기기 유지, 서버에는 동의한 하루 단위 요약만. 기본은 팀 익명 집계, 개인별 열람은 본인이 「케어 담당과 공유」를 켠 경우만
+3. 서버 연동 · 관리자 페이지 — 2026-10-18 기준 현재 개발 범위에서 제외(당시 방향: 옵트인 · 로컬 우선. 원본은 기기 유지, 서버에는 동의한 하루 단위 요약만. 기본은 팀 익명 집계, 개인별 열람은 본인이 「케어 담당과 공유」를 켠 경우만)
 4. UI 변경 — 세부 톤은 추후 확정
 5. 감정 분석 알고리즘 체계화 — 규칙·임계값·단계(로컬 점수 → 필요할 때만 AI)를 문서/코드로 고정
 6. 피드백 — 기본 AI 조언 사용하되, 스트레스 지수를 의사처럼 단정하지 말 것. “컨디션 신호 / 참고용” 프레임. 의료·진단 뉘앙스 금지.
@@ -82,7 +82,7 @@ app/            라우트 — /, /measure, /stats, /demo, /orb-preview
 features/camera/     ① 카메라·모델·측정 루프 — 김우빈
 features/ui/         ④ 화면·오브·Document PiP — 김우빈
 features/algorithm/  ⑤ 감정·스트레스·기준선 — 이정환
-features/feedback/   ⑥ 체크인·넛지·알림·자기관리 제안 — 이정환
+features/feedback/   ⑥ 체크인·넛지·알림·자기관리 제안 — 이정환 (components는 공동)
 shared/storage/      공통 저장 기반 — 이정환 주 관리, 공동 주의
 public/         PWA(manifest, sw.js), face-api 모델
 tests/          camera, ui, algorithm, feedback, shared 및 tooling
@@ -91,7 +91,7 @@ docs/           architecture, collaboration, 기존 설계 스펙·구현 계획
 
 전체 파일 구조와 이동 경로는 [프로젝트 구조](docs/architecture/PROJECT_STRUCTURE.md),
 담당 영역과 공동 관리 기준은 [코드 소유권](docs/collaboration/CODE_OWNERSHIP.md)을 참고합니다.
-② Electron(김우빈)은 향후 `features/electron/`, ③ 서버·관리자(이정환)는 향후 `features/admin/`에 구현합니다. 현재는 두 디렉터리와 기능을 생성하지 않았습니다.
+① rPPG(김우빈)는 향후 `features/rppg/`, ② Electron(김우빈)은 향후 `features/electron/`에 구현합니다. 현재는 두 디렉터리와 기능을 생성하지 않았습니다. ③ 개인 데이터 관리(이정환)는 현재 `shared/storage/`가 중심이며, 관리자 페이지와 조직·직원 관리는 현재 개발 범위에서 제외합니다.
 비어 있는 `features/feedback/components/RiskAlert.tsx`, `features/feedback/lib/notification.ts`는 빈 상태로 이동했습니다.
 
 데이터 흐름: Camera/Detection → 기존 `RawExpressions` → Algorithm 정규화·집계·Stress/State → Feedback 조건·문구 → UI 표시. `useEmotionRecorder`가 약 0.5초 분석·1분 집계를 연결하며 기록은 `shared/storage`의 Dexie `emotions`에 저장합니다. 알고리즘 결과·카메라 옵션·UI·DB schema는 재분류 전과 같습니다.

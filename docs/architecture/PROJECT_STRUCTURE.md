@@ -1,6 +1,6 @@
 # ONMAUM 프로젝트 구조
 
-2026-10-07 공식 6개 업무에 맞춘 구조다. 기준 커밋은 `c39be13`, 작업 브랜치는 `chore/reclassify-by-role`이다. 직전 UI/Core 계층 분류에서 실제 파일 내용을 다시 읽고 이동했다. 기존 2026-10-06 분류·검증 기록은 기준 커밋의 이 문서에서 확인할 수 있다.
+2026-10-07 공식 6개 업무에 맞춘 구조다. 재분류 당시 기준 커밋은 `c39be13`, 작업 브랜치는 `chore/reclassify-by-role`이었으며 현재 `main`에 포함되어 있다. 2026-10-18 역할 명칭 개정(③ 개인 데이터 관리, ① 카메라·rPPG 등)은 [CODE_OWNERSHIP.md](../collaboration/CODE_OWNERSHIP.md)를 따른다. 직전 UI/Core 계층 분류에서 실제 파일 내용을 다시 읽고 이동했다. 기존 2026-10-06 분류·검증 기록은 기준 커밋의 이 문서에서 확인할 수 있다.
 
 소유권과 공동 경계는 [CODE_OWNERSHIP.md](../collaboration/CODE_OWNERSHIP.md), 범위·검증은 [ROLE_RECLASSIFICATION.md](../collaboration/ROLE_RECLASSIFICATION.md), 설치·인계는 [ORCA_WORKFLOW.md](../collaboration/ORCA_WORKFLOW.md)를 따른다.
 
@@ -8,12 +8,14 @@
 
 | 파일/디렉터리 | 담당 | 업무번호 | 이유 |
 |---|---|---|---|
-| `features/camera/**`, `public/models/**` | 김우빈 | ① | 카메라·검출·모델·측정 루프 |
+| `features/camera/**`, `public/models/**` | 김우빈 | ① | 카메라·검출·모델·측정 루프 (`useEmotionRecorder`는 공동) |
+| 향후 `features/rppg/` — 현재 미생성 | 김우빈 | ① | RGB 시계열 수집·rPPG 신호처리·BPM 추정·측정 품질 판정 |
 | 향후 `features/electron/` — 현재 미생성 | 김우빈 | ② | Electron 실행 환경·main·preload·IPC·창 |
-| 향후 `features/admin/` — 현재 미생성 | 이정환 | ③ | 서버 API·관리자·익명 집계·권한 |
+| `shared/storage/**` 중심 (내보내기·삭제 위치는 구현 시 결정) | 이정환 | ③ | 세션·측정 기록 저장·데이터 내보내기·삭제·개인 통계 데이터 |
 | `features/ui/**` | 김우빈 | ④ | 화면·오브·시각 표현·Document PiP |
 | `features/algorithm/**` | 이정환 | ⑤ | 정규화·감정 집계·스트레스·기준선·보정 |
-| `features/feedback/**` | 이정환 | ⑥ | 체크인·넛지·알림·문구·자기관리 제안 |
+| `features/feedback/{lib,hooks}/**` | 이정환 | ⑥ | 체크인·넛지·알림·문구·자기관리 제안 |
+| `features/feedback/components/**` | 공동 (조건·문구 이정환, 시각 디자인 김우빈) | ⑥ / ④ | 체크인·넛지 컴포넌트 |
 | `shared/storage/**` | 공동 / 이정환 중심 | Shared | DB·CRUD·프로필·설정·일일 상태 |
 | `app/**` | 김우빈 / 통합 공동 | ④ / Shared | framework routing·기능 조합 |
 | `tests/<업무>/**` | 대응 소스 담당 | 동일 | 소스와 대응하는 테스트 |
@@ -21,7 +23,7 @@
 
 ## 실제 파일 트리 (Git에 포함되는 경로)
 
-미구현 Electron/Admin 폴더, 중복 types, 빈 constants/utils 폴더를 만들지 않았다. tests는 업무명 아래 소스 구조를 따른다. 테스트가 없는 기능을 위해 빈 폴더를 만들지 않는다.
+미구현 rPPG/Electron 폴더, 중복 types, 빈 constants/utils 폴더를 만들지 않았다. tests는 업무명 아래 소스 구조를 따른다. 테스트가 없는 기능을 위해 빈 폴더를 만들지 않는다.
 
 ```text
 app/
