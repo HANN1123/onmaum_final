@@ -29,7 +29,7 @@ describe('dailyStressFor', () => {
       rec({ timestamp: new Date('2026-06-11T11:00:00'), duration: 1000, happy: 1 }),
     ]
     const s = dailyStressFor(records, '2026-06-10')!
-    expect(s.stress).toBeCloseTo(60) // 0.4×1.5×100
+    expect(s.stress).toBeCloseTo(40) // 0.4×100
     expect(dailyStressFor(records, '2026-06-12')).toBeNull()
   })
 })
@@ -68,7 +68,7 @@ describe('hardestPeriod', () => {
     ]
     const p = hardestPeriod(records)!
     expect(p.startHour).toBe(14) // floor(15/2)*2
-    expect(p.stress).toBeCloseTo(60)
+    expect(p.stress).toBeCloseTo(40) // 0.4×100
   })
 
   it('빈 배열 → null', () => {

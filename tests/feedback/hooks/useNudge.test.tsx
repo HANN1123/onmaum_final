@@ -34,7 +34,7 @@ describe('useNudge', () => {
       happy: 0,
       calm: 0,
       sad: 0,
-      angry: 0.5, // N = 75
+      angry: 0.5, // N = 50
       dominantEmotion: 'angry',
       flatAffectScore: 0,
     } as never)

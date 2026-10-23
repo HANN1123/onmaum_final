@@ -12,10 +12,10 @@ import {
 } from '@/features/algorithm/stress/stressIndex'
 
 describe('frameContribution', () => {
-  it('pos=happy, neg=sad + angry×1.5', () => {
+  it('pos=happy, neg=sad + angry', () => {
     const c = frameContribution({ happy: 0.5, calm: 0.2, sad: 0.1, angry: 0.2 })
     expect(c.pos).toBeCloseTo(0.5)
-    expect(c.neg).toBeCloseTo(0.1 + 0.2 * 1.5) // 0.4
+    expect(c.neg).toBeCloseTo(0.1 + 0.2) // 0.3
   })
 
   it('calm은 긍정에 들어가지 않는다', () => {
@@ -40,9 +40,16 @@ describe('aggregateStress', () => {
     expect(s.stress).toBeCloseTo(0)
   })
 
-  it('화남 0.4 → 스트레스 = 100 × (0.4×1.5) = 60', () => {
+  it('화남 0.4 → 스트레스 = 100 × 0.4 = 40', () => {
     const s = aggregateStress([{ happy: 0, sad: 0, angry: 0.4, duration: 1000 }])!
-    expect(s.stress).toBeCloseTo(60)
+    expect(s.stress).toBeCloseTo(40)
+  })
+
+  it('부정 표정만 가득해도 스트레스는 100을 넘지 않는다', () => {
+    const angryOnly = aggregateStress([{ happy: 0, sad: 0, angry: 1, duration: 1000 }])!
+    const mixed = aggregateStress([{ happy: 0, sad: 0.5, angry: 0.5, duration: 1000 }])!
+    expect(angryOnly.stress).toBeCloseTo(100)
+    expect(mixed.stress).toBeCloseTo(100)
   })
 
   it('duration 가중 평균 — 긴 record가 더 큰 영향', () => {
