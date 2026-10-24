@@ -204,7 +204,11 @@ this.version(2).stores({
 - 원본 영상·얼굴 이미지·raw frame·RGB 시계열은 **저장하지 않는다**(기존 최소 수집 원칙 유지). `HeartRateRecord`는 숫자 요약만 담는다.
 - 보관 기간: 기존 결정(자동 삭제 없음)을 따른다. 사용자가 직접 삭제한다.
 - 저장량 추정: 5초마다 심박 결과 1건이면 1시간에 720건이다. 한 건이 약 150바이트라 하루 8시간 측정 시 약 0.9MB, 1년 약 220MB다. **[합의 필요] 출력 주기에 따라 1분 요약 저장으로 줄이는 안**도 검토한다.
-- 삭제: 새 `deleteAllPersonalData()`는 IndexedDB 모든 테이블과 `onmaum_` localStorage 키를 지운다. 범위(설정·프로필 포함 여부)는 화면 문구와 함께 정한다. 기존 `deleteAllEmotions()`는 시그니처를 유지한다.
+- 삭제: 새 `deleteAllPersonalData()`는 IndexedDB 모든 테이블과 기록성 `onmaum_` localStorage 키(체크인·넛지)를 지운다. 기존 `deleteAllEmotions()`는 시그니처를 유지한다.
+  - **기본 삭제는 설정·설문·온보딩 여부를 남긴다.** `onmaum_settings`, `onmaum_profile`, `onmaum_onboarded`는 지우지 않는다. `onmaum_onboarded`를 지우면 다음 측정 화면 진입 때 온보딩 설문이 다시 뜨기 때문이다(`app/measure/page.tsx`).
+  - 단, 설정 안의 `calibrationOffset`은 체크인 기록에서 나온 값이므로 기본 삭제에서도 0으로 되돌린다.
+  - `{ includePreferences: true }`일 때만 위 세 키까지 모두 지운다. 이때는 온보딩부터 다시 시작한다.
+  - 구현과 테스트: `shared/storage/personalData.ts`, `tests/shared/storage/personalData.test.ts`
 - 내보내기: 기기 안에서 JSON 파일로만 만든다(서버 전송 없음). 최상위에 `schemaVersion: 2`와 내보낸 시각을 넣는다. CSV는 선택.
 
 ## 5. DB 호환성 검토
