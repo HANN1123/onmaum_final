@@ -100,7 +100,7 @@ export interface RppgResult {
 export type SessionStatus = 'active' | 'completed' | 'interrupted'
 export type SessionEndReason = 'user-stop' | 'camera-error' | 'recovered'
 
-/** 측정 세션 = "전화 시작"부터 "전화 종료"까지 한 구간 */
+/** 측정 세션 = "측정 시작"부터 "측정 종료"까지 한 구간 */
 export interface MeasurementSession {
   /** crypto.randomUUID()로 앱에서 생성. 저장 전에도 레코드에 연결할 수 있고 내보내기·병합 시 충돌이 없다 */
   id: string

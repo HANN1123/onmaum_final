@@ -19,7 +19,7 @@ export interface EmotionRecord {
 export type SessionStatus = 'active' | 'completed' | 'interrupted'
 export type SessionEndReason = 'user-stop' | 'camera-error' | 'recovered'
 
-/** 측정 세션 = "전화 시작"부터 "전화 종료"까지 한 구간 */
+/** 측정 세션 = "측정 시작"부터 "측정 종료"까지 한 구간 */
 export interface MeasurementSession {
   /** 앱에서 만든 UUID. 저장 전에도 감정 기록에 연결할 수 있다 */
   id: string
