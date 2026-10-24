@@ -11,10 +11,10 @@ export default function ContactsFooter() {
         </a>
         {' · '}
         <a
-          href="tel:1393"
+          href="tel:109"
           className="font-medium text-ink-700 hover:text-risk-good"
         >
-          📞 1393
+          📞 109
         </a>
       </p>
     </footer>
