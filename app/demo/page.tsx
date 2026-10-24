@@ -44,34 +44,34 @@ export default function DemoPage() {
   const cuts: Cut[] = [
     {
       num: '①',
-      title: '근무 중 · 대기',
+      title: '평소 · 측정 전',
       body: (
         <>
           <EmotionOrb emotions={CALM} recordCount={24} size={150} captionTone="light" />
-          <p style={meta}>오늘 통화 8건 · 스트레스 32</p>
+          <p style={meta}>오늘 측정 3회 · 스트레스 32</p>
         </>
       ),
     },
     {
       num: '②',
-      title: '📞 전화 수신 — 그때부터 시작',
+      title: '측정 시작 — 켜 두면 그때부터',
       body: (
         <>
           <EmotionOrb emotions={CALM} recordCount={24} size={84} showCaption={false} />
-          <p style={{ ...title, marginTop: 16 }}>고객 상담</p>
-          <p style={meta}>02-1234-5678</p>
+          <p style={{ ...title, marginTop: 16 }}>일이나 공부를 시작할 때</p>
+          <p style={meta}>측정을 켜 두면 표정을 살펴 기록해요</p>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button style={btnOk} onClick={() => setStep(2)}>
-              받기
+              측정 시작
             </button>
-            <button style={btnNo}>거절</button>
+            <button style={btnNo}>나중에</button>
           </div>
         </>
       ),
     },
     {
       num: '③',
-      title: '통화 중 — 오브 라이브',
+      title: '측정 중 — 오브 라이브',
       body: (
         <>
           <EmotionOrb emotions={ANGRY} recordCount={24} size={150} />
@@ -81,7 +81,7 @@ export default function DemoPage() {
     },
     {
       num: '④',
-      title: '통화 종료',
+      title: '측정 종료',
       body: (
         <>
           <EmotionOrb emotions={NEUTRAL} recordCount={25} size={120} showCaption={false} />
@@ -92,7 +92,7 @@ export default function DemoPage() {
     },
     {
       num: '⑤',
-      title: '퇴근 통합 리포트',
+      title: '하루 리포트',
       body: (
         <div style={{ width: 300, maxWidth: '90vw' }}>
           <DailyReport records={SAMPLE_RECORDS} historyRecords={SAMPLE_RECORDS} offset={0} />
@@ -105,7 +105,7 @@ export default function DemoPage() {
 
   return (
     <main style={page}>
-      <h1 style={{ fontSize: 20, marginBottom: 4 }}>온마음 데모 — 전화가 오면 그때부터</h1>
+      <h1 style={{ fontSize: 20, marginBottom: 4 }}>온마음 데모 — 측정을 켜 두면 그때부터</h1>
       <p style={{ ...meta, marginBottom: 28 }}>
         {cut.num} {cut.title} ({step + 1}/{cuts.length})
       </p>

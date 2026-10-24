@@ -26,10 +26,10 @@ export default function LandingFooter() {
         </a>{' '}
         · 자살예방{' '}
         <a
-          href="tel:1393"
+          href="tel:109"
           className="text-ink-600 transition-colors hover:text-risk-good"
         >
-          1393
+          109
         </a>{' '}
         (24시간)
       </div>
