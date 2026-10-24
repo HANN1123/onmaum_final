@@ -8,47 +8,48 @@ interface Option {
   label: string
 }
 
-const STEPS: { question: string; options: Option[] }[] = [
+/** 선택지를 바꾸면 features/feedback/lib/selfCareSuggestion.ts의 RELIEF_SUGGESTIONS에도 문장을 추가한다 */
+export const SURVEY_STEPS: { question: string; options: Option[] }[] = [
   {
-    question: '지친 날, 뭘 마시거나\n먹으면 좀 나아져요?',
+    question: '쉴 때 즐겨 먹거나\n마시는 것은 무엇인가요?',
     options: [
-      { emoji: '☕', label: '커피 한 잔' },
+      { emoji: '☕', label: '커피' },
       { emoji: '🍵', label: '따뜻한 차' },
       { emoji: '💧', label: '시원한 물' },
       { emoji: '🍫', label: '달달한 간식' },
-      { emoji: '🥤', label: '탄산 한 모금' },
-      { emoji: '🍊', label: '상큼한 과일' },
+      { emoji: '🥤', label: '탄산음료' },
+      { emoji: '🍊', label: '과일' },
     ],
   },
   {
-    question: '1분이 생긴다면\n뭘 하고 싶어요?',
+    question: '잠깐 짬이 나면\n무엇을 하고 싶나요?',
     options: [
       { emoji: '🚶', label: '짧은 산책' },
       { emoji: '🪟', label: '창밖 보기' },
-      { emoji: '💆', label: '어깨 스트레칭' },
+      { emoji: '💆', label: '스트레칭' },
       { emoji: '🙆', label: '기지개 켜기' },
       { emoji: '😌', label: '잠깐 눈 감기' },
       { emoji: '🚰', label: '세수·손 씻기' },
     ],
   },
   {
-    question: '마음이 시끄러울 땐\n어떻게 하면 좀 가라앉아요?',
+    question: '마음이 복잡할 때\n무엇이 도움이 되나요?',
     options: [
-      { emoji: '🫁', label: '박스 호흡' },
-      { emoji: '🧘', label: '3분 명상' },
+      { emoji: '🫁', label: '천천히 숨쉬기' },
+      { emoji: '🧘', label: '짧은 명상' },
       { emoji: '🖼️', label: '좋아하는 사진 보기' },
       { emoji: '🕯️', label: '향초·아로마' },
       { emoji: '🪴', label: '반려동물·식물 보기' },
-      { emoji: '🌥️', label: '잠깐 멍때리기' },
+      { emoji: '🌥️', label: '멍하니 쉬기' },
     ],
   },
   {
-    question: '위로가 필요한 날엔\n뭐가 힘이 돼요?',
+    question: '힘든 날에는\n무엇이 위로가 되나요?',
     options: [
-      { emoji: '💌', label: '응원 한 마디' },
-      { emoji: '📜', label: '좋아하는 명언' },
-      { emoji: '😸', label: '귀여운 사진·밈' },
-      { emoji: '💬', label: '누군가와 잠깐 수다' },
+      { emoji: '💌', label: '응원의 말' },
+      { emoji: '📜', label: '좋아하는 글귀' },
+      { emoji: '😸', label: '귀여운 사진' },
+      { emoji: '💬', label: '누군가와 대화' },
       { emoji: '🚿', label: '따뜻한 샤워' },
       { emoji: '🛌', label: '일찍 잠들기' },
     ],
@@ -63,12 +64,12 @@ interface Props {
 export default function OnboardingSurvey({ onDone }: Props) {
   const [step, setStep] = useState(0)
   const [selections, setSelections] = useState<Set<string>[]>(() =>
-    STEPS.map(() => new Set<string>()),
+    SURVEY_STEPS.map(() => new Set<string>()),
   )
 
-  const currentStep = STEPS[step]
+  const currentStep = SURVEY_STEPS[step]
   const currentSelected = selections[step]
-  const isLast = step === STEPS.length - 1
+  const isLast = step === SURVEY_STEPS.length - 1
 
   const toggle = (label: string) => {
     setSelections((prev) =>
@@ -85,13 +86,18 @@ export default function OnboardingSurvey({ onDone }: Props) {
     )
   }
 
+  /** 지금까지 고른 답(현재 단계 포함)을 저장하고 설문을 끝낸다 */
+  const finish = () => {
+    const allSelected = Array.from(
+      new Set(selections.flatMap((s) => Array.from(s))),
+    )
+    saveProfile({ reliefs: allSelected })
+    onDone?.()
+  }
+
   const handleNext = () => {
     if (isLast) {
-      const allSelected = Array.from(
-        new Set(selections.flatMap((s) => Array.from(s))),
-      )
-      saveProfile({ reliefs: allSelected })
-      onDone?.()
+      finish()
     } else {
       setStep((s) => s + 1)
     }
@@ -110,7 +116,7 @@ export default function OnboardingSurvey({ onDone }: Props) {
       <section className="w-full max-w-md">
         {/* 진행 점 */}
         <div className="flex justify-center gap-2 mb-8">
-          {STEPS.map((_, i) => (
+          {SURVEY_STEPS.map((_, i) => (
             <span
               key={i}
               className={[
@@ -176,6 +182,20 @@ export default function OnboardingSurvey({ onDone }: Props) {
             {isLast ? finishLabel : '다음'}
           </button>
         </div>
+
+        {/* 어느 단계에서든 설문을 마칠 수 있다. 마지막 단계는 위 버튼이 같은 역할을 한다 */}
+        {!isLast && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={finish}
+              className="text-sm text-ink-500 underline-offset-2 hover:text-ink-700 hover:underline"
+            >
+              설문 마치고 시작하기
+            </button>
+            <p className="mt-1 text-xs text-ink-400">지금까지 선택한 답은 저장돼요</p>
+          </div>
+        )}
       </section>
     </main>
   )
