@@ -1,4 +1,5 @@
 import { EMOTION_ORDER, type Emotion } from '../../features/algorithm/emotion/emotionAnalysis'
+import { OFFSET_MAX } from '../../features/algorithm/baseline/calibration'
 import { db, type EmotionRecord, type MeasurementSession, type SessionEndReason, type SessionStatus } from './db'
 import { EXPORT_SCHEMA_VERSION, isMeasurementActive, MeasurementActiveError } from './personalData'
 import { SETTINGS_KEY } from './settings'
@@ -8,7 +9,7 @@ import { PROFILE_KEY } from './profile'
  * 내보낸 기록 파일(JSON)을 이 기기로 가져온다. 웹에서 쓰던 기록을 데스크톱 앱으로 옮길 때 쓴다.
  *
  * - 기존 기록을 지우거나 덮어쓰지 않고 합친다. 같은 기록은 한 번만 들어간다.
- * - 파일은 사용자가 고른 외부 입력이므로 형식·범위를 모두 검사한다. 잘못된 기록은 건너뛰고 개수를 알린다.
+ * - 파일은 사용자가 고른 외부 입력이므로 형식·범위·관계를 모두 검사한다. 잘못된 기록은 건너뛰고 개수를 알린다.
  */
 
 /** 받는 파일 크기 상한. 하루 8시간씩 1년 측정해도 수십 MB를 넘지 않는다 */
@@ -18,19 +19,26 @@ export const MAX_IMPORT_SESSIONS = 50_000
 export const MAX_IMPORT_LOCAL_KEYS = 5_000
 /** 감정 기록 하나의 측정 시간 상한. 레코더는 1분마다 저장한다 */
 const MAX_RECORD_DURATION_MS = 60 * 60 * 1000
+/** 네 감정 비율의 합은 1이다(normalizeExpressions). 부동소수 오차만 허용한다 */
+const EMOTION_SUM_TOLERANCE = 0.01
 const MAX_ID_LENGTH = 64
 const MAX_LOCAL_VALUE_LENGTH = 64 * 1024
 /** 이보다 이른 시각의 기록은 잘못된 값으로 본다 */
 const EARLIEST_RECORD = Date.UTC(2020, 0, 1)
-/** 기기 시계 차이를 감안해 지금보다 하루 뒤까지는 받는다 */
-const FUTURE_TOLERANCE_MS = 24 * 60 * 60 * 1000
+/**
+ * 기기 시계 차이로 받는 미래 시각의 여유. 길게 두면 미래 기록 하나가
+ * isMeasurementActive를 그 시각까지 "측정 중"으로 만들어 삭제·가져오기를 막는다.
+ */
+const FUTURE_TOLERANCE_MS = 5 * 60 * 1000
 
-/** 가져올 수 있는 localStorage 키. 그 밖의 키는 무시한다 */
-const FIXED_LOCAL_KEYS = new Set([SETTINGS_KEY, PROFILE_KEY, 'onmaum_onboarded'])
 const DATED_LOCAL_KEY = /^onmaum_(checkin|nudge)_\d{4}-\d{2}-\d{2}$/
+const ONBOARDED_KEY = 'onmaum_onboarded'
 
 const SESSION_STATUSES: readonly SessionStatus[] = ['active', 'completed', 'interrupted']
 const END_REASONS: readonly SessionEndReason[] = ['user-stop', 'camera-error', 'recovered']
+const CHECKIN_SLOTS: readonly string[] = ['morning', 'afternoon']
+const SELF_REPORTS: readonly string[] = ['agree', 'worse', 'better']
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export type ImportFormatReason = 'tooLarge' | 'notJson' | 'shape' | 'version' | 'tooMany'
 
@@ -45,6 +53,7 @@ export class ImportFormatError extends Error {
 export interface ParsedImport {
   emotions: Omit<EmotionRecord, 'id'>[]
   sessions: MeasurementSession[]
+  /** 저장할 문자열로 정리한 localStorage 값 */
   localData: [string, string][]
   invalidEmotions: number
   invalidSessions: number
@@ -53,9 +62,13 @@ export interface ParsedImport {
 
 export interface ImportSummary {
   emotions: { added: number; duplicate: number; invalid: number }
-  sessions: { added: number; duplicate: number; invalid: number }
-  /** added: 새로 넣음, kept: 이 기기에 이미 있어 그대로 둠, ignored: 가져오지 않는 키·값 */
-  localKeys: { added: number; kept: number; ignored: number }
+  /** updated: 자동 복구로 끝난 기존 세션을 파일의 더 나중 상태로 바꿈 */
+  sessions: { added: number; updated: number; duplicate: number; invalid: number }
+  /**
+   * added: 새로 넣음, kept: 이 기기에 이미 있어 그대로 둠,
+   * ignored: 가져오지 않는 키이거나 값이 잘못됨, failed: 저장소 오류로 쓰지 못함
+   */
+  localKeys: { added: number; kept: number; ignored: number; failed: number }
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -64,6 +77,10 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 function isUnit(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
+}
+
+function isIntIn(v: unknown, min: number, max: number): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max
 }
 
 function isId(v: unknown): v is string {
@@ -86,6 +103,8 @@ function parseEmotion(v: unknown, now: number): Omit<EmotionRecord, 'id'> | null
     return null
   }
   if (![detectionRate, happy, calm, sad, angry, flatAffectScore].every(isUnit)) return null
+  const sum = (happy as number) + (calm as number) + (sad as number) + (angry as number)
+  if (Math.abs(sum - 1) > EMOTION_SUM_TOLERANCE) return null
   if (!EMOTION_ORDER.includes(dominantEmotion as Emotion)) return null
   if (sessionId !== undefined && !isId(sessionId)) return null
   return {
@@ -102,39 +121,137 @@ function parseEmotion(v: unknown, now: number): Omit<EmotionRecord, 'id'> | null
   }
 }
 
-/** 다른 기기에서 측정 중이던(active) 세션은 이 기기에서 이어질 수 없으므로 복구 종료로 바꾼다 */
+/**
+ * 세션 하나를 검사한다. 시작보다 이른 종료·생존 시각, 끝난 세션의 빈 종료 정보처럼 앞뒤가 맞지 않으면 버린다.
+ * 다른 기기에서 측정 중이던(active) 세션은 이 기기에서 이어질 수 없으므로 복구 종료로 바꾼다.
+ */
 function parseSession(v: unknown, now: number): MeasurementSession | null {
   if (!isObject(v) || !isId(v.id)) return null
   const startedAt = toDate(v.startedAt, now)
   const lastSeenAt = toDate(v.lastSeenAt, now)
-  if (!startedAt || !lastSeenAt) return null
+  if (!startedAt || !lastSeenAt || lastSeenAt < startedAt) return null
   if (!SESSION_STATUSES.includes(v.status as SessionStatus)) return null
-  const endedAt = v.endedAt === null ? null : toDate(v.endedAt, now)
-  if (v.endedAt !== null && !endedAt) return null
-  if (v.endReason !== null && !END_REASONS.includes(v.endReason as SessionEndReason)) return null
 
   if (v.status === 'active') {
+    if (v.endedAt !== null || v.endReason !== null) return null
     return { id: v.id, startedAt, endedAt: lastSeenAt, status: 'interrupted', endReason: 'recovered', lastSeenAt }
   }
+
+  const endedAt = toDate(v.endedAt, now)
+  if (!endedAt || endedAt < startedAt) return null
+  if (!END_REASONS.includes(v.endReason as SessionEndReason)) return null
+  // 'recovered'는 복구 처리가 interrupted로 바꿀 때만 쓴다
+  if (v.endReason === 'recovered' && v.status !== 'interrupted') return null
   return {
     id: v.id,
     startedAt,
     endedAt,
     status: v.status as SessionStatus,
-    endReason: v.endReason as SessionEndReason | null,
+    endReason: v.endReason as SessionEndReason,
     lastSeenAt,
   }
 }
 
-function isImportableKey(key: string): boolean {
-  return FIXED_LOCAL_KEYS.has(key) || DATED_LOCAL_KEY.test(key)
+function isAutoRecovered(s: MeasurementSession): boolean {
+  return s.status === 'interrupted' && s.endReason === 'recovered'
 }
 
-/** 내보내기는 JSON으로 읽히는 값은 값으로, 아니면 원래 문자열로 담는다. 저장할 문자열로 되돌린다 */
-function toStoredString(value: unknown): string | null {
-  const raw = typeof value === 'string' ? value : JSON.stringify(value)
-  if (typeof raw !== 'string' || raw.length > MAX_LOCAL_VALUE_LENGTH) return null
-  return raw
+/**
+ * 같은 id의 세션이 이미 있을 때 파일 쪽으로 바꿀지.
+ * 기존 세션이 자동 복구로 끝난 것(측정 중 백업을 먼저 가져온 경우 등)이고, 파일 쪽이 정상 종료됐거나
+ * 더 나중까지 측정한 상태면 파일 쪽이 더 정확하다. 그 밖에는 이 기기의 기록을 그대로 둔다.
+ */
+function shouldReplaceSession(existing: MeasurementSession, incoming: MeasurementSession): boolean {
+  if (!isAutoRecovered(existing)) return false
+  return !isAutoRecovered(incoming) || incoming.lastSeenAt > existing.lastSeenAt
+}
+
+/** 저장된 설정 모양을 검사하고 알려진 필드만 남긴다. 범위를 벗어나면 키 전체를 버린다 */
+function sanitizeSettings(v: unknown): Record<string, unknown> | null {
+  if (!isObject(v)) return null
+  const out: Record<string, unknown> = {}
+  if (v.calibrationOffset !== undefined) {
+    const o = v.calibrationOffset
+    if (typeof o !== 'number' || !Number.isFinite(o) || Math.abs(o) > OFFSET_MAX) return null
+    out.calibrationOffset = o
+  }
+  for (const key of ['morningWindow', 'afternoonWindow'] as const) {
+    const w = v[key]
+    if (w === undefined) continue
+    if (!isObject(w) || !isIntIn(w.startHour, 0, 23) || !isIntIn(w.endHour, 1, 24) || w.startHour >= w.endHour) {
+      return null
+    }
+    out[key] = { startHour: w.startHour, endHour: w.endHour }
+  }
+  if (v.nudge !== undefined) {
+    const n = v.nudge
+    if (!isObject(n)) return null
+    const nudge: Record<string, unknown> = {}
+    if (n.enabled !== undefined) {
+      if (typeof n.enabled !== 'boolean') return null
+      nudge.enabled = n.enabled
+    }
+    if (n.maxPerDay !== undefined) {
+      if (!isIntIn(n.maxPerDay, 0, 20)) return null
+      nudge.maxPerDay = n.maxPerDay
+    }
+    for (const key of ['cooldownMs', 'sustainMs'] as const) {
+      if (n[key] === undefined) continue
+      if (!isIntIn(n[key], 0, DAY_MS)) return null
+      nudge[key] = n[key]
+    }
+    for (const key of ['dndStartHour', 'dndEndHour'] as const) {
+      if (n[key] === undefined) continue
+      if (n[key] !== null && !isIntIn(n[key], 0, 23)) return null
+      nudge[key] = n[key]
+    }
+    out.nudge = nudge
+  }
+  return out
+}
+
+function sanitizeProfile(v: unknown): Record<string, unknown> | null {
+  if (!isObject(v) || !Array.isArray(v.reliefs) || v.reliefs.length > 50) return null
+  if (!v.reliefs.every((r) => typeof r === 'string' && r.length > 0 && r.length <= 100)) return null
+  return { reliefs: [...v.reliefs] }
+}
+
+function sanitizeCheckinDay(v: unknown): unknown[] | null {
+  if (!Array.isArray(v) || v.length > 10) return null
+  const out: unknown[] = []
+  for (const e of v) {
+    if (!isObject(e) || !CHECKIN_SLOTS.includes(e.slot as string) || !SELF_REPORTS.includes(e.report as string)) {
+      return null
+    }
+    if (typeof e.atMs !== 'number' || !Number.isFinite(e.atMs)) return null
+    // context는 읽을 때 loadCheckinEntries가 다시 검사하고, 손상됐으면 버린다
+    out.push(isObject(e.context) ? { slot: e.slot, report: e.report, atMs: e.atMs, context: e.context } : { slot: e.slot, report: e.report, atMs: e.atMs })
+  }
+  return out
+}
+
+function sanitizeNudgeDay(v: unknown): Record<string, unknown> | null {
+  if (!isObject(v)) return null
+  // "오늘은 그만" 은 count를 MAX_SAFE_INTEGER로 저장한다
+  if (!isIntIn(v.count, 0, Number.MAX_SAFE_INTEGER)) return null
+  if (v.lastAtMs !== null && (typeof v.lastAtMs !== 'number' || !Number.isFinite(v.lastAtMs))) return null
+  return { count: v.count, lastAtMs: v.lastAtMs }
+}
+
+/**
+ * 가져올 수 있는 키면 검사한 값을 저장할 문자열로 돌려준다. 아니면 null.
+ * 내보내기는 JSON으로 읽히는 값은 값으로, 아니면 원래 문자열로 담는다.
+ */
+function sanitizeLocalValue(key: string, value: unknown): string | null {
+  let clean: unknown
+  if (key === SETTINGS_KEY) clean = sanitizeSettings(value)
+  else if (key === PROFILE_KEY) clean = sanitizeProfile(value)
+  else if (key === ONBOARDED_KEY) clean = value === true || value === 'true' ? true : null
+  else if (DATED_LOCAL_KEY.test(key)) clean = key.startsWith('onmaum_checkin_') ? sanitizeCheckinDay(value) : sanitizeNudgeDay(value)
+  else return null
+  if (clean === null) return null
+  const raw = JSON.stringify(clean)
+  return raw.length > MAX_LOCAL_VALUE_LENGTH ? null : raw
 }
 
 /**
@@ -182,7 +299,7 @@ export function parsePersonalDataImport(text: string, now: Date = new Date()): P
   const parsedLocal: [string, string][] = []
   let ignoredLocalKeys = 0
   for (const [key, value] of localEntries) {
-    const raw = isImportableKey(key) ? toStoredString(value) : null
+    const raw = sanitizeLocalValue(key, value)
     if (raw === null) ignoredLocalKeys += 1
     else parsedLocal.push([key, raw])
   }
@@ -198,9 +315,10 @@ export function parsePersonalDataImport(text: string, now: Date = new Date()): P
 }
 
 /**
- * 검사를 마친 기록을 이 기기에 합친다.
+ * 검사를 마친 기록을 이 기기에 합친다. 감정 기록과 세션은 한 트랜잭션으로 넣어, 실패하면 둘 다 넣지 않는다.
  * - 감정 기록은 같은 시각(timestamp)의 기록이 이미 있으면 건너뛴다. 파일 안의 중복도 하나만 넣는다.
- * - 세션은 같은 id가 있으면 건너뛴다.
+ * - 세션은 같은 id가 있으면 건너뛴다. 단, 자동 복구로 끝난 기존 세션은 파일의 더 나중 상태로 바꾼다.
+ * - 파일·이 기기 어디에도 없는 세션을 가리키는 감정 기록은 세션 연결만 빼고 넣는다.
  * - localStorage 값은 이 기기에 없는 키만 넣는다(이 기기의 설정을 덮어쓰지 않는다).
  * 측정 중이면 MeasurementActiveError를 던진다.
  */
@@ -209,25 +327,44 @@ export async function importPersonalData(parsed: ParsedImport, now: Date = new D
 
   const summary: ImportSummary = {
     emotions: { added: 0, duplicate: 0, invalid: parsed.invalidEmotions },
-    sessions: { added: 0, duplicate: 0, invalid: parsed.invalidSessions },
-    localKeys: { added: 0, kept: 0, ignored: parsed.ignoredLocalKeys },
+    sessions: { added: 0, updated: 0, duplicate: 0, invalid: parsed.invalidSessions },
+    localKeys: { added: 0, kept: 0, ignored: parsed.ignoredLocalKeys, failed: 0 },
   }
 
   await db.transaction('rw', db.emotions, db.sessions, async () => {
-    if (parsed.emotions.length > 0) {
-      // 기록이 많으면 Math.min(...배열)이 인자 수 한도를 넘으므로 반복문으로 구한다
-      let first = Infinity
-      let last = -Infinity
-      for (const e of parsed.emotions) {
-        const t = e.timestamp.getTime()
-        if (t < first) first = t
-        if (t > last) last = t
+    // 세션 먼저: 감정 기록의 세션 연결이 유효한지 판단하는 데 쓴다
+    const knownSessionIds = new Set<string>()
+    if (parsed.sessions.length > 0) {
+      const ids = [...new Set(parsed.sessions.map((s) => s.id))]
+      const existing = new Map<string, MeasurementSession>()
+      for (const s of await db.sessions.bulkGet(ids)) if (s) existing.set(s.id, s)
+      const toPut: MeasurementSession[] = []
+      const handled = new Set<string>()
+      for (const s of parsed.sessions) {
+        knownSessionIds.add(s.id)
+        const current = existing.get(s.id)
+        if (handled.has(s.id) || (current && !shouldReplaceSession(current, s))) {
+          summary.sessions.duplicate += 1
+          continue
+        }
+        handled.add(s.id)
+        toPut.push(s)
+        if (current) summary.sessions.updated += 1
+        else summary.sessions.added += 1
       }
-      const existing = await db.emotions
-        .where('timestamp')
-        .between(new Date(first), new Date(last), true, true)
-        .toArray()
-      const seen = new Set(existing.map((e) => e.timestamp.getTime()))
+      await db.sessions.bulkPut(toPut)
+    }
+
+    if (parsed.emotions.length > 0) {
+      // 같은 시각의 기존 기록만 인덱스 키로 찾는다(기존 기록 전체를 읽지 않는다)
+      const dates = [...new Set(parsed.emotions.map((e) => e.timestamp.getTime()))].map((t) => new Date(t))
+      const existingKeys = await db.emotions.where('timestamp').anyOf(dates).keys()
+      const seen = new Set(existingKeys.map((k) => (k as Date).getTime()))
+
+      const referenced = [...new Set(parsed.emotions.map((e) => e.sessionId).filter((id): id is string => !!id))]
+      const unknown = referenced.filter((id) => !knownSessionIds.has(id))
+      for (const s of await db.sessions.bulkGet(unknown)) if (s) knownSessionIds.add(s.id)
+
       const toAdd: Omit<EmotionRecord, 'id'>[] = []
       for (const e of parsed.emotions) {
         const key = e.timestamp.getTime()
@@ -236,28 +373,17 @@ export async function importPersonalData(parsed: ParsedImport, now: Date = new D
           continue
         }
         seen.add(key)
-        toAdd.push(e)
+        if (e.sessionId !== undefined && !knownSessionIds.has(e.sessionId)) {
+          const { sessionId: _orphan, ...rest } = e
+          void _orphan
+          toAdd.push(rest)
+        } else {
+          toAdd.push(e)
+        }
       }
       // id는 이 기기에서 새로 매긴다
       await db.emotions.bulkAdd(toAdd as EmotionRecord[])
       summary.emotions.added = toAdd.length
-    }
-
-    if (parsed.sessions.length > 0) {
-      const ids = [...new Set(parsed.sessions.map((s) => s.id))]
-      const existing = await db.sessions.bulkGet(ids)
-      const seen = new Set(existing.filter((s) => s !== undefined).map((s) => s!.id))
-      const toAdd: MeasurementSession[] = []
-      for (const s of parsed.sessions) {
-        if (seen.has(s.id)) {
-          summary.sessions.duplicate += 1
-          continue
-        }
-        seen.add(s.id)
-        toAdd.push(s)
-      }
-      await db.sessions.bulkAdd(toAdd)
-      summary.sessions.added = toAdd.length
     }
   })
 
@@ -271,8 +397,7 @@ export async function importPersonalData(parsed: ParsedImport, now: Date = new D
         localStorage.setItem(key, raw)
         summary.localKeys.added += 1
       } catch {
-        // 저장소를 쓸 수 없으면 가져오지 못한 키로 센다
-        summary.localKeys.ignored += 1
+        summary.localKeys.failed += 1
       }
     }
   }

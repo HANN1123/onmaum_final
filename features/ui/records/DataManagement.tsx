@@ -33,6 +33,9 @@ function importResultText(s: ImportSummary): string {
   const invalid = s.emotions.invalid + s.sessions.invalid
   if (invalid > 0) parts.push(`읽을 수 없는 ${invalid}개는 빼고 가져왔어요`)
   if (s.localKeys.kept > 0) parts.push('이 기기의 설정은 그대로 두었어요')
+  if (s.localKeys.failed > 0) {
+    parts.push(`설정·체크인 기록 ${s.localKeys.failed}개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요`)
+  }
   return parts.join('. ')
 }
 

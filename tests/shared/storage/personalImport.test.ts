@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { db, type EmotionRecord, type MeasurementSession } from '@/shared/storage/db'
 import {
   exportPersonalData,
@@ -70,15 +70,15 @@ describe('내보내기 → 가져오기', () => {
     await db.emotions.bulkAdd([emotion('2026-10-27T09:01:00', 's1'), emotion('2026-10-27T09:02:00', 's1')])
     saveSettings({ ...DEFAULT_SETTINGS, calibrationOffset: 6 })
     localStorage.setItem('onmaum_onboarded', 'true')
-    localStorage.setItem('onmaum_checkin_2026-10-27', JSON.stringify({ done: ['morning'] }))
+    localStorage.setItem('onmaum_checkin_2026-10-27', JSON.stringify([{ slot: 'morning', report: 'agree', atMs: 1 }]))
     const text = serializeExport(await exportPersonalData(NOW))
 
     await clearAll()
     const summary = await importPersonalData(parsePersonalDataImport(text, NOW), NOW)
 
     expect(summary.emotions).toEqual({ added: 2, duplicate: 0, invalid: 0 })
-    expect(summary.sessions).toEqual({ added: 1, duplicate: 0, invalid: 0 })
-    expect(summary.localKeys.added).toBe(3)
+    expect(summary.sessions).toEqual({ added: 1, updated: 0, duplicate: 0, invalid: 0 })
+    expect(summary.localKeys).toEqual({ added: 3, kept: 0, ignored: 0, failed: 0 })
     const emotions = await db.emotions.orderBy('timestamp').toArray()
     expect(emotions.map((e) => e.timestamp.getTime())).toEqual([
       new Date('2026-10-27T09:01:00').getTime(),
@@ -99,7 +99,7 @@ describe('내보내기 → 가져오기', () => {
 
     const summary = await importPersonalData(parsePersonalDataImport(text, NOW), NOW)
     expect(summary.emotions).toEqual({ added: 0, duplicate: 1, invalid: 0 })
-    expect(summary.sessions).toEqual({ added: 0, duplicate: 1, invalid: 0 })
+    expect(summary.sessions).toEqual({ added: 0, updated: 0, duplicate: 1, invalid: 0 })
     expect(await db.emotions.count()).toBe(1)
     expect(await db.sessions.count()).toBe(1)
   })
@@ -119,7 +119,7 @@ describe('합치기 정책', () => {
     })
     const summary = await importPersonalData(parsePersonalDataImport(text, NOW), NOW)
     expect(loadSettings().calibrationOffset).toBe(-3)
-    expect(summary.localKeys).toEqual({ added: 1, kept: 1, ignored: 0 })
+    expect(summary.localKeys).toEqual({ added: 1, kept: 1, ignored: 0, failed: 0 })
   })
 
   it('측정 중이던(active) 세션은 복구 종료로 바꿔 넣는다', async () => {
@@ -222,5 +222,131 @@ describe('파일 검사', () => {
     expect(parsed.localData.map(([k]) => k).sort()).toEqual(['onmaum_nudge_2026-10-27', 'onmaum_profile'])
     expect(parsed.ignoredLocalKeys).toBe(5)
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+})
+
+describe('교차 검토 반영', () => {
+  it('범위를 벗어난 설정 값은 가져오지 않는다', () => {
+    const parsed = parsePersonalDataImport(
+      file({
+        localData: {
+          [SETTINGS_KEY]: { ...DEFAULT_SETTINGS, calibrationOffset: 9999 },
+          onmaum_profile: { reliefs: 'walk' },
+          'onmaum_nudge_2026-10-27': { count: -1, lastAtMs: null },
+          'onmaum_checkin_2026-10-27': [{ slot: 'night', report: 'agree', atMs: 1 }],
+        },
+      }),
+      NOW,
+    )
+    expect(parsed.localData).toHaveLength(0)
+    expect(parsed.ignoredLocalKeys).toBe(4)
+
+    const nudge = parsePersonalDataImport(
+      file({ localData: { [SETTINGS_KEY]: { ...DEFAULT_SETTINGS, nudge: { ...DEFAULT_SETTINGS.nudge, maxPerDay: 1e9 } } } }),
+      NOW,
+    )
+    expect(nudge.localData).toHaveLength(0)
+  })
+
+  it('정상 설정은 알려진 필드만 남겨 저장한다', async () => {
+    const text = file({ localData: { [SETTINGS_KEY]: { ...DEFAULT_SETTINGS, calibrationOffset: 6, extra: '<script>' } } })
+    await importPersonalData(parsePersonalDataImport(text, NOW), NOW)
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}')
+    expect(stored.extra).toBeUndefined()
+    expect(loadSettings().calibrationOffset).toBe(6)
+  })
+
+  it('5분 넘게 미래인 기록은 받지 않는다(측정 중 판정을 막지 않도록)', () => {
+    const later = (ms: number) => ({ ...emotion('2026-10-27T09:00:00'), timestamp: new Date(NOW.getTime() + ms).toISOString() })
+    const parsed = parsePersonalDataImport(file({ emotions: [later(4 * 60_000), later(6 * 60_000)] }), NOW)
+    expect(parsed.emotions).toHaveLength(1)
+    expect(parsed.invalidEmotions).toBe(1)
+  })
+
+  it('네 감정 비율의 합이 1이 아니면 받지 않는다', () => {
+    const e = emotion('2026-10-27T09:01:00')
+    const parsed = parsePersonalDataImport(
+      file({ emotions: [{ ...e, happy: 1, calm: 1, sad: 1, angry: 1 }, { ...e, happy: 0, calm: 0, sad: 0, angry: 0 }] }),
+      NOW,
+    )
+    expect(parsed.emotions).toHaveLength(0)
+    expect(parsed.invalidEmotions).toBe(2)
+  })
+
+  it('앞뒤가 맞지 않는 세션은 받지 않는다', () => {
+    const ok = session('s1', '2026-10-27T09:00:00')
+    const before = new Date('2026-10-27T08:00:00')
+    const parsed = parsePersonalDataImport(
+      file({
+        sessions: [
+          { ...ok, endedAt: null }, // 끝났는데 종료 시각 없음
+          { ...ok, endReason: null },
+          { ...ok, endedAt: before }, // 시작보다 이른 종료
+          { ...ok, lastSeenAt: before },
+          { ...ok, endReason: 'recovered' }, // completed에 복구 사유
+          { ...ok, status: 'active' }, // 측정 중인데 종료 정보 있음
+        ],
+      }),
+      NOW,
+    )
+    expect(parsed.sessions).toHaveLength(0)
+    expect(parsed.invalidSessions).toBe(6)
+  })
+
+  it('측정 중 백업을 먼저 가져온 뒤 종료 후 백업을 가져오면 세션을 최신 상태로 바꾼다', async () => {
+    const midway = session('s3', '2026-10-27T09:00:00', {
+      status: 'active',
+      endedAt: null,
+      endReason: null,
+      lastSeenAt: new Date('2026-10-27T09:05:00'),
+    })
+    await importPersonalData(parsePersonalDataImport(file({ sessions: [midway] }), NOW), NOW)
+    expect((await db.sessions.get('s3'))?.status).toBe('interrupted')
+
+    const done = session('s3', '2026-10-27T09:00:00')
+    const summary = await importPersonalData(parsePersonalDataImport(file({ sessions: [done] }), NOW), NOW)
+    expect(summary.sessions).toEqual({ added: 0, updated: 1, duplicate: 0, invalid: 0 })
+    expect(await db.sessions.get('s3')).toMatchObject({ status: 'completed', endReason: 'user-stop' })
+  })
+
+  it('이 기기에서 정상 종료된 세션은 파일 내용으로 바꾸지 않는다', async () => {
+    await db.sessions.add(session('s4', '2026-10-27T09:00:00'))
+    const other = session('s4', '2026-10-27T09:00:00', { endReason: 'camera-error', status: 'interrupted' })
+    const summary = await importPersonalData(parsePersonalDataImport(file({ sessions: [other] }), NOW), NOW)
+    expect(summary.sessions.duplicate).toBe(1)
+    expect((await db.sessions.get('s4'))?.endReason).toBe('user-stop')
+  })
+
+  it('어디에도 없는 세션을 가리키는 기록은 세션 연결만 빼고 넣는다', async () => {
+    await db.sessions.add(session('here', '2026-10-26T09:00:00'))
+    const emotions = [emotion('2026-10-27T09:01:00', 'ghost'), emotion('2026-10-27T09:02:00', 'here')]
+    await importPersonalData(parsePersonalDataImport(file({ emotions }), NOW), NOW)
+    const stored = await db.emotions.orderBy('timestamp').toArray()
+    expect(stored[0].sessionId).toBeUndefined()
+    expect(stored[1].sessionId).toBe('here')
+  })
+
+  it('기록 저장이 실패하면 세션도 넣지 않는다(한 트랜잭션)', async () => {
+    const spy = vi.spyOn(db.emotions, 'bulkAdd').mockRejectedValueOnce(new Error('quota'))
+    const parsed = parsePersonalDataImport(
+      file({ sessions: [session('s5', '2026-10-27T09:00:00')], emotions: [emotion('2026-10-27T09:01:00', 's5')] }),
+      NOW,
+    )
+    await expect(importPersonalData(parsed, NOW)).rejects.toThrow('quota')
+    spy.mockRestore()
+    expect(await db.sessions.count()).toBe(0)
+    expect(await db.emotions.count()).toBe(0)
+  })
+
+  it('설정 저장에 실패하면 failed로 알린다', async () => {
+    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    const summary = await importPersonalData(
+      parsePersonalDataImport(file({ localData: { onmaum_onboarded: true } }), NOW),
+      NOW,
+    )
+    spy.mockRestore()
+    expect(summary.localKeys).toEqual({ added: 0, kept: 0, ignored: 0, failed: 1 })
   })
 })

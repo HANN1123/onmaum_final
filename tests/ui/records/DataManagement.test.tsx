@@ -19,8 +19,8 @@ vi.mock('@/shared/storage/personalData', () => ({
 
 const importSummary = {
   emotions: { added: 5, duplicate: 2, invalid: 1 },
-  sessions: { added: 1, duplicate: 0, invalid: 0 },
-  localKeys: { added: 0, kept: 1, ignored: 0 },
+  sessions: { added: 1, updated: 0, duplicate: 0, invalid: 0 },
+  localKeys: { added: 0, kept: 1, ignored: 0, failed: 0 },
 }
 const parsePersonalDataImport = vi.fn((text: string) => ({ text }))
 const importPersonalData = vi.fn(async (_parsed: unknown) => importSummary)
@@ -165,5 +165,22 @@ describe('DataManagement', () => {
     render(<DataManagement />)
     chooseFile('{}')
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/측정이 진행 중이에요/))
+  })
+})
+
+describe('DataManagement 가져오기 부분 실패', () => {
+  it('설정 일부를 저장하지 못하면 알려 준다', async () => {
+    importPersonalData.mockResolvedValueOnce({
+      ...importSummary,
+      emotions: { added: 3, duplicate: 0, invalid: 0 },
+      localKeys: { added: 1, kept: 0, ignored: 0, failed: 2 },
+    })
+    render(<DataManagement />)
+    chooseFile('{}')
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        '기록 3개를 가져왔어요. 설정·체크인 기록 2개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요',
+      ),
+    )
   })
 })
