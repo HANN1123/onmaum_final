@@ -28,6 +28,7 @@ export default function CameraView({ active, onReady, onError }: Props) {
     }
 
     let cancelled = false
+    let acquired: MediaStream | null = null
 
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -36,6 +37,7 @@ export default function CameraView({ active, onReady, onError }: Props) {
           stream.getTracks().forEach((t) => t.stop())
           return
         }
+        acquired = stream
         streamRef.current = stream
         const video = videoRef.current
         if (!video) return
@@ -49,8 +51,15 @@ export default function CameraView({ active, onReady, onError }: Props) {
         callbacksRef.current.onError?.(error)
       })
 
+    // 측정 화면을 떠나거나(unmount) active가 바뀌면 이 실행이 얻은 카메라를 끈다.
     return () => {
       cancelled = true
+      if (acquired) {
+        acquired.getTracks().forEach((t) => t.stop())
+        if (streamRef.current === acquired) streamRef.current = null
+        const video = videoRef.current
+        if (video && video.srcObject === acquired) video.srcObject = null
+      }
     }
   }, [active])
 
