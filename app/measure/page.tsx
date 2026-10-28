@@ -10,6 +10,8 @@ import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
 import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
 import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 import { db } from '@/shared/storage/db'
+import { useDesktopBridge } from '@/features/electron/renderer/desktopBridge'
+import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/useDesktopMeasurementPublisher'
 
 type ModelStatus = 'loading' | 'ready' | 'error'
 
@@ -97,6 +99,10 @@ export default function Home() {
     videoEl,
   })
 
+  // Electron: 최소화 위젯에 측정 상태를 알린다. 위젯이 PiP 역할을 하므로 PiP 버튼은 숨긴다.
+  const desktop = useDesktopBridge()
+  useDesktopMeasurementPublisher({ active, emotions: currentEmotion, recordCount, videoEl })
+
   const handleOnboardingDone = useCallback(() => {
     try {
       localStorage.setItem(ONBOARDED_KEY, 'true')
@@ -152,7 +158,9 @@ export default function Home() {
             recordCount={recordCount}
             size={150}
           />
-          <OrbPipButton emotions={currentEmotion ?? CALM_FALLBACK} recordCount={recordCount} />
+          {!desktop && (
+            <OrbPipButton emotions={currentEmotion ?? CALM_FALLBACK} recordCount={recordCount} />
+          )}
         </div>
 
         {modelStatus === 'loading' && (

@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import CheckInCard from '@/features/feedback/components/CheckInCard'
 import DailyReport from '@/features/ui/report/DailyReport'
 import NudgeSettings from '@/features/feedback/components/NudgeSettings'
+import DesktopWidgetSettings from '@/features/electron/renderer/DesktopWidgetSettings'
 import RecentRecords from '@/features/ui/report/RecentRecords'
 import TrendChart from '@/features/ui/report/TrendChart'
 import { useCheckin } from '@/features/feedback/hooks/useCheckin'
@@ -61,6 +62,7 @@ export default function StatsPage() {
         />
         <TrendChart />
         <NudgeSettings />
+        <DesktopWidgetSettings />
         <RecentRecords />
       </section>
     </main>

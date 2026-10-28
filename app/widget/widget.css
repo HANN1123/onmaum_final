@@ -1,0 +1,8 @@
+/* Electron 위젯 창 전용: 위젯 루트가 있는 문서만 배경을 투명하게 하고 여백·스크롤을 없앤다. */
+html:has(.onmaum-widget-root),
+html:has(.onmaum-widget-root) body {
+  background: transparent !important;
+  margin: 0;
+  min-height: 0;
+  overflow: hidden;
+}
