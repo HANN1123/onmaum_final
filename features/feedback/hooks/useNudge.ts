@@ -9,6 +9,7 @@ import { applyOffset } from '@/features/algorithm/baseline/calibration'
 import { updateSustain, shouldNudge, type SustainState } from '@/features/feedback/lib/nudge'
 import { loadSettings } from '@/shared/storage/settings'
 import { loadNudgeDayState, saveNudgeDayState } from '@/shared/storage/dayState'
+import { useLocalDate } from './useLocalDate'
 
 const NUDGE_MESSAGE = '마음에 힘이 들어간 지 좀 됐어요. 잠깐 숨 돌릴까요?'
 
@@ -16,7 +17,7 @@ export function useNudge() {
   const [bannerOpen, setBannerOpen] = useState(false)
   const sustainRef = useRef<SustainState | null>(null)
 
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = useLocalDate()
   const todayRecords = useLiveQuery(() => getEmotionsByDate(today), [today])
   const rangeRecords = useLiveQuery(() => {
     const start = new Date()
