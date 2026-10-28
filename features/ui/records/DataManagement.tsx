@@ -7,6 +7,13 @@ import {
   serializeExport,
   MeasurementActiveError,
 } from '@/shared/storage/personalData'
+import {
+  importPersonalData,
+  parsePersonalDataImport,
+  ImportFormatError,
+  MAX_IMPORT_BYTES,
+  type ImportSummary,
+} from '@/shared/storage/personalImport'
 
 type Status = { kind: 'idle' } | { kind: 'done'; text: string } | { kind: 'error'; text: string }
 
@@ -20,6 +27,27 @@ function downloadJson(json: string, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+function importResultText(s: ImportSummary): string {
+  const parts = [`기록 ${s.emotions.added}개를 가져왔어요`]
+  if (s.emotions.duplicate > 0) parts.push(`이미 있던 ${s.emotions.duplicate}개는 건너뛰었어요`)
+  const invalid = s.emotions.invalid + s.sessions.invalid
+  if (invalid > 0) parts.push(`읽을 수 없는 ${invalid}개는 빼고 가져왔어요`)
+  if (s.localKeys.kept > 0) parts.push('이 기기의 설정은 그대로 두었어요')
+  return parts.join('. ')
+}
+
+function importErrorText(err: unknown): string {
+  if (err instanceof MeasurementActiveError) {
+    return '측정이 진행 중이에요. 측정을 멈추고 2분 뒤에 다시 시도해 주세요'
+  }
+  if (err instanceof ImportFormatError) {
+    if (err.reason === 'tooLarge' || err.reason === 'tooMany') return '파일이 너무 커서 가져올 수 없어요'
+    if (err.reason === 'version') return '이 버전의 온마음에서 내보낸 파일이 아니라 가져올 수 없어요'
+    return '온마음에서 내보낸 기록 파일(JSON)이 아니에요'
+  }
+  return '기록을 가져오지 못했어요. 잠시 후 다시 시도해 주세요'
+}
+
 export default function DataManagement() {
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -28,6 +56,7 @@ export default function DataManagement() {
   const deleteButtonRef = useRef<HTMLButtonElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const wasConfirming = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 확인 단계를 열면 안전한 "취소"로, 닫으면 원래 "지우기" 버튼으로 포커스를 옮긴다
   useEffect(() => {
@@ -50,6 +79,22 @@ export default function DataManagement() {
       setStatus({ kind: 'error', text: '파일을 만들지 못했어요. 잠시 후 다시 시도해 주세요' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handleImport = async (file: File | undefined) => {
+    if (!file) return
+    setBusy(true)
+    try {
+      if (file.size > MAX_IMPORT_BYTES) throw new ImportFormatError('tooLarge')
+      const summary = await importPersonalData(parsePersonalDataImport(await file.text()))
+      setStatus({ kind: 'done', text: importResultText(summary) })
+    } catch (err) {
+      setStatus({ kind: 'error', text: importErrorText(err) })
+    } finally {
+      setBusy(false)
+      // 같은 파일을 다시 골라도 change가 일어나도록 비운다
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -77,7 +122,9 @@ export default function DataManagement() {
     <div className="space-y-4 rounded-2xl border border-ink-200 bg-white p-4">
       <div>
         <p className="text-sm font-medium text-ink-900">내 기록 관리</p>
-        <p className="mt-1 text-xs text-ink-500">기록은 이 기기에만 있어요. 파일로 옮기거나 한 번에 지울 수 있어요</p>
+        <p className="mt-1 text-xs text-ink-500">
+          기록은 이 기기에만 있어요. 파일로 내보내 다른 기기(데스크톱 앱 등)로 가져오거나 한 번에 지울 수 있어요
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -89,6 +136,26 @@ export default function DataManagement() {
         >
           기록 파일로 내보내기 (JSON)
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus({ kind: 'idle' })
+            fileInputRef.current?.click()
+          }}
+          disabled={busy}
+          className="w-full rounded-xl border border-ink-300 py-2.5 text-sm font-medium text-ink-800 hover:bg-ink-50 disabled:opacity-50"
+        >
+          기록 파일 가져오기
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          aria-label="가져올 기록 파일"
+          onChange={(e) => void handleImport(e.target.files?.[0])}
+        />
 
         {!confirming ? (
           <button
