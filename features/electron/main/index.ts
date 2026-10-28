@@ -4,6 +4,7 @@
  * - 메인 창: 지금 웹 앱 전체. 측정은 /measure 화면이 소유하고, 최소화해도 계속한다.
  * - 위젯 창: 메인 창이 최소화된 동안 측정 상태를 보여 주는 표시 전용 오브.
  */
+import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import {
   app,
@@ -35,8 +36,10 @@ import { createMainWindow, createWidgetWindow } from './windows'
 const mode = resolveRunMode(app.isPackaged)
 
 if (mode.userDataDirName) {
-  // 개발 실행의 저장소를 패키지 실행과 분리한다.
-  app.setPath('userData', path.join(app.getPath('appData'), mode.userDataDirName))
+  // 개발 실행의 저장소를 패키지 실행과 분리한다. setPath는 없는 폴더를 받으면 예외를 던지므로 먼저 만든다.
+  const devUserData = path.join(app.getPath('appData'), mode.userDataDirName)
+  mkdirSync(devUserData, { recursive: true })
+  app.setPath('userData', devUserData)
 }
 
 registerAppSchemePrivileges()
@@ -94,7 +97,11 @@ function ensureWidgetWindow(ses: Electron.Session): BrowserWindow {
       if (win.isDestroyed()) return
       const [x, y] = win.getPosition()
       const current = settings.get()
-      settings.update({ widget: { ...current.widget, position: { x, y } } })
+      try {
+        settings.update({ widget: { ...current.widget, position: { x, y } } })
+      } catch (err) {
+        console.error('[onmaum] 위젯 위치 저장 실패:', err)
+      }
     }, 400)
   })
   win.on('closed', () => {

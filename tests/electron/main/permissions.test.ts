@@ -24,6 +24,8 @@ const chk = (o: Partial<PermissionCheckInput>): PermissionCheckInput => ({
   isMainFrame: true,
   mode: 'packaged',
   mediaType: 'video',
+  hasWebContents: true,
+  requestingOrigin: 'app://onmaum',
   ...o,
 })
 
@@ -80,6 +82,21 @@ describe('decidePermissionCheck (mediaType)', () => {
     ['위젯 창', { role: 'widget' }],
   ])('거부: %s', (_, o) => {
     expect(decidePermissionCheck(chk(o))).toBe(false)
+  })
+
+  // Electron은 알림 권한 확인을 WebContents 없이(null) 부른다
+  it('WebContents 없는 알림 확인은 앱 출처일 때만 허용한다', () => {
+    const n = (o: Partial<PermissionCheckInput>) =>
+      chk({ permission: 'notifications', mediaType: undefined, hasWebContents: false, role: 'unknown', ...o })
+    expect(decidePermissionCheck(n({}))).toBe(true)
+    expect(decidePermissionCheck(n({ requestingOrigin: 'https://example.com' }))).toBe(false)
+    expect(decidePermissionCheck(n({ requestingOrigin: 'app://other' }))).toBe(false)
+    expect(decidePermissionCheck(n({ embeddingOrigin: 'app://onmaum' }))).toBe(false)
+    expect(decidePermissionCheck(n({ mode: 'dev', requestingOrigin: 'http://localhost:3003' }))).toBe(true)
+  })
+
+  it('WebContents 없는 확인은 알림 말고는 거부한다', () => {
+    expect(decidePermissionCheck(chk({ hasWebContents: false, role: 'unknown' }))).toBe(false)
   })
 
   it('개발 모드에서는 localhost:3003만 신뢰한다', () => {

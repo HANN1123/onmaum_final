@@ -30,7 +30,7 @@ export function installPermissionHandlers(ses: Session, mode: RunModeName, roleO
     )
   })
 
-  ses.setPermissionCheckHandler((contents, permission, _origin, details) =>
+  ses.setPermissionCheckHandler((contents, permission, requestingOrigin, details) =>
     decidePermissionCheck({
       role: roleOf(contents),
       permission,
@@ -38,6 +38,9 @@ export function installPermissionHandlers(ses: Session, mode: RunModeName, roleO
       isMainFrame: details.isMainFrame,
       mode,
       mediaType: details.mediaType,
+      hasWebContents: contents !== null,
+      requestingOrigin,
+      embeddingOrigin: details.embeddingOrigin,
     }),
   )
 }

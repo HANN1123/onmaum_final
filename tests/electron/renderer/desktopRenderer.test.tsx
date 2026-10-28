@@ -52,7 +52,7 @@ describe('ServiceWorkerRegistrar', () => {
 
 describe('useDesktopMeasurementPublisher', () => {
   type Props = Parameters<typeof useDesktopMeasurementPublisher>[0]
-  const base: Props = { active: false, emotions: null, recordCount: 2, videoEl: null }
+  const base: Props = { active: false, emotions: null, recordCount: 2, videoEl: null, saveFailed: false }
 
   it('웹에서는 아무것도 하지 않는다', () => {
     const { unmount } = renderHook((p: Props) => useDesktopMeasurementPublisher(p), { initialProps: base })
@@ -141,11 +141,12 @@ describe('DesktopWidget', () => {
     seq: 1,
     receivedAt: Date.now(),
     noFramesSince: null,
+    noEmotionSince: null,
     endedWhileMinimized: false,
     snapshot:
       snap === null
         ? null
-        : { active: true, emotions: CALM, recordCount: 3, videoFps: 30, sentAt: Date.now(), ...snap },
+        : { active: true, emotions: CALM, recordCount: 3, videoFps: 30, saveFailed: false, sentAt: Date.now(), ...snap },
     ...o,
   })
 

@@ -18,6 +18,7 @@ const snap = (o: Partial<MeasurementSnapshot> = {}): MeasurementSnapshot => ({
   emotions: { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 },
   recordCount: 3,
   videoFps: 30,
+  saveFailed: false,
   sentAt: 0,
   ...o,
 })
@@ -135,6 +136,28 @@ describe('widgetStatus', () => {
     )
     expect(v.noFramesSince).toBeNull()
     expect(widgetStatus(v, 7500)).toBe('measuring')
+  })
+
+  it('저장이 실패하면 확인 필요', () => {
+    const v = at({ type: 'snapshot', snapshot: snap({ saveFailed: true }), now: 1000 })
+    expect(widgetStatus(v, 1500)).toBe('attention')
+  })
+
+  it('감정 결과 없음(얼굴 미검출·분석 실패)이 30초 이어지면 확인 필요, 결과가 나오면 회복', () => {
+    const v = at(
+      { type: 'snapshot', snapshot: snap({ emotions: null }), now: 1000 },
+      { type: 'snapshot', snapshot: snap({ emotions: null }), now: 20_000 },
+    )
+    expect(v.noEmotionSince).toBe(1000)
+    // heartbeat는 계속 온다고 보고 감정 결과 공백만 본다
+    expect(widgetStatus({ ...v, receivedAt: 30_999 }, 30_999)).toBe('measuring')
+    expect(widgetStatus({ ...v, receivedAt: 31_000 }, 31_000)).toBe('attention')
+    const back = at(
+      { type: 'snapshot', snapshot: snap({ emotions: null }), now: 1000 },
+      { type: 'snapshot', snapshot: snap(), now: 32_000 },
+    )
+    expect(back.noEmotionSince).toBeNull()
+    expect(widgetStatus(back, 32_500)).toBe('measuring')
   })
 
   it('스냅샷이 없으면 측정 꺼짐', () => {

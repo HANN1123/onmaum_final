@@ -27,16 +27,14 @@ export class DesktopSettingsStore {
     return { widget: { ...this.current.widget } }
   }
 
+  /** 파일 교체에 성공한 뒤에만 메모리 값을 바꾼다. 실패하면 예외를 그대로 던져 호출자가 알 수 있게 한다. */
   update(next: DesktopSettings): DesktopSettings {
-    this.current = { widget: { ...next.widget } }
+    const value: DesktopSettings = { widget: { ...next.widget } }
     const tmp = `${this.filePath}.tmp`
-    try {
-      fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
-      fs.writeFileSync(tmp, serializeDesktopSettings(this.current), 'utf8')
-      fs.renameSync(tmp, this.filePath)
-    } catch (err) {
-      console.error('[onmaum] 데스크톱 설정 저장 실패:', err)
-    }
+    fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
+    fs.writeFileSync(tmp, serializeDesktopSettings(value), 'utf8')
+    fs.renameSync(tmp, this.filePath)
+    this.current = value
     return this.get()
   }
 }

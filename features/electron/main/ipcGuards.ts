@@ -69,7 +69,7 @@ function parseEmotion(v: unknown): DesktopEmotion | null | undefined {
 export function parseSnapshot(v: unknown): MeasurementSnapshot | null {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return null
   const o = v as Record<string, unknown>
-  if (Object.keys(o).length > 5) return null
+  if (Object.keys(o).length > 6) return null
 
   if (typeof o.active !== 'boolean') return null
 
@@ -92,8 +92,16 @@ export function parseSnapshot(v: unknown): MeasurementSnapshot | null {
     return null
   }
   if (typeof sentAt !== 'number' || !Number.isFinite(sentAt) || sentAt < 0) return null
+  if (typeof o.saveFailed !== 'boolean') return null
 
-  return { active: o.active, emotions, recordCount, videoFps: videoFps as number | null, sentAt }
+  return {
+    active: o.active,
+    emotions,
+    recordCount,
+    videoFps: videoFps as number | null,
+    saveFailed: o.saveFailed,
+    sentAt,
+  }
 }
 
 export function parseEnabledFlag(v: unknown): boolean | null {

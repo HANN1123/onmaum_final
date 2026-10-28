@@ -16,6 +16,7 @@ const valid = {
   emotions: { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 },
   recordCount: 4,
   videoFps: 30,
+  saveFailed: false,
   sentAt: 1_700_000_000_000,
 }
 
@@ -46,6 +47,8 @@ describe('parseSnapshot', () => {
     ['음수 fps', { ...valid, videoFps: -1 }],
     ['Infinity fps', { ...valid, videoFps: Number.POSITIVE_INFINITY }],
     ['과도한 fps', { ...valid, videoFps: 10_000 }],
+    ['saveFailed 없음', { ...valid, saveFailed: undefined }],
+    ['saveFailed가 boolean 아님', { ...valid, saveFailed: 'no' }],
     ['sentAt NaN', { ...valid, sentAt: Number.NaN }],
     ['추가 필드', { ...valid, extra: 'x'.repeat(10) }],
   ])('거부: %s', (_, v) => {

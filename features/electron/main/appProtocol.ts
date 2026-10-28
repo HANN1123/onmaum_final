@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises'
 import { protocol, type Session } from 'electron'
 import { APP_SCHEME } from './runMode'
 import { resolveAppRequest, type EntryKind } from './protocolPath'
+import { isTrustedUrl } from './trust'
 
 /**
  * Next inline script(RSC payload 주입)와 face-api(WebGL)가 동작하는 최소 범위.
@@ -55,6 +56,10 @@ const SECURITY_HEADERS = {
 /** 영속 partition의 Session에 handler를 등록한다. 기본 protocol.handle만으로는 동작하지 않는다. */
 export function handleAppProtocol(ses: Session, outDir: string): void {
   ses.protocol.handle(APP_SCHEME, async (request) => {
+    // 탐색 차단과 같은 기준으로 `app://onmaum/` 밖의 authority(다른 호스트·포트·사용자 정보)는 제공하지 않는다.
+    if (!isTrustedUrl(request.url, 'packaged')) {
+      return new Response(null, { status: 403, headers: SECURITY_HEADERS })
+    }
     const url = new URL(request.url)
     const r = resolveAppRequest(outDir, url.pathname, statSync)
 

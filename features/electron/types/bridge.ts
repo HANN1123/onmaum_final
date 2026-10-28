@@ -21,6 +21,8 @@ export interface MeasurementSnapshot {
   recordCount: number
   /** 최근 1초 동안 디코딩된 카메라 프레임 수(진단). 알 수 없으면 null */
   videoFps: number | null
+  /** 이번 측정에서 감정 기록 저장이 실패했는지 */
+  saveFailed: boolean
   /** 보낸 시각(ms) */
   sentAt: number
 }
@@ -34,6 +36,8 @@ export interface WidgetView {
   receivedAt: number | null
   /** 측정 중 videoFps가 0 또는 null로 이어지기 시작한 시각. 프레임이 들어오면 null */
   noFramesSince: number | null
+  /** 측정 중 감정 결과가 null(얼굴 미검출·분석 실패)로 이어지기 시작한 시각. 결과가 나오면 null */
+  noEmotionSince: number | null
   /** 최소화된 동안 측정이 끝났는지 */
   endedWhileMinimized: boolean
 }

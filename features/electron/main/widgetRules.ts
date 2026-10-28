@@ -28,6 +28,7 @@ export function initialWidgetState(enabled: boolean): WidgetState {
       snapshot: null,
       receivedAt: null,
       noFramesSince: null,
+      noEmotionSince: null,
       endedWhileMinimized: false,
     },
   }
@@ -44,11 +45,14 @@ function applySnapshot(state: WidgetState, snapshot: MeasurementSnapshot, now: n
   // 측정 중인데 프레임이 0이거나 알 수 없으면 그때부터 시각을 잰다.
   const noFrames = snapshot.active && (snapshot.videoFps === null || snapshot.videoFps === 0)
   const noFramesSince = noFrames ? (state.view.noFramesSince ?? now) : null
+  const noEmotion = snapshot.active && snapshot.emotions === null
+  const noEmotionSince = noEmotion ? (state.view.noEmotionSince ?? now) : null
 
   return withView(state, {
     snapshot,
     receivedAt: now,
     noFramesSince,
+    noEmotionSince,
     endedWhileMinimized: state.view.endedWhileMinimized || endedNow,
   })
 }
@@ -71,7 +75,7 @@ export function reduceWidgetState(state: WidgetState, event: WidgetEvent): Widge
       if (!prev?.active) return state
       return applySnapshot(
         state,
-        { ...prev, active: false, emotions: null, videoFps: null, sentAt: event.now },
+        { ...prev, active: false, emotions: null, videoFps: null, saveFailed: false, sentAt: event.now },
         event.now,
       )
     }

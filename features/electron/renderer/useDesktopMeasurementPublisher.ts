@@ -10,6 +10,8 @@ interface Options {
   emotions: EmotionResult | null
   recordCount: number
   videoEl: HTMLVideoElement | null
+  /** 레코더의 감정 기록 저장 실패 여부 */
+  saveFailed: boolean
 }
 
 /** 측정 중 heartbeat 주기 */
@@ -33,18 +35,24 @@ function totalFrames(video: HTMLVideoElement | null): number | null {
  * Electron에서 측정 상태를 메인 프로세스로 보낸다(위젯 표시용). 웹에서는 아무것도 하지 않는다.
  * 측정 흐름·레코더는 건드리지 않고 화면 상태만 읽는다.
  */
-export function useDesktopMeasurementPublisher({ active, emotions, recordCount, videoEl }: Options): void {
+export function useDesktopMeasurementPublisher({
+  active,
+  emotions,
+  recordCount,
+  videoEl,
+  saveFailed,
+}: Options): void {
   const bridge = useDesktopBridge()
-  const latest = useRef({ active, emotions, recordCount, videoFps: null as number | null })
+  const latest = useRef({ active, emotions, recordCount, saveFailed, videoFps: null as number | null })
 
   useEffect(() => {
-    latest.current = { ...latest.current, active, emotions, recordCount }
+    latest.current = { ...latest.current, active, emotions, recordCount, saveFailed }
   })
 
   useEffect(() => {
     if (!bridge) return
     bridge.publishMeasurement(buildSnapshot(latest.current))
-  }, [bridge, active, emotions, recordCount])
+  }, [bridge, active, emotions, recordCount, saveFailed])
 
   // 측정 중에는 1초마다 프레임 증가량과 함께 heartbeat를 보낸다.
   useEffect(() => {
@@ -78,6 +86,7 @@ export function useDesktopMeasurementPublisher({ active, emotions, recordCount, 
         emotions: null,
         recordCount: latest.current.recordCount,
         videoFps: null,
+        saveFailed: false,
         sentAt: Date.now(),
       })
     }
@@ -88,6 +97,7 @@ function buildSnapshot(s: {
   active: boolean
   emotions: EmotionResult | null
   recordCount: number
+  saveFailed: boolean
   videoFps: number | null
 }): MeasurementSnapshot {
   return {
@@ -95,6 +105,7 @@ function buildSnapshot(s: {
     emotions: toDesktopEmotion(s.emotions),
     recordCount: Math.max(0, Math.floor(s.recordCount)),
     videoFps: s.active ? s.videoFps : null,
+    saveFailed: s.active && s.saveFailed,
     sentAt: Date.now(),
   }
 }

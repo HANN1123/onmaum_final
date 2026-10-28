@@ -33,11 +33,11 @@ export function isWidgetUrl(url: string, mode: RunModeName): boolean {
 }
 
 /**
- * 외부 프로그램으로 넘길 수 있는 URL.
- * 기준 커밋의 ContactsFooter·LandingFooter에 실제로 있는 상담 전화 링크만 허용한다.
- * 번호가 바뀌면 이 목록과 테스트를 같이 바꾼다.
+ * 외부 프로그램으로 넘길 수 있는 URL. ContactsFooter·LandingFooter의 상담 전화 링크만 허용한다.
+ * 자살예방 상담전화는 1393에서 109로 통합되어 Footer가 바뀌는 중이므로(PR #17) 병합 순서와 관계없이
+ * 둘 다 허용한다. Footer의 링크가 모두 이 목록에 있는지는 테스트가 확인한다.
  */
-export const EXTERNAL_TEL_ALLOWLIST: readonly string[] = ['tel:1577-0199', 'tel:1393']
+export const EXTERNAL_TEL_ALLOWLIST: readonly string[] = ['tel:1577-0199', 'tel:109', 'tel:1393']
 
 export function isAllowedExternalUrl(url: string): boolean {
   return EXTERNAL_TEL_ALLOWLIST.includes(url)

@@ -57,14 +57,15 @@ describe('isAllowedExternalUrl', () => {
     }
   })
 
-  it('허용 목록이 두 Footer의 tel: 링크와 같다', () => {
+  it('두 Footer의 tel: 링크가 모두 허용 목록에 있다', () => {
     const files = ['features/ui/common/ContactsFooter.tsx', 'features/ui/landing/LandingFooter.tsx']
     const found = new Set<string>()
     for (const f of files) {
       const src = fs.readFileSync(path.resolve(f), 'utf8')
       for (const m of src.matchAll(/href="(tel:[^"]+)"/g)) found.add(m[1])
     }
-    expect([...found].sort()).toEqual([...EXTERNAL_TEL_ALLOWLIST].sort())
+    expect(found.size).toBeGreaterThan(0)
+    for (const url of found) expect(EXTERNAL_TEL_ALLOWLIST).toContain(url)
   })
 })
 

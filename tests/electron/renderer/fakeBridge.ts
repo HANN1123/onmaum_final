@@ -37,7 +37,7 @@ export function createFakeBridge(initialView?: WidgetView) {
 }
 
 export function emptyView(): WidgetView {
-  return { seq: 0, snapshot: null, receivedAt: null, noFramesSince: null, endedWhileMinimized: false }
+  return { seq: 0, snapshot: null, receivedAt: null, noFramesSince: null, noEmotionSince: null, endedWhileMinimized: false }
 }
 
 export function uninstallBridge() {

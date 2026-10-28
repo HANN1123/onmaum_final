@@ -101,7 +101,13 @@ export default function Home() {
 
   // Electron: 최소화 위젯에 측정 상태를 알린다. 위젯이 PiP 역할을 하므로 PiP 버튼은 숨긴다.
   const desktop = useDesktopBridge()
-  useDesktopMeasurementPublisher({ active, emotions: currentEmotion, recordCount, videoEl })
+  useDesktopMeasurementPublisher({
+    active,
+    emotions: currentEmotion,
+    recordCount,
+    videoEl,
+    saveFailed: saveError !== null,
+  })
 
   const handleOnboardingDone = useCallback(() => {
     try {

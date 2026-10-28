@@ -1,9 +1,14 @@
 // @vitest-environment node
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  DESKTOP_SETTINGS_FILE,
   parseDesktopSettings,
   serializeDesktopSettings,
 } from '@/features/electron/main/desktopSettings'
+import { DesktopSettingsStore } from '@/features/electron/main/settingsStore'
 import { DEFAULT_DESKTOP_SETTINGS } from '@/features/electron/types/bridge'
 
 describe('parseDesktopSettings', () => {
@@ -43,5 +48,32 @@ describe('parseDesktopSettings', () => {
     const a = parseDesktopSettings(null)
     a.widget.enabled = false
     expect(DEFAULT_DESKTOP_SETTINGS.widget.enabled).toBe(true)
+  })
+})
+
+describe('DesktopSettingsStore', () => {
+  it('파일 교체에 실패하면 예외를 던지고 이전 값을 유지한다', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'onmaum-settings-'))
+    try {
+      const store = new DesktopSettingsStore(dir)
+      const next = { widget: { ...DEFAULT_DESKTOP_SETTINGS.widget, enabled: false } }
+      // 설정 파일 자리에 폴더를 두어 rename이 실패하게 한다
+      fs.mkdirSync(path.join(dir, DESKTOP_SETTINGS_FILE))
+      expect(() => store.update(next)).toThrow()
+      expect(store.get().widget.enabled).toBe(DEFAULT_DESKTOP_SETTINGS.widget.enabled)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('저장에 성공하면 새 값을 돌려주고 다시 읽어도 같다', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'onmaum-settings-'))
+    try {
+      const next = { widget: { ...DEFAULT_DESKTOP_SETTINGS.widget, enabled: false } }
+      expect(new DesktopSettingsStore(dir).update(next).widget.enabled).toBe(false)
+      expect(new DesktopSettingsStore(dir).get().widget.enabled).toBe(false)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
