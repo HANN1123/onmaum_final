@@ -1,0 +1,28 @@
+# 온마음 Windows 패키징 설정. `npm run electron:pack`(설치본) / `npm run electron:pack:dir`(설치 없이 폴더)
+# 미서명·publish 없음·사용자별 설치. 서명·자동 업데이트는 범위 밖이다.
+appId: kr.onmaum.app
+productName: OnMaum
+directories:
+  output: release
+files:
+  - package.json
+  - out/**/*
+  - dist-electron/**/*
+  # 정적 export로 실행하므로 런타임 node_modules가 필요 없다.
+  - "!node_modules/**/*"
+asar: true
+npmRebuild: false
+publish: null
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 온마음

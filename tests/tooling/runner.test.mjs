@@ -43,12 +43,12 @@ function fixture(t) {
   }
 }
 
-test('check runs tooling tests, application tests, lint and build in order with two workers by default', (t) => {
+test('check runs tooling tests, application tests, lint, Electron typecheck and build in order with two workers by default', (t) => {
   const f = fixture(t)
   const result = f.run('check')
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(f.calls().map(({ args }) => args), [
-    ['run', 'test:tooling'], ['run', 'test:run'], ['run', 'lint'], ['run', 'build'],
+    ['run', 'test:tooling'], ['run', 'test:run'], ['run', 'lint'], ['run', 'typecheck:electron'], ['run', 'build'],
   ])
   assert.ok(f.calls().every(({ cwd, workers }) => cwd === f.root && workers === '2'))
 })
