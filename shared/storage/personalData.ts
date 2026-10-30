@@ -1,6 +1,7 @@
 import { db, type EmotionRecord, type MeasurementSession } from './db'
 import { loadSettings, SETTINGS_KEY } from './settings'
 import { PROFILE_KEY } from './profile'
+import { CAMERA_ROTATION_KEY } from './cameraRotation'
 
 /** 내보내기 파일 형식 버전. DB schema 버전과 맞춘다 */
 export const EXPORT_SCHEMA_VERSION = 2
@@ -8,7 +9,7 @@ export const EXPORT_SCHEMA_VERSION = 2
 const KEY_PREFIX = 'onmaum_'
 const ONBOARDED_KEY = 'onmaum_onboarded'
 /** 지워도 기록이 아닌 사용자 선택이라 기본 삭제에서 남기는 키 */
-const PREFERENCE_KEYS = [SETTINGS_KEY, PROFILE_KEY, ONBOARDED_KEY]
+const PREFERENCE_KEYS = [SETTINGS_KEY, PROFILE_KEY, ONBOARDED_KEY, CAMERA_ROTATION_KEY]
 
 export interface DateRange {
   start: Date

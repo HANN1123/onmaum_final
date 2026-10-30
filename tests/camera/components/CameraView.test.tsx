@@ -36,6 +36,19 @@ describe('CameraView 카메라 정리', () => {
     vi.restoreAllMocks()
   })
 
+  it('세로로 돌리면 세로 틀에 맞추고, 돌린 뒤 거울처럼 뒤집는다', () => {
+    const { container } = render(<CameraView active={false} rotation={90} />)
+    const video = container.querySelector('video') as HTMLVideoElement
+    expect(video.style.transform).toBe('translate(-50%, -50%) scaleX(-1) rotate(90deg)')
+    expect(video.style.width).toBe('133.3333%')
+    expect(container.firstElementChild?.className).toContain('aspect-[3/4]')
+  })
+
+  it('회전이 없으면 기존 가로 틀을 유지한다', () => {
+    const { container } = render(<CameraView active={false} />)
+    expect(container.firstElementChild?.className).toContain('aspect-video')
+  })
+
   it('측정 중에 화면을 떠나면(unmount) 카메라 track을 끈다', async () => {
     const { stream, track } = fakeStream()
     getUserMedia.mockResolvedValue(stream)
