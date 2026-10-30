@@ -43,7 +43,6 @@ export function useEmotionRecorder(opts: Options): Result {
 
   const bufferRef = useRef<EmotionSample[]>([])
   const bufferStartRef = useRef<number>(0)
-  const loopActiveRef = useRef(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const fnRef = useRef({ analyze, saveRecord })
 
@@ -59,7 +58,6 @@ export function useEmotionRecorder(opts: Options): Result {
     if (!active || !videoEl) {
       const samples = bufferRef.current
       bufferRef.current = []
-      loopActiveRef.current = false
       if (samples.length > 0) {
         const record = aggregate(samples, new Date())
         if (record) {
@@ -79,7 +77,9 @@ export function useEmotionRecorder(opts: Options): Result {
     setSaveError(null)
     bufferRef.current = []
     bufferStartRef.current = Date.now()
-    loopActiveRef.current = true
+    // 실행마다 따로 두는 상태. 빠르게 중지·재시작해도 이전 실행의 분석 결과·예약 타이머가 새 실행에 섞이지 않는다.
+    let running = true
+    let timer: ReturnType<typeof setTimeout> | null = null
 
     const flushBuffer = async (endTime: Date): Promise<void> => {
       const samples = bufferRef.current
@@ -97,7 +97,8 @@ export function useEmotionRecorder(opts: Options): Result {
     }
 
     const tick = async (): Promise<void> => {
-      if (!loopActiveRef.current) return
+      timer = null
+      if (!running) return
 
       const video = videoRef.current
       let result: EmotionResult | null = null
@@ -109,7 +110,7 @@ export function useEmotionRecorder(opts: Options): Result {
           result = null
         }
       }
-      if (!loopActiveRef.current) return
+      if (!running) return
 
       bufferRef.current.push({ emotion: result, intervalMs })
       setCurrentEmotion(result)
@@ -119,14 +120,15 @@ export function useEmotionRecorder(opts: Options): Result {
         bufferStartRef.current = Date.now()
       }
 
-      if (loopActiveRef.current) {
-        setTimeout(tick, intervalMs)
+      if (running) {
+        timer = setTimeout(tick, intervalMs)
       }
     }
     void tick()
 
     return () => {
-      loopActiveRef.current = false
+      running = false
+      if (timer !== null) clearTimeout(timer)
       void flushBuffer(new Date())
     }
   }, [active, videoEl, intervalMs, aggregateMs])
