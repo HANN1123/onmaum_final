@@ -45,6 +45,14 @@ const LEVEL_BADGE: Record<StressLevel, { text: string; cls: string }> = {
   veryHigh: { text: '평소보다 많이 높음', cls: 'bg-risk-warning/10 text-risk-warning' },
 }
 
+/** 기록이 3일 미만이라 개인 기준선이 없을 때(절대 판정). "평소" 비교 표현을 쓰지 않는다 */
+const ABSOLUTE_BADGE_TEXT: Record<StressLevel, string> = {
+  low: '가벼움',
+  typical: '보통',
+  high: '높음',
+  veryHigh: '많이 높음',
+}
+
 interface Props {
   records: EmotionRecord[]
   historyRecords: EmotionRecord[]
@@ -72,7 +80,8 @@ export default function DailyReport({ records, historyRecords, offset, now = new
   const adjustedN = applyOffset(scores.stress, offset)
   const baseline = computeBaselineState(dailyStressHistory(historyRecords, BASELINE_WINDOW_DAYS, now))
   const level = classifyStress(adjustedN, baseline)
-  const badge = LEVEL_BADGE[level]
+  const badge =
+    baseline.mode === 'relative' ? LEVEL_BADGE[level] : { ...LEVEL_BADGE[level], text: ABSOLUTE_BADGE_TEXT[level] }
 
   const hard = hardestPeriod(records)
   const [dominant] = topTwoEmotions(averageEmotion(records))

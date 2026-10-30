@@ -30,4 +30,22 @@ describe('DailyReport v2', () => {
     expect(screen.queryByText(/충분하지 않아요/)).toBeNull()
     expect(screen.getByText('스트레스')).toBeTruthy() // 게이지는 그대로 보인다
   })
+
+  it('기준선이 없으면(기록 3일 미만) 배지에 "평소" 비교 표현을 쓰지 않는다', () => {
+    const now = new Date('2026-06-12T18:00:00')
+    const records = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 5 * 60000, sad: 0.6 })]
+    render(<DailyReport records={records} historyRecords={records} offset={0} now={now} />)
+    expect(screen.getByText('많이 높음')).toBeTruthy() // 절대 판정: 60 > 50
+    expect(screen.queryByText(/평소/)).toBeNull()
+  })
+
+  it('기준선이 있으면 "평소 대비" 배지를 쓴다', () => {
+    const now = new Date('2026-06-12T18:00:00')
+    const past = ['2026-06-09', '2026-06-10', '2026-06-11'].map((d) =>
+      rec({ timestamp: new Date(`${d}T10:00:00`), duration: 6 * 60000, sad: 0.3 }),
+    )
+    const today = [rec({ timestamp: new Date('2026-06-12T15:10:00'), duration: 5 * 60000, sad: 0.6 })]
+    render(<DailyReport records={today} historyRecords={[...past, ...today]} offset={0} now={now} />)
+    expect(screen.getByText('평소보다 많이 높음')).toBeTruthy() // 60 / 30 = 2.0
+  })
 })

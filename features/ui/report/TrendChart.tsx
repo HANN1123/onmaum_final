@@ -13,8 +13,10 @@ import {
 } from 'recharts'
 import { getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
 import { dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
-import { computeBaselineState } from '@/features/algorithm/baseline/baseline'
+import { computeBaselineState, BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
+import { useLocalDate } from '@/features/feedback/hooks/useLocalDate'
 
+/** 차트에 보여 주는 날 수. 평소선은 리포트·체크인·넛지와 같은 기간(BASELINE_WINDOW_DAYS)으로 계산한다 */
 const DAYS = 7
 
 function formatDateLabel(date: string): string {
@@ -44,10 +46,10 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
 }
 
 export default function TrendChart() {
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = useLocalDate()
   const records = useLiveQuery(() => {
     const start = new Date()
-    start.setDate(start.getDate() - (DAYS - 1))
+    start.setDate(start.getDate() - (BASELINE_WINDOW_DAYS - 1))
     start.setHours(0, 0, 0, 0)
     const end = new Date()
     end.setHours(23, 59, 59, 999)
@@ -62,14 +64,15 @@ export default function TrendChart() {
     )
   }
 
-  const history = dailyStressHistory(records, DAYS, new Date())
+  const baselineHistory = dailyStressHistory(records, BASELINE_WINDOW_DAYS, new Date())
+  const history = baselineHistory.slice(-DAYS)
   const data: ChartPoint[] = history.map((h) => ({
     date: h.date,
     label: formatDateLabel(h.date),
     stress: h.scores ? h.scores.stress : 0,
     hasData: h.scores !== null,
   }))
-  const baseline = computeBaselineState(history)
+  const baseline = computeBaselineState(baselineHistory)
   const hasAnyData = data.some((d) => d.hasData)
 
   return (
