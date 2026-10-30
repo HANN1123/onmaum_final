@@ -7,8 +7,14 @@ import EmotionOrb from '@/features/ui/orb/EmotionOrb'
 import OrbPipButton from '@/features/ui/orb/OrbPipButton'
 import OnboardingSurvey from '@/features/ui/onboarding/OnboardingSurvey'
 import { useEmotionRecorder } from '@/features/camera/hooks/useEmotionRecorder'
-import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
+import { analyzeEmotion, loadFaceApiModels } from '@/features/camera/lib/faceDetection'
 import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import {
+  loadCameraRotation,
+  nextCameraRotation,
+  saveCameraRotation,
+  type CameraRotation,
+} from '@/shared/storage/cameraRotation'
 import { db } from '@/shared/storage/db'
 
 type ModelStatus = 'loading' | 'ready' | 'error'
@@ -38,11 +44,13 @@ export default function Home() {
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [recordCount, setRecordCount] = useState(0)
+  const [rotation, setRotation] = useState<CameraRotation>(0)
 
   useEffect(() => {
     // localStorage는 클라이언트에서만 — mount 후 온보딩 여부 확인 (hydration mismatch 방지)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboarded(readOnboarded())
+    setRotation(loadCameraRotation())
   }, [])
 
   useEffect(() => {
@@ -92,9 +100,16 @@ export default function Home() {
     }
   }, [active])
 
+  const analyze = useCallback(
+    (video: HTMLVideoElement) => analyzeEmotion(video, rotation),
+    [rotation],
+  )
+
   const { currentEmotion, saveError } = useEmotionRecorder({
     active,
     videoEl,
+    alignmentKey: rotation,
+    analyze,
   })
 
   const handleOnboardingDone = useCallback(() => {
@@ -126,6 +141,13 @@ export default function Home() {
   const handleStop = () => {
     setActive(false)
     setVideoEl(null)
+  }
+
+  // 카메라를 정방향으로 맞추는 정렬 버튼이다. 측정 중에 누르면 정렬 전 샘플은 버리고 다음 분석부터 돌린 프레임을 쓴다
+  const handleRotate = () => {
+    const next = nextCameraRotation(rotation)
+    setRotation(next)
+    saveCameraRotation(next)
   }
 
   const startDisabled = active || modelStatus !== 'ready' || !dbReady
@@ -173,9 +195,22 @@ export default function Home() {
 
         <CameraView
           active={active}
+          rotation={rotation}
           onReady={handleCameraReady}
           onError={handleCameraError}
         />
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-ink-500">얼굴이 옆으로 보이면 화면을 돌려 바로 세워 주세요</p>
+          <button
+            type="button"
+            onClick={handleRotate}
+            aria-label={`카메라 화면 돌리기, 지금 ${rotation}도`}
+            className="shrink-0 rounded-full border border-ink-300 bg-white px-4 py-2 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-100"
+          >
+            화면 돌리기 ↻
+          </button>
+        </div>
 
         {cameraError && (
           <div className="rounded-2xl border border-ink-200 bg-white p-4 text-center text-sm text-risk-warning">

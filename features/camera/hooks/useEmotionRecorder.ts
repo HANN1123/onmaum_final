@@ -14,6 +14,8 @@ interface Options {
   videoEl: HTMLVideoElement | null
   intervalMs?: number
   aggregateMs?: number
+  /** 값이 바뀌면 카메라 정렬이 바뀐 것으로 보고, 저장 전 샘플을 버린다. 정방향이 아닌 얼굴의 값은 쓸 수 없기 때문이다. */
+  alignmentKey?: unknown
   /** 테스트 주입용. production은 디폴트 사용. */
   analyze?: (video: HTMLVideoElement) => Promise<EmotionResult | null>
   /** 테스트 주입용. production은 디폴트 사용. */
@@ -34,6 +36,7 @@ export function useEmotionRecorder(opts: Options): Result {
     videoEl,
     intervalMs = DEFAULT_INTERVAL_MS,
     aggregateMs = DEFAULT_AGGREGATE_MS,
+    alignmentKey,
     analyze = defaultAnalyzeEmotion,
     saveRecord = defaultAddEmotionRecord,
   } = opts
@@ -45,6 +48,7 @@ export function useEmotionRecorder(opts: Options): Result {
   const bufferStartRef = useRef<number>(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const fnRef = useRef({ analyze, saveRecord })
+  const alignmentKeyRef = useRef(alignmentKey)
 
   useEffect(() => {
     fnRef.current = { analyze, saveRecord }
@@ -53,6 +57,13 @@ export function useEmotionRecorder(opts: Options): Result {
   useEffect(() => {
     videoRef.current = videoEl
   }, [videoEl])
+
+  useEffect(() => {
+    if (alignmentKeyRef.current === alignmentKey) return
+    alignmentKeyRef.current = alignmentKey
+    bufferRef.current = []
+    bufferStartRef.current = Date.now()
+  }, [alignmentKey])
 
   useEffect(() => {
     if (!active || !videoEl) {
@@ -101,6 +112,7 @@ export function useEmotionRecorder(opts: Options): Result {
       if (!running) return
 
       const video = videoRef.current
+      const alignment = alignmentKeyRef.current
       let result: EmotionResult | null = null
       if (video && video.readyState >= 2) {
         try {
@@ -111,6 +123,11 @@ export function useEmotionRecorder(opts: Options): Result {
         }
       }
       if (!running) return
+      // 분석하는 동안 정렬이 바뀌었으면 이전 방향의 결과이므로 쓰지 않는다
+      if (alignment !== alignmentKeyRef.current) {
+        timer = setTimeout(tick, intervalMs)
+        return
+      }
 
       bufferRef.current.push({ emotion: result, intervalMs })
       setCurrentEmotion(result)
