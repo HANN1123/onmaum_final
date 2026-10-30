@@ -156,3 +156,45 @@ describe('useEmotionRecorder', () => {
     })
   })
 })
+
+// fake timer와 맞지 않는 위 skip 테스트와 달리, 실제 타이머와 직접 푸는 promise로 실행 순서를 고정한다.
+describe('useEmotionRecorder 중지·재시작', () => {
+  const angry: EmotionResult = { happy: 0, calm: 0, sad: 0, angry: 1 }
+
+  it('이전 실행의 늦게 끝난 분석 결과는 새 실행에 섞이지 않고, 이전 루프도 이어지지 않는다', async () => {
+    const fakeVideo = makeFakeVideo()
+    let resolveFirst: (v: EmotionResult) => void = () => {}
+    const analyze = vi
+      .fn<(v: HTMLVideoElement) => Promise<EmotionResult | null>>()
+      .mockImplementationOnce(() => new Promise<EmotionResult>((r) => (resolveFirst = r)))
+      .mockResolvedValue(mockEmotion)
+    const saveRecord = makeSaveMock()
+
+    const { result, rerender, unmount } = renderHook(
+      ({ active }) =>
+        useEmotionRecorder({ active, videoEl: fakeVideo, intervalMs: 60_000, analyze, saveRecord }),
+      { initialProps: { active: true } },
+    )
+    expect(analyze).toHaveBeenCalledTimes(1)
+
+    // 첫 분석이 끝나기 전에 중지 → 재시작
+    rerender({ active: false })
+    rerender({ active: true })
+    await waitFor(() => expect(result.current.currentEmotion).toEqual(mockEmotion))
+    expect(analyze).toHaveBeenCalledTimes(2)
+
+    // 이전 실행의 분석이 이제 끝난다
+    await act(async () => {
+      resolveFirst(angry)
+      await Promise.resolve()
+    })
+    expect(result.current.currentEmotion).toEqual(mockEmotion)
+
+    // 중지하면 새 실행의 샘플만 저장된다(angry가 섞이면 angry > 0)
+    rerender({ active: false })
+    await waitFor(() => expect(saveRecord).toHaveBeenCalledTimes(1))
+    expect(saveRecord.mock.calls[0][0].angry).toBeCloseTo(mockEmotion.angry)
+    expect(analyze).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+})

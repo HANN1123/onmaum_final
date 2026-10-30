@@ -68,7 +68,8 @@ export default function WeeklyRecords({ now }: Props) {
     sessionsPerDay.set(k, (sessionsPerDay.get(k) ?? 0) + 1)
   }
   const weekTotal = days.reduce((sum, d) => sum + d.totalDuration, 0)
-  const recordedDays = days.filter((d) => d.totalDuration > 0).length
+  // 표정 기록이 없어도 측정 세션이 있으면 기록한 날로 센다 (목록 표시와 맞춤)
+  const recordedDays = days.filter((d) => d.totalDuration > 0 || sessionsPerDay.has(d.date)).length
   const weekLabel = weekOffset === 0 ? '이번 주' : '이 주'
 
   return (

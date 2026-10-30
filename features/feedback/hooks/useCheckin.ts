@@ -10,12 +10,14 @@ import { checkinLine } from '@/features/feedback/lib/checkinCopy'
 import { applyOffset, nextOffset, type SelfReport } from '@/features/algorithm/baseline/calibration'
 import { loadSettings, saveSettings } from '@/shared/storage/settings'
 import { loadCheckinDone, saveCheckinEntry, type CheckinContext } from '@/shared/storage/dayState'
+import { useLocalDate } from './useLocalDate'
 
 interface Args {
   now?: Date
 }
 
 interface CheckinView {
+  /** 체크인 시간대이고, 응답을 받을 판정 문구까지 준비됐을 때만 true */
   due: boolean
   slot: CheckinSlot | null
   line: string
@@ -23,6 +25,8 @@ interface CheckinView {
 }
 
 export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
+  // 날짜가 바뀌면 다시 그려 now(기본값)와 조회 범위를 새로 잡는다
+  useLocalDate()
   const date = now.toLocaleDateString('en-CA')
   const nowMs = now.getTime()
 
@@ -39,7 +43,7 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
   const settings = loadSettings()
   const hasTodayData = (todayRecords?.length ?? 0) > 0
 
-  const { due, slot } = checkinDue({
+  const { due: inWindow, slot } = checkinDue({
     now,
     morning: settings.morningWindow,
     afternoon: settings.afternoonWindow,
@@ -49,7 +53,7 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
 
   let line = ''
   let context: CheckinContext | undefined
-  if (due && todayRecords && rangeRecords) {
+  if (inWindow && todayRecords && rangeRecords) {
     const current = recentStress(todayRecords, now)
     const baseline = computeBaselineState(
       dailyStressHistory(rangeRecords, BASELINE_WINDOW_DAYS, now),
@@ -69,9 +73,13 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
     }
   }
 
+  // 판정이 없으면(최근 30분 기록 없음·조회 중) "맞아요/달라요"가 가리킬 대상이 없으므로 묻지 않는다.
+  // 빈 카드에 응답해 보정값이 바뀌는 것을 막는다.
+  const due = inWindow && context !== undefined
+
   const submit = useCallback(
     (report: SelfReport) => {
-      if (!slot) return
+      if (!slot || !context) return
       const s = loadSettings()
       saveSettings({ ...s, calibrationOffset: nextOffset(s.calibrationOffset, report) })
       saveCheckinEntry(date, slot, report, nowMs, context)

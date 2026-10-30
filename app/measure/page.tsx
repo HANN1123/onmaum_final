@@ -210,7 +210,7 @@ export default function Home() {
             disabled={startDisabled}
             className="flex-1 rounded-full bg-risk-good px-6 py-3 font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            전화 시작
+            측정 시작
           </button>
           <button
             type="button"
@@ -218,7 +218,7 @@ export default function Home() {
             disabled={!active}
             className="flex-1 rounded-full border border-ink-300 bg-white px-6 py-3 font-medium text-ink-700 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            전화 종료
+            측정 종료
           </button>
         </div>
 

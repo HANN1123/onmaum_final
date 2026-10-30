@@ -84,6 +84,8 @@ describe('WeeklyRecords', () => {
     render(<WeeklyRecords now={NOW} />)
     await waitFor(() => expect(screen.getByText('측정 1회')).toBeTruthy())
     expect(screen.getByText('표정 기록 없음')).toBeTruthy()
+    // 목록에 측정이 보이는 날은 주간 요약의 기록 일수에도 들어가야 한다
+    expect(screen.getByText('이번 주 1일 기록 · 총 0분')).toBeTruthy()
     expect(screen.getAllByText('기록 없음')).toHaveLength(6)
   })
 })

@@ -115,3 +115,36 @@ describe('useCheckin', () => {
     await vi.waitFor(() => expect(result.current.due).toBe(false))
   })
 })
+
+describe('useCheckin 판정이 없을 때', () => {
+  beforeEach(async () => {
+    localStorage.clear()
+    await db.emotions.clear()
+  })
+
+  it('오늘 기록은 있지만 최근 30분 기록이 없으면 묻지 않고, submit해도 보정값이 바뀌지 않는다', async () => {
+    const now = new Date('2026-06-12T10:30:00')
+    // 2시간 전 기록: 오늘 데이터는 있지만 최근 30분 판정은 없다
+    await db.emotions.add({
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+      duration: 60000,
+      detectionRate: 1,
+      happy: 0, calm: 0.4, sad: 0.6, angry: 0,
+      dominantEmotion: 'sad',
+      flatAffectScore: 0,
+    } as never)
+    const date = now.toLocaleDateString('en-CA')
+    const { result } = renderHook(() => useCheckin({ now }))
+    await vi.waitFor(() => expect(result.current.slot).toBe('morning'))
+    // 조회가 끝난 뒤에도 판정이 없으므로 due가 아니다
+    await new Promise((r) => setTimeout(r, 50))
+    expect(result.current.due).toBe(false)
+    expect(result.current.line).toBe('')
+
+    await act(async () => {
+      result.current.submit('worse')
+    })
+    expect(loadSettings().calibrationOffset).toBe(0)
+    expect(loadCheckinDone(date)).not.toContain('morning')
+  })
+})
