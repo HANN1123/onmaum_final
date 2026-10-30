@@ -77,7 +77,7 @@ export default function CameraView({ active, rotation = 0, onReady, onError }: P
         ref={videoRef}
         muted
         playsInline
-        className="absolute left-1/2 top-1/2 object-cover"
+        className="absolute left-1/2 top-1/2 max-w-none object-cover"
         style={{
           width: sideways ? '133.3333%' : '100%',
           height: sideways ? '75%' : '100%',

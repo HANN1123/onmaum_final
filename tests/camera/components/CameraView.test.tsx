@@ -41,6 +41,8 @@ describe('CameraView 카메라 정리', () => {
     const video = container.querySelector('video') as HTMLVideoElement
     expect(video.style.transform).toBe('translate(-50%, -50%) scaleX(-1) rotate(90deg)')
     expect(video.style.width).toBe('133.3333%')
+    // 전역 max-width: 100%에 잘리면 세로 틀을 채우지 못한다
+    expect(video.className).toContain('max-w-none')
     expect(container.firstElementChild?.className).toContain('aspect-[3/4]')
   })
 
