@@ -108,6 +108,7 @@ export default function Home() {
   const { currentEmotion, saveError } = useEmotionRecorder({
     active,
     videoEl,
+    alignmentKey: rotation,
     analyze,
   })
 
@@ -142,7 +143,7 @@ export default function Home() {
     setVideoEl(null)
   }
 
-  // 측정 중에도 바로 적용된다. 다음 분석부터 돌린 프레임을 쓴다
+  // 카메라를 정방향으로 맞추는 정렬 버튼이다. 측정 중에 누르면 정렬 전 샘플은 버리고 다음 분석부터 돌린 프레임을 쓴다
   const handleRotate = () => {
     const next = nextCameraRotation(rotation)
     setRotation(next)

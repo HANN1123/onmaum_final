@@ -198,3 +198,59 @@ describe('useEmotionRecorder 중지·재시작', () => {
     unmount()
   })
 })
+
+describe('useEmotionRecorder 카메라 정렬', () => {
+  const sideways: EmotionResult = { happy: 0, calm: 0, sad: 0, angry: 1 }
+
+  it('정렬이 바뀌면 저장 전 샘플을 버리고 정렬 뒤 샘플만 저장한다', async () => {
+    const fakeVideo = makeFakeVideo()
+    let aligned = false
+    const analyze = vi.fn(async () => (aligned ? mockEmotion : sideways))
+    const saveRecord = makeSaveMock()
+
+    const { rerender, unmount } = renderHook(
+      ({ active, rotation }) =>
+        useEmotionRecorder({ active, videoEl: fakeVideo, intervalMs: 5, alignmentKey: rotation, analyze, saveRecord }),
+      { initialProps: { active: true, rotation: 0 } },
+    )
+    await waitFor(() => expect(analyze.mock.calls.length).toBeGreaterThanOrEqual(2))
+
+    aligned = true
+    rerender({ active: true, rotation: 270 })
+    const callsAfterAlign = analyze.mock.calls.length
+    await waitFor(() => expect(analyze.mock.calls.length).toBeGreaterThanOrEqual(callsAfterAlign + 2))
+
+    rerender({ active: false, rotation: 270 })
+    await waitFor(() => expect(saveRecord).toHaveBeenCalledTimes(1))
+    expect(saveRecord.mock.calls[0][0].angry).toBeCloseTo(mockEmotion.angry)
+    unmount()
+  })
+
+  it('정렬을 바꾸는 동안 끝난 이전 방향의 분석 결과는 쓰지 않고 측정은 이어진다', async () => {
+    const fakeVideo = makeFakeVideo()
+    let resolveFirst: (v: EmotionResult) => void = () => {}
+    const analyze = vi
+      .fn<(v: HTMLVideoElement) => Promise<EmotionResult | null>>()
+      .mockImplementationOnce(() => new Promise<EmotionResult>((r) => (resolveFirst = r)))
+      .mockResolvedValue(mockEmotion)
+    const saveRecord = makeSaveMock()
+
+    const { result, rerender, unmount } = renderHook(
+      ({ active, rotation }) =>
+        useEmotionRecorder({ active, videoEl: fakeVideo, intervalMs: 5, alignmentKey: rotation, analyze, saveRecord }),
+      { initialProps: { active: true, rotation: 0 } },
+    )
+    rerender({ active: true, rotation: 90 })
+    await act(async () => {
+      resolveFirst(sideways)
+      await Promise.resolve()
+    })
+    expect(result.current.currentEmotion).not.toEqual(sideways)
+
+    await waitFor(() => expect(result.current.currentEmotion).toEqual(mockEmotion))
+    rerender({ active: false, rotation: 90 })
+    await waitFor(() => expect(saveRecord).toHaveBeenCalledTimes(1))
+    expect(saveRecord.mock.calls[0][0].angry).toBeCloseTo(mockEmotion.angry)
+    unmount()
+  })
+})
