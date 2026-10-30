@@ -17,13 +17,41 @@ vi.mock('@/shared/storage/personalData', () => ({
   MeasurementActiveError: class MeasurementActiveError extends Error {},
 }))
 
+const importSummary = {
+  emotions: { added: 5, duplicate: 2, invalid: 1 },
+  sessions: { added: 1, updated: 0, duplicate: 0, invalid: 0 },
+  localKeys: { added: 0, kept: 1, ignored: 0, failed: 0 },
+}
+const parsePersonalDataImport = vi.fn((text: string) => ({ text }))
+const importPersonalData = vi.fn(async (_parsed: unknown) => importSummary)
+
+vi.mock('@/shared/storage/personalImport', () => ({
+  parsePersonalDataImport: (text: string) => parsePersonalDataImport(text),
+  importPersonalData: (parsed: unknown) => importPersonalData(parsed),
+  ImportFormatError: class ImportFormatError extends Error {
+    constructor(readonly reason: string) {
+      super(reason)
+    }
+  },
+  MAX_IMPORT_BYTES: 1000,
+}))
+
 import DataManagement from '@/features/ui/records/DataManagement'
+import { ImportFormatError } from '@/shared/storage/personalImport'
 import { MeasurementActiveError } from '@/shared/storage/personalData'
 
 beforeEach(() => {
   deleteAllPersonalData.mockClear()
   exportPersonalData.mockClear()
+  parsePersonalDataImport.mockClear()
+  importPersonalData.mockClear()
 })
+
+function chooseFile(content: string, name = 'onmaum-records.json') {
+  const input = screen.getByLabelText('가져올 기록 파일') as HTMLInputElement
+  const f = new File([content], name, { type: 'application/json' })
+  fireEvent.change(input, { target: { files: [f] } })
+}
 
 describe('DataManagement', () => {
   it('지우기 버튼은 확인 단계를 거친 뒤에만 삭제한다', async () => {
@@ -93,5 +121,66 @@ describe('DataManagement', () => {
     fireEvent.click(screen.getByRole('button', { name: '모든 기록 지우기' }))
     fireEvent.click(screen.getByRole('button', { name: '지우기' }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/지우지 못했어요/))
+  })
+
+  it('가져오기 버튼은 파일 선택 창을 연다', () => {
+    render(<DataManagement />)
+    const input = screen.getByLabelText('가져올 기록 파일') as HTMLInputElement
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {})
+    fireEvent.click(screen.getByRole('button', { name: '기록 파일 가져오기' }))
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
+  it('파일을 고르면 가져오고 결과를 알려 준다', async () => {
+    render(<DataManagement />)
+    chooseFile('{"schemaVersion":2}')
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        '기록 5개를 가져왔어요. 이미 있던 2개는 건너뛰었어요. 읽을 수 없는 1개는 빼고 가져왔어요. 이 기기의 설정은 그대로 두었어요',
+      ),
+    )
+    expect(parsePersonalDataImport).toHaveBeenCalledWith('{"schemaVersion":2}')
+    expect(importPersonalData).toHaveBeenCalledTimes(1)
+  })
+
+  it('온마음 파일이 아니면 이유를 알려 주고 저장하지 않는다', async () => {
+    parsePersonalDataImport.mockImplementationOnce(() => {
+      throw new ImportFormatError('notJson')
+    })
+    render(<DataManagement />)
+    chooseFile('hello')
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('온마음에서 내보낸 기록 파일(JSON)이 아니에요'))
+    expect(importPersonalData).not.toHaveBeenCalled()
+  })
+
+  it('너무 큰 파일은 읽지 않는다', async () => {
+    render(<DataManagement />)
+    chooseFile('x'.repeat(1001))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/너무 커서/))
+    expect(parsePersonalDataImport).not.toHaveBeenCalled()
+  })
+
+  it('측정 중이면 가져오지 않고 측정을 멈추라고 알려 준다', async () => {
+    importPersonalData.mockRejectedValueOnce(new MeasurementActiveError())
+    render(<DataManagement />)
+    chooseFile('{}')
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/측정이 진행 중이에요/))
+  })
+})
+
+describe('DataManagement 가져오기 부분 실패', () => {
+  it('설정 일부를 저장하지 못하면 알려 준다', async () => {
+    importPersonalData.mockResolvedValueOnce({
+      ...importSummary,
+      emotions: { added: 3, duplicate: 0, invalid: 0 },
+      localKeys: { added: 1, kept: 0, ignored: 0, failed: 2 },
+    })
+    render(<DataManagement />)
+    chooseFile('{}')
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        '기록 3개를 가져왔어요. 설정·체크인 기록 2개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요',
+      ),
+    )
   })
 })
