@@ -2,6 +2,9 @@
   "name": "onmaum",
   "version": "0.1.0",
   "private": true,
+  "description": "얼굴 표정 기반 일별 마음 상태 모니터링",
+  "author": "ONMAUM",
+  "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,7 +17,12 @@
     "setup:workspace": "node scripts/collaboration/setup.mjs",
     "check": "node scripts/collaboration/check.mjs",
     "dev:core": "next dev --port 3001",
-    "dev:ui": "next dev --port 3002"
+    "dev:ui": "next dev --port 3002",
+    "typecheck:electron": "tsc -p tsconfig.electron.json --noEmit",
+    "electron:dev": "node scripts/electron/dev.mjs",
+    "electron:build": "node scripts/electron/build.mjs",
+    "electron:pack": "npm run electron:build && electron-builder --win nsis --x64 --publish never",
+    "electron:pack:dir": "npm run electron:build && electron-builder --win dir --x64 --publish never"
   },
   "dependencies": {
     "dexie": "^4.4.2",
@@ -35,6 +43,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.1.5",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "fake-indexeddb": "^6.2.5",

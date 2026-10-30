@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": false,
+    "rootDir": "features/electron",
+    "outDir": "dist-electron",
+    "sourceMap": false,
+    "noEmitOnError": true
+  },
+  "include": [
+    "features/electron/main/**/*.ts",
+    "features/electron/preload/**/*.ts",
+    "features/electron/types/**/*.ts"
+  ]
+}
