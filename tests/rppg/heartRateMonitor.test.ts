@@ -83,7 +83,7 @@ describe('connectHeartRateMonitor', () => {
 
   it('설정 중에 끊기면 실패로 끝내고 listener를 남기지 않는다', async () => {
     const { characteristic, device, gatt } = fakeDevice()
-    let resolveService = (_: unknown) => {}
+    let resolveService: (service: unknown) => void = () => {}
     const server = await gatt.connect()
     server.getPrimaryService.mockImplementationOnce(() => new Promise((res) => (resolveService = res)) as never)
     gatt.connect.mockResolvedValueOnce(server)

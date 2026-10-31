@@ -595,6 +595,7 @@ export function RppgLab() {
         runId: runIdRef.current || undefined,
         source: 'manual',
         slot: null,
+        originMs: startRef.current,
         t: (performance.now() - startRef.current) / 1000,
         condition,
         watch: v,

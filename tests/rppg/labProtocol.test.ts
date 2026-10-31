@@ -141,7 +141,12 @@ describe('summarizePairs 자동 평가 집계', () => {
   })
 
   it('슬롯이 다 차기 전에는 정상 행만 있어도 판정하지 않는다', () => {
-    expect(summarizePairs([row()], 0, SLOT_COUNT).quiet.me.verdict).toBe('undecided')
+    const partial = summarizePairs([row()], 0, SLOT_COUNT).quiet.me
+    expect(partial.verdict).toBe('undecided')
+    expect(partial.n).toBe(SLOT_COUNT)
+    expect(partial.coverage).toBeCloseTo(1 / SLOT_COUNT)
+    const half = summarizePairs(Array(4).fill(row()), 0, SLOT_COUNT).quiet.me
+    expect(half.verdict).toBe('undecided')
     expect(summarizePairs(Array(SLOT_COUNT).fill(row()), 0, SLOT_COUNT).quiet.me.verdict).toBe('pass')
   })
 
@@ -192,6 +197,25 @@ describe('referenceBpm', () => {
 })
 
 describe('기록 보관', () => {
+  it('수동 기록도 CSV에 추정 창 시각을 남긴다', () => {
+    const manual: LabRow = {
+      runId: 'run-1',
+      source: 'manual',
+      slot: null,
+      originMs: 90_000,
+      t: 25,
+      fps: 30,
+      condition: 'quiet',
+      watch: 70,
+      forehead: null,
+      all: null,
+      me: { bpm: 71, snrDb: 2, windowStart: 105_000, windowEnd: 114_800 },
+    }
+    const [head, line] = rowsToCsv(parseLabRows(JSON.stringify([manual]))).split('\n')
+    const cells = line.split(',')
+    expect(cells[head.split(',').indexOf('me_win_end_s')]).toBe('24.80')
+  })
+
   it('실행과 출처별로 나눈다', () => {
     const base: LabRow = { t: 1, fps: 30, condition: 'quiet', watch: 70, forehead: null, all: null, me: null }
     expect(runKey({ ...base, runId: 'a', source: 'ble' })).not.toBe(runKey({ ...base, runId: 'a', source: 'manual' }))

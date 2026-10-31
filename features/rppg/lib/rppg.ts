@@ -456,10 +456,10 @@ export interface ErrorSummary {
   verdict: Verdict
 }
 
-function verdictOf(cond: Condition, s: Omit<ErrorSummary, 'verdict'>, minSlots: number): Verdict {
+function verdictOf(cond: Condition, s: Omit<ErrorSummary, 'verdict'>, complete: boolean): Verdict {
   const target = TARGETS[cond]
   if (!target) return 'exploratory'
-  if (s.n < minSlots || s.comparableRate < MIN_COMPARABLE_RATE || s.gatedMae === null) return 'undecided'
+  if (!complete || s.n === 0 || s.comparableRate < MIN_COMPARABLE_RATE || s.gatedMae === null) return 'undecided'
   return s.gatedMae <= target.mae && s.coverage >= target.coverage ? 'pass' : 'fail'
 }
 
@@ -489,9 +489,11 @@ export function summarizePairs(
       errs.push(err)
       if (Number.isFinite(est.snrDb) && est.snrDb >= gateDb) gatedErrs.push(err)
     }
-    const rate = (count: number) => (sub.length > 0 ? count / sub.length : 0)
+    // 슬롯이 덜 찼어도 분모는 예정 슬롯 수다. 저장된 행만 나누면 앞부분 몇 개로 비율이 부풀려진다
+    const n = sub.length > 0 ? Math.max(sub.length, minSlots) : 0
+    const rate = (count: number) => (n > 0 ? count / n : 0)
     const summary = {
-      n: sub.length,
+      n,
       mae: meanOrNull(errs),
       coverage: rate(gatedErrs.length),
       gatedMae: meanOrNull(gatedErrs),
@@ -499,7 +501,7 @@ export function summarizePairs(
       refRate: rate(withReference),
       comparableRate: rate(errs.length),
     }
-    return { ...summary, verdict: verdictOf(cond, summary, minSlots) }
+    return { ...summary, verdict: verdictOf(cond, summary, sub.length >= minSlots) }
   }
   const conds: Condition[] = ['quiet', 'talk', 'move']
   return Object.fromEntries(
