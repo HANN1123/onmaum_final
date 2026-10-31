@@ -4,6 +4,7 @@
 import type { ReferenceSample } from '@/features/rppg/lib/rppg'
 
 const MAX_BPM = 250
+const DISCONNECTED_DURING_SETUP = '연결 중에 기기가 끊겼어요'
 
 type Contact = ReferenceSample['contact']
 
@@ -15,9 +16,15 @@ export function parseHeartRateMeasurement(view: DataView): { bpm: number; contac
   const contactSupported = (flags & 0b0100) !== 0
   const contactGood = (flags & 0b0010) !== 0
   const hasEnergy = (flags & 0b1000) !== 0
+  const hasRrIntervals = (flags & 0b10000) !== 0
 
   const valueSize = is16Bit ? 2 : 1
-  if (view.byteLength < 1 + valueSize + (hasEnergy ? 2 : 0)) return null
+  const fixedSize = 1 + valueSize + (hasEnergy ? 2 : 0)
+  if (view.byteLength < fixedSize) return null
+  if (hasRrIntervals) {
+    const rrBytes = view.byteLength - fixedSize
+    if (rrBytes < 2 || rrBytes % 2 !== 0) return null
+  }
 
   const bpm = is16Bit ? view.getUint16(1, true) : view.getUint8(1)
   if (bpm <= 0 || bpm > MAX_BPM) return null
@@ -67,8 +74,10 @@ export async function connectHeartRateMonitor(
   try {
     const service = await server.getPrimaryService('heart_rate')
     characteristic = await service.getCharacteristic('heart_rate_measurement')
+    if (closed) throw new Error(DISCONNECTED_DURING_SETUP)
     characteristic.addEventListener('characteristicvaluechanged', handleValue)
     await characteristic.startNotifications()
+    if (closed) throw new Error(DISCONNECTED_DURING_SETUP)
   } catch (err) {
     cleanup()
     device.gatt.disconnect()

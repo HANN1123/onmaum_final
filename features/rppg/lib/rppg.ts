@@ -361,6 +361,10 @@ export type LabRow = PairRow & {
   reason?: string | null
   refAgeS?: number | null
   refN?: number | null
+  /** 평가 전에 고정한 품질 게이트 */
+  gateDb?: number
+  /** 이 행의 추정 창 시각을 측정 시작 기준으로 바꿀 때 쓰는 시작 시각 */
+  originMs?: number
   meOutFps?: number
   meDropped?: number
 }
@@ -407,6 +411,8 @@ export function parseLabRows(raw: string): LabRow[] {
         reason: typeof r.reason === 'string' ? r.reason : null,
         refAgeS: num(r.refAgeS),
         refN: num(r.refN),
+        ...(num(r.gateDb) !== null ? { gateDb: num(r.gateDb) as number } : {}),
+        ...(num(r.originMs) !== null ? { originMs: num(r.originMs) as number } : {}),
         ...(num(r.meOutFps) !== null ? { meOutFps: num(r.meOutFps) as number } : {}),
         ...(num(r.meDropped) !== null ? { meDropped: num(r.meDropped) as number } : {}),
         t: r.t,
@@ -450,10 +456,10 @@ export interface ErrorSummary {
   verdict: Verdict
 }
 
-function verdictOf(cond: Condition, s: Omit<ErrorSummary, 'verdict'>): Verdict {
+function verdictOf(cond: Condition, s: Omit<ErrorSummary, 'verdict'>, minSlots: number): Verdict {
   const target = TARGETS[cond]
   if (!target) return 'exploratory'
-  if (s.n === 0 || s.comparableRate < MIN_COMPARABLE_RATE || s.gatedMae === null) return 'undecided'
+  if (s.n < minSlots || s.comparableRate < MIN_COMPARABLE_RATE || s.gatedMae === null) return 'undecided'
   return s.gatedMae <= target.mae && s.coverage >= target.coverage ? 'pass' : 'fail'
 }
 
@@ -464,6 +470,8 @@ function meanOrNull(xs: number[]): number | null {
 export function summarizePairs(
   rows: PairRow[],
   gateDb: number,
+  /** 이만큼 슬롯이 차기 전에는 판정하지 않는다. 자동 평가는 예정 슬롯 수를 넘긴다 */
+  minSlots: number = 1,
 ): Record<Condition, Record<RoiSet, ErrorSummary>> {
   const summarize = (cond: Condition, roi: RoiSet): ErrorSummary => {
     const sub = rows.filter((r) => r.condition === cond)
@@ -491,7 +499,7 @@ export function summarizePairs(
       refRate: rate(withReference),
       comparableRate: rate(errs.length),
     }
-    return { ...summary, verdict: verdictOf(cond, summary) }
+    return { ...summary, verdict: verdictOf(cond, summary, minSlots) }
   }
   const conds: Condition[] = ['quiet', 'talk', 'move']
   return Object.fromEntries(

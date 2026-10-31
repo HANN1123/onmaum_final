@@ -28,6 +28,8 @@ describe('parseHeartRateMeasurement', () => {
     expect(parseHeartRateMeasurement(view(0b0001, 72))).toBeNull()
     expect(parseHeartRateMeasurement(view(0b1000, 72, 0x10))).toBeNull()
     expect(parseHeartRateMeasurement(view(0b0000, 0))).toBeNull()
+    expect(parseHeartRateMeasurement(view(0b10000, 72))).toBeNull()
+    expect(parseHeartRateMeasurement(view(0b10000, 72, 1))).toBeNull()
   })
 })
 
@@ -74,6 +76,25 @@ describe('connectHeartRateMonitor', () => {
     device.dispatchEvent(new Event('gattserverdisconnected'))
     expect(onDisconnect).toHaveBeenCalledTimes(1)
 
+    characteristic.value = view(0, 70)
+    characteristic.dispatchEvent(new Event('characteristicvaluechanged'))
+    expect(onSample).not.toHaveBeenCalled()
+  })
+
+  it('설정 중에 끊기면 실패로 끝내고 listener를 남기지 않는다', async () => {
+    const { characteristic, device, gatt } = fakeDevice()
+    let resolveService = (_: unknown) => {}
+    const server = await gatt.connect()
+    server.getPrimaryService.mockImplementationOnce(() => new Promise((res) => (resolveService = res)) as never)
+    gatt.connect.mockResolvedValueOnce(server)
+
+    const onSample = vi.fn()
+    const pending = connectHeartRateMonitor(onSample, vi.fn())
+    await vi.waitFor(() => expect(server.getPrimaryService).toHaveBeenCalled())
+    device.dispatchEvent(new Event('gattserverdisconnected'))
+    resolveService({ getCharacteristic: async () => characteristic })
+
+    await expect(pending).rejects.toThrow('끊겼')
     characteristic.value = view(0, 70)
     characteristic.dispatchEvent(new Event('characteristicvaluechanged'))
     expect(onSample).not.toHaveBeenCalled()

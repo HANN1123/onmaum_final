@@ -206,6 +206,9 @@ export function RppgLab() {
   const { getSamples } = heartRate
   const evaluationRef = useRef<Evaluation | null>(null)
   const runIdRef = useRef('')
+  const evaluationCountRef = useRef(0)
+  /** 조건이 바뀌면 이전 조건의 ME 내부 상태가 결과에 남지 않게 다음 프레임에서 초기화한다 */
+  const meResetRequestRef = useRef(false)
   const liveRef = useRef<Live>(EMPTY_LIVE)
   const detectMsRef = useRef(detectMs)
   const startRef = useRef(0)
@@ -436,7 +439,10 @@ export function RppgLab() {
           return
         }
         // 끊겼다 돌아오면 파형만 비우지 않고 모델 상태까지 새로 시작한다. 기준은 신호처리의 공백과 같다
-        if (meLastSendT !== null && t - meLastSendT > MAX_SAMPLE_GAP_MS) resetMe()
+        if (meResetRequestRef.current || (meLastSendT !== null && t - meLastSendT > MAX_SAMPLE_GAP_MS)) {
+          meResetRequestRef.current = false
+          resetMe()
+        }
         if (!meKalman) {
           meKalman = [det.originX, det.originY, det.width, det.height].map((v) => createKalman1D(1e-2, 5e-1, v, 1))
         }
@@ -573,6 +579,7 @@ export function RppgLab() {
 
   // 이벤트 timeStamp는 performance.now()와 같은 기준 시각
   const handleCondition = (c: Condition, at: number) => {
+    meResetRequestRef.current = true
     setCondition(c)
     setConditionStart(at)
   }
@@ -601,12 +608,16 @@ export function RppgLab() {
   }
 
   const startEvaluation = () => {
+    evaluationCountRef.current++
     const next: Evaluation = {
-      runId: runIdRef.current,
+      // 반복 평가가 한 실행으로 합쳐지지 않게 평가마다 따로 이름을 붙인다
+      runId: `${runIdRef.current}-${condition}-${evaluationCountRef.current}`,
       condition,
+      gateDb,
       evalStart: performance.now() + PREP_MS,
       nextSlot: 1,
     }
+    meResetRequestRef.current = true
     evaluationRef.current = next
     setEvaluation(next)
   }
@@ -618,7 +629,11 @@ export function RppgLab() {
   const prepLeft = evaluation ? Math.ceil((evaluation.evalStart - clock) / 1000) : 0
   const lastReceived = heartRate.latest ? Math.max(0, Math.round((clock - heartRate.latest.t) / 1000)) : null
 
-  const summary = summarizePairs(runRows, gateDb)
+  // 자동 평가는 시작할 때 고정한 게이트로 판정하고, 슬롯이 다 차기 전에는 판정하지 않는다
+  const autoRun = runRows.some((r) => r.source === 'ble')
+  const activeGate = runRows.find((r) => r.gateDb !== undefined)?.gateDb ?? gateDb
+  const summary = summarizePairs(runRows, activeGate, autoRun ? SLOT_COUNT : 1)
+  const visibleConditions = CONDITIONS.filter((c) => runRows.length === 0 || summary[c.key].me.n > 0)
   const elapsed = conditionStart > 0 ? Math.max(0, Math.floor((clock - conditionStart) / 1000)) : 0
   const meStatusLabel: Record<MeStatus, string> = {
     loading: '로딩 중',
@@ -808,6 +823,7 @@ export function RppgLab() {
                 type="number"
                 step={0.5}
                 value={gateDb}
+                disabled={evaluation !== null}
                 onChange={(e) => setGateDb(Number(e.target.value))}
                 className="w-16 rounded border border-ink-300 px-2 py-1"
               />
@@ -815,6 +831,7 @@ export function RppgLab() {
             </label>
           </div>
           <p className="text-xs text-ink-400">
+            {autoRun && `이 평가의 게이트는 시작할 때 고정한 ${activeGate} dB예요. `}
             이 장비와 이 참여자에서 애플워치와 얼마나 일치했는지를 보는 값이에요. 임상 정확도가 아니고, 15초 간격 슬롯은
             독립 표본이 아니에요.
           </p>
@@ -836,7 +853,7 @@ export function RppgLab() {
               </tr>
             </thead>
             <tbody>
-              {CONDITIONS.flatMap((c) =>
+              {visibleConditions.flatMap((c) =>
                 (['forehead', 'all', 'me'] as const).map((roi) => {
                   const s = summary[c.key][roi]
                   return (

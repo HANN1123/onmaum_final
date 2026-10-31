@@ -8,12 +8,16 @@ export const SLOT_MS = 15_000
 export const SLOT_COUNT = 8
 /** 추정 창 끝이 슬롯 시각에서 이만큼 벗어나면 같은 구간으로 비교하지 않는다 */
 export const MAX_ALIGN_MS = 2_000
+/** 기준값은 최근 10초 평균이다. 이보다 짧은 창은 다른 구간을 재는 셈이라 비교하지 않는다 */
+export const MIN_COMPARE_WINDOW_MS = 9_000
 /** 슬롯 처리가 이만큼 늦으면 탭이 멈췄던 것으로 보고 평가에서 뺀다 */
 export const MAX_SLOT_LATE_MS = 2_000
 
 export interface Evaluation {
   runId: string
   condition: Condition
+  /** 평가 전에 고정한 품질 게이트. 결과를 본 뒤 바꿔 판정이 달라지지 않게 한다 */
+  gateDb: number
   /** 준비 구간이 끝나고 평가가 시작되는 시각 */
   evalStart: number
   nextSlot: number
@@ -43,12 +47,13 @@ export interface SlotInput {
   meDropped: number
 }
 
-/** 창이 평가 구간 안에 있고 슬롯 시각에 맞는 추정만 비교 대상으로 남긴다 */
-function alignedEstimate(est: HeartRate | null, slotAt: number, evalStart: number): HeartRate | null {
-  if (!est || est.windowStart === undefined || est.windowEnd === undefined) return null
-  if (est.windowStart < evalStart) return null
-  if (Math.abs(slotAt - est.windowEnd) > MAX_ALIGN_MS) return null
-  return est
+/** 창이 평가 구간 안에 있고 슬롯 시각·기준값 구간에 맞는 추정만 비교한다. 아니면 그 이유를 돌려준다 */
+function rejectReason(est: HeartRate | null, slotAt: number, evalStart: number): string | null {
+  if (!est || est.windowStart === undefined || est.windowEnd === undefined) return 'none'
+  if (est.windowStart < evalStart) return 'before_eval'
+  if (est.windowEnd - est.windowStart < MIN_COMPARE_WINDOW_MS) return 'short_window'
+  if (Math.abs(slotAt - est.windowEnd) > MAX_ALIGN_MS) return 'misaligned'
+  return null
 }
 
 export function slotRow(input: SlotInput): LabRow {
@@ -56,8 +61,9 @@ export function slotRow(input: SlotInput): LabRow {
   const slotAt = evaluation.evalStart + slot * SLOT_MS
   const late = now - slotAt > MAX_SLOT_LATE_MS
 
+  const rejects = ESTIMATORS.map((k) => [k, rejectReason(input.estimates[k], slotAt, evaluation.evalStart)] as const)
   const aligned = Object.fromEntries(
-    ESTIMATORS.map((k) => [k, late ? null : alignedEstimate(input.estimates[k], slotAt, evaluation.evalStart)]),
+    rejects.map(([k, why]) => [k, late || why ? null : input.estimates[k]]),
   ) as Record<RoiSet, HeartRate | null>
   const usableRef = late ? null : reference
 
@@ -66,6 +72,7 @@ export function slotRow(input: SlotInput): LabRow {
   else {
     if (!usableRef) reasons.push('no_reference')
     if (ESTIMATORS.every((k) => !aligned[k])) reasons.push('no_rppg')
+    for (const [k, why] of rejects) if (why) reasons.push(`${k}:${why}`)
   }
 
   return {
@@ -74,6 +81,8 @@ export function slotRow(input: SlotInput): LabRow {
     slot,
     conditionSec: slot * (SLOT_MS / 1000),
     reason: reasons.length > 0 ? reasons.join('+') : null,
+    gateDb: evaluation.gateDb,
+    originMs: startedAt,
     t: (slotAt - startedAt) / 1000,
     condition: evaluation.condition,
     watch: usableRef?.bpm ?? null,
@@ -96,6 +105,8 @@ export function abortedRows(evaluation: Evaluation, startedAt: number): LabRow[]
       slot,
       conditionSec: slot * (SLOT_MS / 1000),
       reason: 'aborted',
+      gateDb: evaluation.gateDb,
+      originMs: startedAt,
       t: (evaluation.evalStart + slot * SLOT_MS - startedAt) / 1000,
       condition: evaluation.condition,
       watch: null,
@@ -121,17 +132,24 @@ function csvNumber(v: number | null | undefined, digits: number): string {
 
 function estimateColumns(row: LabRow, roi: RoiSet): string[] {
   const est = row[roi]
-  const span =
-    est?.windowStart !== undefined && est.windowEnd !== undefined ? (est.windowEnd - est.windowStart) / 1000 : null
-  return [csvNumber(est?.bpm, 1), csvNumber(est?.snrDb, 1), csvNumber(span, 1)]
+  const origin = row.originMs
+  const relative = (ms: number | undefined) => (ms === undefined || origin === undefined ? null : (ms - origin) / 1000)
+  const end = relative(est?.windowEnd)
+  return [
+    csvNumber(est?.bpm, 1),
+    csvNumber(est?.snrDb, 1),
+    csvNumber(relative(est?.windowStart), 2),
+    csvNumber(end, 2),
+    csvNumber(end === null ? null : row.t - end, 2),
+  ]
 }
 
 export function rowsToCsv(rows: LabRow[]): string {
   const head = [
-    'run_id,ref_source,slot,condition,condition_s,t_s,reason,watch_bpm,ref_age_s,ref_n',
-    'forehead_bpm,forehead_snr_db,forehead_window_s',
-    'all_bpm,all_snr_db,all_window_s',
-    'me_bpm,me_snr_db,me_window_s',
+    'run_id,ref_source,slot,condition,condition_s,t_s,reason,gate_db,watch_bpm,ref_age_s,ref_n',
+    'forehead_bpm,forehead_snr_db,forehead_win_start_s,forehead_win_end_s,forehead_age_s',
+    'all_bpm,all_snr_db,all_win_start_s,all_win_end_s,all_age_s',
+    'me_bpm,me_snr_db,me_win_start_s,me_win_end_s,me_age_s',
     'me_out_fps,me_dropped,fps',
   ].join(',')
   const lines = rows.map((r) =>
@@ -143,6 +161,7 @@ export function rowsToCsv(rows: LabRow[]): string {
       r.conditionSec ?? '',
       r.t.toFixed(1),
       r.reason ?? '',
+      r.gateDb ?? '',
       r.watch ?? '',
       csvNumber(r.refAgeS, 1),
       r.refN ?? '',

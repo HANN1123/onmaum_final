@@ -12,7 +12,7 @@ import {
 } from '@/features/rppg/lib/labProtocol'
 import { parseLabRows, referenceBpm, summarizePairs, type LabRow, type ReferenceSample } from '@/features/rppg/lib/rppg'
 
-const evaluation: Evaluation = { runId: 'run-1', condition: 'quiet', evalStart: 100_000, nextSlot: 1 }
+const evaluation: Evaluation = { runId: 'run-1', condition: 'quiet', gateDb: 2, evalStart: 100_000, nextSlot: 1 }
 
 function input(over: Partial<SlotInput> = {}): SlotInput {
   const slotAt = 115_000
@@ -55,7 +55,20 @@ describe('slotRow', () => {
     const est = { bpm: 70, snrDb: 3, windowStart: 99_000, windowEnd: 114_800 }
     const row = slotRow(input({ estimates: { forehead: est, all: est, me: null } }))
     expect(row.forehead).toBeNull()
-    expect(row.reason).toBe('no_rppg')
+    expect(row.reason).toContain('no_rppg')
+    expect(row.reason).toContain('forehead:before_eval')
+  })
+
+  it('10초보다 짧은 창은 기준값과 구간이 달라 비교하지 않는다', () => {
+    const short = { bpm: 70, snrDb: 3, windowStart: 108_800, windowEnd: 114_800 }
+    const row = slotRow(input({ estimates: { ...input().estimates, me: short } }))
+    expect(row.me).toBeNull()
+    expect(row.reason).toBe('me:short_window')
+  })
+
+  it('평가 전에 고정한 게이트를 슬롯에 남긴다', () => {
+    expect(slotRow(input()).gateDb).toBe(2)
+    expect(abortedRows(evaluation, 90_000)[0].gateDb).toBe(2)
   })
 
   it('슬롯 시각에서 벗어난 창은 그 추정기만 뺀다', () => {
@@ -63,7 +76,7 @@ describe('slotRow', () => {
     const row = slotRow(input({ estimates: { ...input().estimates, me: old } }))
     expect(row.me).toBeNull()
     expect(row.forehead).not.toBeNull()
-    expect(row.reason).toBeNull()
+    expect(row.reason).toBe('me:misaligned')
   })
 
   it('기준값이 없어도 슬롯을 남기고 이유를 적는다', () => {
@@ -125,6 +138,11 @@ describe('summarizePairs 자동 평가 집계', () => {
     const missing = [...Array(3).fill(row()), ...Array(5).fill(row({ watch: null }))]
     expect(summarizePairs(missing, 0).quiet.me.verdict).toBe('undecided')
     expect(summarizePairs(Array(8).fill(row({ condition: 'move' })), 0).move.me.verdict).toBe('exploratory')
+  })
+
+  it('슬롯이 다 차기 전에는 정상 행만 있어도 판정하지 않는다', () => {
+    expect(summarizePairs([row()], 0, SLOT_COUNT).quiet.me.verdict).toBe('undecided')
+    expect(summarizePairs(Array(SLOT_COUNT).fill(row()), 0, SLOT_COUNT).quiet.me.verdict).toBe('pass')
   })
 
   it('게이트를 통과한 슬롯이 적으면 목표 미달이다', () => {
@@ -189,5 +207,12 @@ describe('기록 보관', () => {
     const csv = rowsToCsv([restored]).split('\n')
     expect(csv[0].split(',')).toHaveLength(csv[1].split(',').length)
     expect(csv[1]).toContain('no_reference')
+
+    const head = csv[0].split(',')
+    const cells = csv[1].split(',')
+    expect(cells[head.indexOf('me_win_start_s')]).toBe('15.00')
+    expect(cells[head.indexOf('me_win_end_s')]).toBe('24.80')
+    expect(cells[head.indexOf('me_age_s')]).toBe('0.20')
+    expect(cells[head.indexOf('gate_db')]).toBe('2')
   })
 })
