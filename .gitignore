@@ -47,3 +47,6 @@ next-env.d.ts
 /.orca/
 /.claude/settings.local.json
 /CLAUDE.local.md
+
+# rPPG 실험실 WASM 런타임 (scripts/copy-rppg-assets.mjs가 node_modules에서 복사)
+/public/vendor/

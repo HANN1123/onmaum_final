@@ -90,6 +90,8 @@ self.addEventListener('fetch', (event) => {
   // 주소가 /demo/report?_rsc=... 처럼 일반 경로라 아래 cache-first 로 떨어지면, 처음 받은 응답이 영구히 재사용되어
   // 코드가 바뀐 뒤(재배포·개발 서버 재시작) 없는 청크를 가리키게 되고 화면 이동이 멈춘다.
   if (url.searchParams.has('_rsc') || event.request.headers.get('RSC') === '1') return
+  // rPPG WASM 런타임은 JS와 같은 빌드여야 하므로 캐시 우선으로 고정하지 않는다
+  if (url.origin === self.location.origin && url.pathname.startsWith('/vendor/')) return
 
   const isDocument =
     event.request.mode === 'navigate' || event.request.destination === 'document'

@@ -111,6 +111,27 @@ describe('exportPersonalData', () => {
   })
 })
 
+describe('rPPG 실험 기록 키', () => {
+  const LAB_KEY = 'onmaum_rppg_lab_rows'
+
+  it('일반 내보내기에는 넣지 않는다', async () => {
+    localStorage.setItem(LAB_KEY, '[{"watch":70}]')
+    localStorage.setItem('onmaum_settings_probe', '1')
+    const exported = await exportPersonalData()
+    expect(exported.localData).not.toHaveProperty(LAB_KEY)
+    expect(exported.localData).toHaveProperty('onmaum_settings_probe')
+  })
+
+  it.each([{ includePreferences: false }, { includePreferences: true }])(
+    '전체 삭제에는 포함한다 (%o)',
+    async (options) => {
+      localStorage.setItem(LAB_KEY, '[{"watch":70}]')
+      await deleteAllPersonalData(options)
+      expect(localStorage.getItem(LAB_KEY)).toBeNull()
+    },
+  )
+})
+
 describe('deleteAllPersonalData', () => {
   const LATER = new Date('2026-10-22T09:00:00')
 

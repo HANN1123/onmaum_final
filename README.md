@@ -64,6 +64,8 @@ npm run build && npm start
 
 환경 변수는 없습니다. 카메라는 HTTPS(또는 localhost)와 권한 허용이 필요합니다. 얼굴 인식 가중치는 `public/models/`에서 서빙되며 합계는 약 6.5MB입니다.
 
+`/rppg-lab`은 메뉴에 없는 심박 추정 실험 화면이며 Windows Chrome을 기준으로 시험합니다. ME-rPPG와 BlazeFace의 WASM 런타임은 설치 때 `public/vendor/`로 복사되고, 복사에 실패하면 설치도 실패합니다. `--ignore-scripts`로 설치하면 이 파일이 생기지 않아 ME-rPPG가 동작하지 않으므로 `npm run assets:rppg`를 실행합니다. Electron 지원과 오프라인 실행은 아직 범위 밖이고, 모델 출처와 라이선스는 `public/models/me-rppg/`, `public/models/blazeface/`에 있습니다.
+
 테스트 (최근 확인 기준): 파일 30개, **139 passed / 4 skipped**. 레코더 통합 테스트 일부는 아직 `skip`입니다.
 
 배포 예: [https://onmaum.vercel.app](https://onmaum.vercel.app) (Vercel). 별도 서버·API 키 없음.
