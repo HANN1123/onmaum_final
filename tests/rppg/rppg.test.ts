@@ -214,14 +214,14 @@ describe('summarizePairs', () => {
 
   it('조건·ROI별 평균절대오차와, 품질 게이트 통과 비율·통과 구간 오차를 낸다', () => {
     const s = summarizePairs([...rows], 0)
-    expect(s.quiet.forehead).toEqual({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 2 })
-    expect(s.quiet.all).toEqual({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 0 })
+    expect(s.quiet.forehead).toMatchObject({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 2 })
+    expect(s.quiet.all).toMatchObject({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 0 })
   })
 
   it('추정값이 없는 행은 오차에서 빠지고 게이트 미통과로 센다', () => {
     const s = summarizePairs([...rows], 0)
-    expect(s.talk.forehead).toEqual({ n: 1, mae: null, coverage: 0, gatedMae: null })
-    expect(s.talk.all).toEqual({ n: 1, mae: 10, coverage: 1, gatedMae: 10 })
+    expect(s.talk.forehead).toMatchObject({ n: 1, mae: null, coverage: 0, gatedMae: null })
+    expect(s.talk.all).toMatchObject({ n: 1, mae: 10, coverage: 1, gatedMae: 10 })
   })
 
   it('ME-rPPG 추정값도 같은 방식으로 집계한다', () => {
@@ -229,13 +229,13 @@ describe('summarizePairs', () => {
       [{ condition: 'move', watch: 70, forehead: null, all: null, me: { bpm: 73, snrDb: 2 } }],
       0,
     )
-    expect(s.move.me).toEqual({ n: 1, mae: 3, coverage: 1, gatedMae: 3 })
+    expect(s.move.me).toMatchObject({ n: 1, mae: 3, coverage: 1, gatedMae: 3 })
   })
 
   it('게이트를 올리면 통과 구간이 줄어든다', () => {
     const s = summarizePairs([...rows], 3.5)
-    expect(s.quiet.forehead).toEqual({ n: 2, mae: 2.5, coverage: 0, gatedMae: null })
-    expect(s.quiet.all).toEqual({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 0 })
+    expect(s.quiet.forehead).toMatchObject({ n: 2, mae: 2.5, coverage: 0, gatedMae: null })
+    expect(s.quiet.all).toMatchObject({ n: 2, mae: 2.5, coverage: 0.5, gatedMae: 0 })
   })
 })
 

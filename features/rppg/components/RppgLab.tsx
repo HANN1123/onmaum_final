@@ -6,7 +6,7 @@
 //  - ME-rPPG: BlazeFace(매 프레임) 얼굴 박스 → 36×36 → 워커에서 ONNX 추론 → 맥박 파형 → BPM
 // 옆 사람이 스마트워치(또는 손가락 앱) BPM을 입력하면 앱 추정과 짝지어 조건별 오차를 낸다.
 
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import * as faceapi from 'face-api.js'
 import type { FaceDetector } from '@mediapipe/tasks-vision'
 import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
@@ -17,11 +17,14 @@ import {
   MAX_SAMPLE_GAP_MS,
   meanSkinRgb,
   parseLabRows,
+  referenceBpm,
   roiRects,
   summarizePairs,
   type Condition,
   type HeartRate,
   type LabRow,
+  type ReferenceSample,
+  type Verdict,
   type Rect,
   type RgbSample,
   type RoiSet,
@@ -34,7 +37,19 @@ import {
   type FaceBox,
   type Kalman1D,
 } from '@/features/rppg/lib/meRppg'
+import {
+  abortedRows,
+  dueSlots,
+  PREP_MS,
+  rowsToCsv,
+  runKey,
+  SLOT_COUNT,
+  SLOT_MS,
+  slotRow,
+  type Evaluation,
+} from '@/features/rppg/lib/labProtocol'
 import type { MeWorkerIn, MeWorkerOut } from '@/features/rppg/lib/meRppg.worker'
+import { useHeartRateDevice } from '@/features/rppg/hooks/useHeartRateDevice'
 
 const WINDOW_MS = 10_000
 const BUFFER_MS = 12_000
@@ -120,23 +135,29 @@ function fmt(v: number | null | undefined, digits = 1): string {
   return v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(digits)
 }
 
-function toCsv(rows: LabRow[]): string {
-  const head = 't_s,condition,watch_bpm,forehead_bpm,forehead_snr_db,all_bpm,all_snr_db,me_bpm,me_snr_db,fps'
-  const lines = rows.map((r) =>
-    [
-      r.t.toFixed(1),
-      r.condition,
-      r.watch,
-      fmt(r.forehead?.bpm),
-      fmt(r.forehead?.snrDb),
-      fmt(r.all?.bpm),
-      fmt(r.all?.snrDb),
-      fmt(r.me?.bpm),
-      fmt(r.me?.snrDb),
-      r.fps.toFixed(0),
-    ].join(','),
-  )
-  return [head, ...lines].join('\n')
+const VERDICT_LABELS: Record<Verdict, string> = {
+  pass: '목표 충족',
+  fail: '목표 미달',
+  undecided: '판정 불가',
+  exploratory: '참고',
+}
+
+function rate(v: number, n: number): string {
+  return n > 0 ? `${Math.round(v * 100)}%` : '—'
+}
+
+function downloadText(text: string, prefix: string) {
+  const blob = new Blob([text], { type: 'text/csv' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${prefix}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+function rawReferenceCsv(samples: ReferenceSample[]): string {
+  const lines = samples.map((s) => `${(s.t / 1000).toFixed(3)},${s.bpm},${s.contact}`)
+  return ['received_s,bpm,contact', ...lines].join('\n')
 }
 
 /** BlazeFace(MediaPipe) — 메인 스레드 전용. WASM 인스턴스를 측정마다 새로 만들면 close() 후에도
@@ -178,7 +199,13 @@ export function RppgLab() {
   const [rows, setRows] = useState<LabRow[]>([])
   const [rowsLoaded, setRowsLoaded] = useState(false)
   const [watchInput, setWatchInput] = useState('')
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
+  const [selectedRun, setSelectedRun] = useState<string | null>(null)
 
+  const heartRate = useHeartRateDevice()
+  const { getSamples } = heartRate
+  const evaluationRef = useRef<Evaluation | null>(null)
+  const runIdRef = useRef('')
   const liveRef = useRef<Live>(EMPTY_LIVE)
   const detectMsRef = useRef(detectMs)
   const startRef = useRef(0)
@@ -364,6 +391,7 @@ export function RppgLab() {
       cropCtx.imageSmoothingEnabled = true
       cropCtx.imageSmoothingQuality = 'high'
       startRef.current = performance.now()
+      runIdRef.current = `run-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}`
 
       // POS용 얼굴 위치: face-api (현행 측정과 같은 부하)
       const detectLoop = async () => {
@@ -491,6 +519,29 @@ export function RppgLab() {
         }
         liveRef.current = next
         setLive(next)
+
+        const current = evaluationRef.current
+        if (!current) return
+        const due = dueSlots(current, nowWall)
+        if (due.length === 0) return
+        const slotRows = due.map((slot) =>
+          slotRow({
+            evaluation: current,
+            slot,
+            now: nowWall,
+            startedAt: startRef.current,
+            estimates: { forehead: next.forehead, all: next.all, me: next.me },
+            reference: referenceBpm(getSamples(), current.evalStart + slot * SLOT_MS),
+            fps: next.fps,
+            meOutFps: next.meOutFps,
+            meDropped: next.meDropped,
+          }),
+        )
+        setRows((rs) => [...rs, ...slotRows])
+        const nextSlot = due[due.length - 1] + 1
+        const updated = nextSlot > SLOT_COUNT ? null : { ...current, nextSlot }
+        evaluationRef.current = updated
+        setEvaluation(updated)
       }, 1000)
     }
 
@@ -503,6 +554,13 @@ export function RppgLab() {
     return () => {
       stopped = true
       if (estimateTimer) clearInterval(estimateTimer)
+      const interrupted = evaluationRef.current
+      if (interrupted) {
+        const startedAt = startRef.current
+        setRows((rs) => [...rs, ...abortedRows(interrupted, startedAt)])
+        evaluationRef.current = null
+        setEvaluation(null)
+      }
       stream?.getTracks().forEach((t) => t.stop())
       video.srcObject = null
       overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height)
@@ -511,7 +569,7 @@ export function RppgLab() {
       setLive(EMPTY_LIVE)
       setMeStatus('loading')
     }
-  }, [running, meEnabled])
+  }, [running, meEnabled, getSamples])
 
   // 이벤트 timeStamp는 performance.now()와 같은 기준 시각
   const handleCondition = (c: Condition, at: number) => {
@@ -527,6 +585,9 @@ export function RppgLab() {
     setRows((rs) => [
       ...rs,
       {
+        runId: runIdRef.current || undefined,
+        source: 'manual',
+        slot: null,
         t: (performance.now() - startRef.current) / 1000,
         condition,
         watch: v,
@@ -539,16 +600,25 @@ export function RppgLab() {
     setWatchInput('')
   }
 
-  const downloadCsv = () => {
-    const blob = new Blob([toCsv(rows)], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `rppg-lab-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+  const startEvaluation = () => {
+    const next: Evaluation = {
+      runId: runIdRef.current,
+      condition,
+      evalStart: performance.now() + PREP_MS,
+      nextSlot: 1,
+    }
+    evaluationRef.current = next
+    setEvaluation(next)
   }
 
-  const summary = summarizePairs(rows, gateDb)
+  const runKeys = useMemo(() => [...new Set(rows.map(runKey))], [rows])
+  const activeRun = selectedRun !== null && runKeys.includes(selectedRun) ? selectedRun : (runKeys.at(-1) ?? null)
+  const runRows = useMemo(() => rows.filter((r) => runKey(r) === activeRun), [rows, activeRun])
+
+  const prepLeft = evaluation ? Math.ceil((evaluation.evalStart - clock) / 1000) : 0
+  const lastReceived = heartRate.latest ? Math.max(0, Math.round((clock - heartRate.latest.t) / 1000)) : null
+
+  const summary = summarizePairs(runRows, gateDb)
   const elapsed = conditionStart > 0 ? Math.max(0, Math.floor((clock - conditionStart) / 1000)) : 0
   const meStatusLabel: Record<MeStatus, string> = {
     loading: '로딩 중',
@@ -569,6 +639,9 @@ export function RppgLab() {
         </header>
 
         {error && <p className="rounded-lg bg-risk-warning/10 p-3 text-sm text-risk-warning">{error}</p>}
+        {heartRate.error && (
+          <p className="rounded-lg bg-risk-warning/10 p-3 text-sm text-risk-warning">{heartRate.error}</p>
+        )}
 
         <div className="relative aspect-4/3 w-full overflow-hidden rounded-xl bg-ink-900">
           <video ref={videoRef} muted playsInline className="h-full w-full -scale-x-100 object-cover" />
@@ -630,11 +703,45 @@ export function RppgLab() {
         </div>
 
         <div className="space-y-3 rounded-xl border border-ink-200 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-ink-900">심박 기기</p>
+              <p className="text-xs text-ink-500">
+                {!heartRate.supported
+                  ? '이 브라우저는 Web Bluetooth를 지원하지 않아요. Chrome에서 열거나 아래에 직접 입력하세요'
+                  : heartRate.status === 'connected'
+                    ? `${heartRate.deviceName} · ${heartRate.latest ? `${heartRate.latest.bpm} BPM · ${lastReceived}초 전 수신` : '첫 값을 기다리는 중'}`
+                    : '표준 심박 센서로 방송 중인 기기를 연결하세요'}
+              </p>
+            </div>
+            {heartRate.status === 'connected' ? (
+              <button
+                type="button"
+                onClick={heartRate.disconnect}
+                className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm"
+              >
+                연결 해제
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!heartRate.supported || heartRate.status === 'connecting'}
+                onClick={() => void heartRate.connect()}
+                className="rounded-lg bg-ink-900 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {heartRate.status === 'connecting' ? '연결 중…' : '심박 기기 연결'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-ink-200 p-4">
           <div className="flex flex-wrap items-center gap-2">
             {CONDITIONS.map((c) => (
               <button
                 key={c.key}
                 type="button"
+                disabled={evaluation !== null}
                 onClick={(e) => handleCondition(c.key, e.timeStamp)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium ${
                   condition === c.key ? 'bg-risk-good text-white' : 'bg-ink-100 text-ink-600'
@@ -645,6 +752,23 @@ export function RppgLab() {
             ))}
             <span className="ml-auto font-mono text-sm text-ink-500">
               {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={!running || heartRate.status !== 'connected' || evaluation !== null}
+              onClick={startEvaluation}
+              className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              자동 평가 시작
+            </button>
+            <span className="text-sm text-ink-500">
+              {evaluation === null
+                ? `준비 ${PREP_MS / 1000}초 뒤 ${SLOT_MS / 1000}초마다 ${SLOT_COUNT}회 기록해요`
+                : prepLeft > 0
+                  ? `준비 중 ${prepLeft}초`
+                  : `평가 중 ${evaluation.nextSlot - 1}/${SLOT_COUNT} · 다른 탭으로 옮기지 마세요`}
             </span>
           </div>
           <form onSubmit={handleWatch} className="flex gap-2">
@@ -665,6 +789,19 @@ export function RppgLab() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-lg font-bold text-ink-900">조건별 오차 (기준 기기 대비)</h2>
+            {runKeys.length > 0 && (
+              <select
+                value={activeRun ?? ''}
+                onChange={(e) => setSelectedRun(e.target.value)}
+                className="rounded border border-ink-300 px-2 py-1 text-sm"
+              >
+                {runKeys.map((key) => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))}
+              </select>
+            )}
             <label className="ml-auto flex items-center gap-2 text-sm text-ink-600">
               품질 게이트 SNR ≥
               <input
@@ -677,16 +814,25 @@ export function RppgLab() {
               dB
             </label>
           </div>
+          <p className="text-xs text-ink-400">
+            이 장비와 이 참여자에서 애플워치와 얼마나 일치했는지를 보는 값이에요. 임상 정확도가 아니고, 15초 간격 슬롯은
+            독립 표본이 아니에요.
+          </p>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-ink-200 text-left text-ink-500">
                 <th className="py-2">조건</th>
                 <th>추정기</th>
-                <th>n</th>
+                <th>슬롯</th>
+                <th>rPPG 유효</th>
+                <th>기준값</th>
+                <th>비교 가능</th>
                 <th>평균오차</th>
                 <th>게이트 통과율</th>
                 <th>통과 구간 오차</th>
                 <th>목표</th>
+                <th>판정</th>
               </tr>
             </thead>
             <tbody>
@@ -698,24 +844,36 @@ export function RppgLab() {
                       <td className="py-2">{c.label}</td>
                       <td>{ROI_LABELS[roi]}</td>
                       <td>{s.n}</td>
+                      <td>{rate(s.rppgRate, s.n)}</td>
+                      <td>{rate(s.refRate, s.n)}</td>
+                      <td>{rate(s.comparableRate, s.n)}</td>
                       <td>{fmt(s.mae)}</td>
-                      <td>{s.n > 0 ? `${Math.round(s.coverage * 100)}%` : '—'}</td>
+                      <td>{rate(s.coverage, s.n)}</td>
                       <td>{fmt(s.gatedMae)}</td>
                       <td>{c.target === null ? '참고' : `≤ ${c.target}`}</td>
+                      <td>{VERDICT_LABELS[s.verdict]}</td>
                     </tr>
                   )
                 }),
               )}
             </tbody>
           </table>
-          <div className="flex gap-2">
+          </div>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={downloadCsv}
+              onClick={() => downloadText(rowsToCsv(rows), 'rppg-lab')}
               disabled={rows.length === 0}
               className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm disabled:opacity-40"
             >
               CSV 저장 ({rows.length}행)
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadText(rawReferenceCsv(heartRate.getRawLog()), 'rppg-lab-ble-raw')}
+              className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm"
+            >
+              심박 기기 원시값 저장
             </button>
             <button
               type="button"

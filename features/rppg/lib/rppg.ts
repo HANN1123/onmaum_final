@@ -297,16 +297,73 @@ export function roiRects(pts: { x: number; y: number }[]): {
 export type Condition = 'quiet' | 'talk' | 'move'
 export type RoiSet = 'forehead' | 'all' | 'me'
 
+export type RefSource = 'ble' | 'manual'
+
+/** 기준 기기에서 받은 값. t는 PC가 받은 시각이다 */
+export interface ReferenceSample {
+  t: number
+  bpm: number
+  contact: 'unsupported' | 'good' | 'poor'
+}
+
+export interface ReferenceValue {
+  bpm: number
+  /** 평균에 쓴 알림 수. 독립 측정 횟수가 아니다 */
+  n: number
+  /** 마지막 알림을 받고 지난 초. 워치 측정값의 실제 나이가 아니다 */
+  ageS: number
+}
+
+/**
+ * 최근 구간의 기준 심박 평균. 받은 시각 기준 대리값이고 워치 측정 시각과 맞춘 값이 아니다.
+ * 알림이 드물거나 구간을 고르게 덮지 못하면 null이다.
+ */
+export function referenceBpm(
+  samples: ReferenceSample[],
+  atMs: number,
+  windowMs: number = 10_000,
+  staleMs: number = 8_000,
+): ReferenceValue | null {
+  const from = atMs - windowMs
+  const win = samples.filter((s) => s.t >= from && s.t <= atMs && s.contact !== 'poor')
+  if (win.length < 2) return null
+  const last = win[win.length - 1]
+  if (atMs - last.t > staleMs || win[0].t - from > staleMs) return null
+  for (let i = 1; i < win.length; i++) {
+    if (win[i].t - win[i - 1].t > staleMs) return null
+  }
+  return {
+    bpm: win.reduce((sum, s) => sum + s.bpm, 0) / win.length,
+    n: win.length,
+    ageS: (atMs - last.t) / 1000,
+  }
+}
+
 export interface PairRow {
   condition: Condition
-  watch: number
+  /** 기준 BPM. 자동 평가에서 기준값을 얻지 못한 슬롯은 null */
+  watch: number | null
   forehead: HeartRate | null
   all: HeartRate | null
   /** ME-rPPG(딥러닝) 추정 — 없으면 미측정 */
   me?: HeartRate | null
 }
 
-export type LabRow = PairRow & { t: number; fps: number }
+export type LabRow = PairRow & {
+  t: number
+  fps: number
+  runId?: string
+  source?: RefSource
+  /** 자동 평가의 슬롯 번호. 수동 입력은 null */
+  slot?: number | null
+  conditionSec?: number | null
+  /** 슬롯이 비교되지 못한 이유 */
+  reason?: string | null
+  refAgeS?: number | null
+  refN?: number | null
+  meOutFps?: number
+  meDropped?: number
+}
 
 function parseEstimate(v: unknown): HeartRate | null {
   if (typeof v !== 'object' || v === null) return null
@@ -337,14 +394,25 @@ export function parseLabRows(raw: string): LabRow[] {
     if (typeof v !== 'object' || v === null) return []
     const r = v as Record<string, unknown>
     if (!CONDITIONS.includes(r.condition as Condition)) return []
-    if (typeof r.watch !== 'number' || !Number.isFinite(r.watch)) return []
+    const watch = r.watch === null ? null : r.watch
+    if (watch !== null && (typeof watch !== 'number' || !Number.isFinite(watch))) return []
     if (typeof r.t !== 'number' || typeof r.fps !== 'number') return []
+    const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
     return [
       {
+        ...(typeof r.runId === 'string' ? { runId: r.runId } : {}),
+        ...(r.source === 'ble' || r.source === 'manual' ? { source: r.source } : {}),
+        slot: num(r.slot),
+        conditionSec: num(r.conditionSec),
+        reason: typeof r.reason === 'string' ? r.reason : null,
+        refAgeS: num(r.refAgeS),
+        refN: num(r.refN),
+        ...(num(r.meOutFps) !== null ? { meOutFps: num(r.meOutFps) as number } : {}),
+        ...(num(r.meDropped) !== null ? { meDropped: num(r.meDropped) as number } : {}),
         t: r.t,
         fps: r.fps,
         condition: r.condition as Condition,
-        watch: r.watch,
+        watch,
         forehead: parseEstimate(r.forehead),
         all: parseEstimate(r.all),
         me: parseEstimate(r.me),
@@ -353,14 +421,40 @@ export function parseLabRows(raw: string): LabRow[] {
   })
 }
 
+/** 시험 전에 정한 내부 목표. 이 장비·이 참여자에서 워치와의 일치도를 보는 기준이다 */
+const TARGETS: Record<Condition, { mae: number; coverage: number } | null> = {
+  quiet: { mae: 5, coverage: 0.7 },
+  talk: { mae: 8, coverage: 0.5 },
+  move: null,
+}
+/** 비교 가능한 슬롯이 이 비율보다 적으면 합격·불합격을 말하지 않는다 */
+const MIN_COMPARABLE_RATE = 0.5
+
+export type Verdict = 'pass' | 'fail' | 'undecided' | 'exploratory'
+
 export interface ErrorSummary {
+  /** 예정된 슬롯 수. 실패한 슬롯도 포함한다 */
   n: number
-  /** 추정값이 있는 행의 평균절대오차(BPM) */
+  /** 추정값과 기준값이 모두 있는 쌍의 평균절대오차(BPM) */
   mae: number | null
-  /** SNR ≥ 게이트인 행 비율 */
+  /** SNR ≥ 게이트이고 비교 가능한 슬롯 비율 */
   coverage: number
-  /** 게이트 통과 행만의 평균절대오차 */
+  /** 게이트 통과 쌍만의 평균절대오차 */
   gatedMae: number | null
+  /** 추정값이 있는 슬롯 비율 */
+  rppgRate: number
+  /** 기준값이 있는 슬롯 비율 */
+  refRate: number
+  /** 추정값과 기준값이 모두 있는 슬롯 비율 */
+  comparableRate: number
+  verdict: Verdict
+}
+
+function verdictOf(cond: Condition, s: Omit<ErrorSummary, 'verdict'>): Verdict {
+  const target = TARGETS[cond]
+  if (!target) return 'exploratory'
+  if (s.n === 0 || s.comparableRate < MIN_COMPARABLE_RATE || s.gatedMae === null) return 'undecided'
+  return s.gatedMae <= target.mae && s.coverage >= target.coverage ? 'pass' : 'fail'
 }
 
 function meanOrNull(xs: number[]): number | null {
@@ -375,19 +469,29 @@ export function summarizePairs(
     const sub = rows.filter((r) => r.condition === cond)
     const errs: number[] = []
     const gatedErrs: number[] = []
+    let withEstimate = 0
+    let withReference = 0
     for (const r of sub) {
       const est = r[roi]
-      if (!est || !Number.isFinite(est.bpm)) continue
+      const hasEstimate = est !== null && est !== undefined && Number.isFinite(est.bpm)
+      if (hasEstimate) withEstimate++
+      if (r.watch !== null) withReference++
+      if (!hasEstimate || r.watch === null) continue
       const err = Math.abs(est.bpm - r.watch)
       errs.push(err)
       if (Number.isFinite(est.snrDb) && est.snrDb >= gateDb) gatedErrs.push(err)
     }
-    return {
+    const rate = (count: number) => (sub.length > 0 ? count / sub.length : 0)
+    const summary = {
       n: sub.length,
       mae: meanOrNull(errs),
-      coverage: sub.length > 0 ? gatedErrs.length / sub.length : 0,
+      coverage: rate(gatedErrs.length),
       gatedMae: meanOrNull(gatedErrs),
+      rppgRate: rate(withEstimate),
+      refRate: rate(withReference),
+      comparableRate: rate(errs.length),
     }
+    return { ...summary, verdict: verdictOf(cond, summary) }
   }
   const conds: Condition[] = ['quiet', 'talk', 'move']
   return Object.fromEntries(
