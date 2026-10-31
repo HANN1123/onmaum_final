@@ -11,6 +11,9 @@ export interface RgbSample {
 export interface HeartRate {
   bpm: number
   snrDb: number
+  /** 추정에 실제로 쓴 창의 시작·끝 (ms). 기준값과 같은 구간인지 판단할 때 쓴다 */
+  windowStart?: number
+  windowEnd?: number
 }
 
 export interface Rect {
@@ -30,6 +33,54 @@ const STEP_HZ = 1 / 60
 const POS_WINDOW_SEC = 1.6
 const MIN_SECONDS = 6
 const DEFAULT_FS = 30
+/** 이 간격을 넘는 샘플 공백은 끊긴 구간으로 보고 이어 붙이지 않는다 */
+export const MAX_SAMPLE_GAP_MS = 500
+/** 추정 창의 최소 입력 밀도. 이보다 드물면 맥박 대역을 믿을 수 없다 */
+export const MIN_INPUT_FPS = 10
+
+/** 끝에서부터 공백 없이 이어진 구간만 돌려준다 */
+export function contiguousTail<T extends { t: number }>(samples: T[], maxGapMs: number = MAX_SAMPLE_GAP_MS): T[] {
+  let start = samples.length - 1
+  while (start > 0 && samples[start].t - samples[start - 1].t <= maxGapMs) start--
+  return samples.slice(Math.max(start, 0))
+}
+
+function usableWindow<T extends { t: number }>(samples: T[]): T[] | null {
+  const tail = contiguousTail(samples)
+  if (tail.length < 2) return null
+  const spanMs = tail[tail.length - 1].t - tail[0].t
+  if (spanMs < MIN_SECONDS * 1000) return null
+  if ((tail.length - 1) / (spanMs / 1000) < MIN_INPUT_FPS) return null
+  return tail
+}
+
+/** 무신호(SNR 비유한)는 심박으로 세지 않고, 유효한 결과에는 실제 창을 붙인다 */
+function withWindow(est: HeartRate, win: { t: number }[]): HeartRate | null {
+  if (!Number.isFinite(est.bpm) || !Number.isFinite(est.snrDb)) return null
+  return { ...est, windowStart: win[0].t, windowEnd: win[win.length - 1].t }
+}
+
+export interface FrameClock {
+  /** 프레임 시각. 출처가 없거나 시각이 역행하면 null이고 그 프레임은 버린다 */
+  next(now: number, captureTime: number | undefined): number | null
+  source(): 'capture' | 'display' | null
+}
+
+/** 시각 출처를 첫 프레임에서 고정한다. 한 세션에서 출처가 섞이면 버퍼 시간축이 깨진다 */
+export function createFrameClock(): FrameClock {
+  let source: 'capture' | 'display' | null = null
+  let last = -Infinity
+  return {
+    next(now, captureTime) {
+      source ??= captureTime === undefined ? 'display' : 'capture'
+      const t = source === 'capture' ? captureTime : now
+      if (t === undefined || t <= last) return null
+      last = t
+      return t
+    },
+    source: () => source,
+  }
+}
 
 /** 불규칙한 프레임 타임스탬프를 fs 간격의 균일 격자로 선형 보간한다. */
 export function resampleUniform(samples: RgbSample[], fs: number): number[][] {
@@ -161,9 +212,9 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
 
 /** 피부 평균 RGB 시계열(최소 6초)에서 심박을 추정한다. */
 export function estimateHeartRate(samples: RgbSample[], fs: number = DEFAULT_FS): HeartRate | null {
-  if (samples.length < 2) return null
-  if (samples[samples.length - 1].t - samples[0].t < MIN_SECONDS * 1000) return null
-  return spectralPeak(pos(resampleUniform(samples, fs), fs), fs)
+  const win = usableWindow(samples)
+  if (!win) return null
+  return withWindow(spectralPeak(pos(resampleUniform(win, fs), fs), fs), win)
 }
 
 const BVP_WINDOW_MS = 10_000
@@ -172,13 +223,13 @@ const BVP_WINDOW_MS = 10_000
 export function heartRateFromBvp(points: { t: number; v: number }[], fs: number = DEFAULT_FS): HeartRate | null {
   if (points.length < 2) return null
   const from = points[points.length - 1].t - BVP_WINDOW_MS
-  const win = points.filter((p) => p.t >= from)
-  if (win[win.length - 1].t - win[0].t < MIN_SECONDS * 1000) return null
+  const win = usableWindow(points.filter((p) => p.t >= from))
+  if (!win) return null
   const x = resampleUniform(
     win.map((p) => ({ t: p.t, r: p.v, g: 0, b: 0 })),
     fs,
   ).map((c) => c[0])
-  return spectralPeak(x, fs)
+  return withWindow(spectralPeak(x, fs), win)
 }
 
 /**
@@ -255,6 +306,53 @@ export interface PairRow {
   me?: HeartRate | null
 }
 
+export type LabRow = PairRow & { t: number; fps: number }
+
+function parseEstimate(v: unknown): HeartRate | null {
+  if (typeof v !== 'object' || v === null) return null
+  const { bpm, snrDb, windowStart, windowEnd } = v as Record<string, unknown>
+  if (typeof bpm !== 'number' || !Number.isFinite(bpm)) return null
+  // JSON에서 -Infinity는 null이 된다. 품질을 모르는 결과는 게이트를 통과시키지 않는다
+  if (typeof snrDb !== 'number' || !Number.isFinite(snrDb)) return null
+  return {
+    bpm,
+    snrDb,
+    ...(typeof windowStart === 'number' ? { windowStart } : {}),
+    ...(typeof windowEnd === 'number' ? { windowEnd } : {}),
+  }
+}
+
+const CONDITIONS: Condition[] = ['quiet', 'talk', 'move']
+
+/** localStorage에서 읽은 실험 기록을 검증한다. 구조가 깨진 행은 버린다 */
+export function parseLabRows(raw: string): LabRow[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed.flatMap((v): LabRow[] => {
+    if (typeof v !== 'object' || v === null) return []
+    const r = v as Record<string, unknown>
+    if (!CONDITIONS.includes(r.condition as Condition)) return []
+    if (typeof r.watch !== 'number' || !Number.isFinite(r.watch)) return []
+    if (typeof r.t !== 'number' || typeof r.fps !== 'number') return []
+    return [
+      {
+        t: r.t,
+        fps: r.fps,
+        condition: r.condition as Condition,
+        watch: r.watch,
+        forehead: parseEstimate(r.forehead),
+        all: parseEstimate(r.all),
+        me: parseEstimate(r.me),
+      },
+    ]
+  })
+}
+
 export interface ErrorSummary {
   n: number
   /** 추정값이 있는 행의 평균절대오차(BPM) */
@@ -279,10 +377,10 @@ export function summarizePairs(
     const gatedErrs: number[] = []
     for (const r of sub) {
       const est = r[roi]
-      if (!est) continue
+      if (!est || !Number.isFinite(est.bpm)) continue
       const err = Math.abs(est.bpm - r.watch)
       errs.push(err)
-      if (est.snrDb >= gateDb) gatedErrs.push(err)
+      if (Number.isFinite(est.snrDb) && est.snrDb >= gateDb) gatedErrs.push(err)
     }
     return {
       n: sub.length,

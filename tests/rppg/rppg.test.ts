@@ -8,6 +8,8 @@ import {
   summarizePairs,
   heartRateFromBvp,
   type RgbSample,
+  createFrameClock,
+  parseLabRows,
 } from '@/features/rppg/lib/rppg'
 
 // ── 테스트 유틸: 결정적 난수 + 합성 피부 신호 ──────────────────────────
@@ -260,5 +262,74 @@ describe('heartRateFromBvp', () => {
   it('6초 미만이면 null', () => {
     const pts = Array.from({ length: 150 }, (_, k) => ({ t: (k * 1000) / 30, v: Math.sin(k) }))
     expect(heartRateFromBvp(pts)).toBeNull()
+  })
+})
+
+describe('측정 신뢰성', () => {
+  const pulse = (fps: number, seconds: number, bpm = 72, start = 0) =>
+    Array.from({ length: Math.floor(fps * seconds) }, (_, k) => {
+      const t = start + (k * 1000) / fps
+      const s = 2 * Math.sin((2 * Math.PI * bpm * t) / 60000)
+      return { t, r: 120 + s * 0.3, g: 110 + s, b: 100 + s * 0.4 }
+    })
+
+  it.each([15, 24, 30])('%i fps 타임스탬프도 같은 심박으로 추정한다', (fps) => {
+    expect(estimateHeartRate(pulse(fps, 10))!.bpm).toBeCloseTo(72, 0)
+  })
+
+  it('긴 공백을 가로질러 추정하지 않는다', () => {
+    const samples = [...pulse(30, 1), ...pulse(30, 1, 72, 9000)]
+    expect(estimateHeartRate(samples)).toBeNull()
+  })
+
+  it('공백 뒤 이어진 구간만으로 추정하고 실제 창을 돌려준다', () => {
+    const samples = [...pulse(30, 3), ...pulse(30, 8, 72, 12000)]
+    const est = estimateHeartRate(samples)!
+    expect(est.bpm).toBeCloseTo(72, 0)
+    expect(est.windowStart).toBe(12000)
+  })
+
+  it('입력이 너무 드물면 추정하지 않는다', () => {
+    expect(estimateHeartRate(pulse(5, 10))).toBeNull()
+  })
+
+  it('무신호는 심박으로 세지 않는다', () => {
+    const flat = Array.from({ length: 300 }, (_, k) => ({ t: (k * 1000) / 30, r: 100, g: 100, b: 100 }))
+    expect(estimateHeartRate(flat)).toBeNull()
+    expect(heartRateFromBvp(flat.map((p) => ({ t: p.t, v: 0 })))).toBeNull()
+  })
+
+  it('멀리 떨어진 맥박 파형 두 점으로 추정하지 않는다', () => {
+    expect(heartRateFromBvp([{ t: 0, v: 0 }, { t: 10000, v: 1 }])).toBeNull()
+  })
+
+  it('프레임 시각 출처를 고정하고 역행한 프레임을 버린다', () => {
+    const clock = createFrameClock()
+    expect(clock.next(100, 50)).toBe(50)
+    expect(clock.source()).toBe('capture')
+    expect(clock.next(133, undefined)).toBeNull()
+    expect(clock.next(166, 40)).toBeNull()
+    expect(clock.next(199, 83)).toBe(83)
+    const display = createFrameClock()
+    expect(display.next(10, undefined)).toBe(10)
+    expect(display.next(20, 5)).toBe(20)
+  })
+
+  it('저장 기록을 복원할 때 깨진 행과 품질 없는 추정을 거른다', () => {
+    const good = {
+      t: 1,
+      fps: 30,
+      condition: 'quiet',
+      watch: 70,
+      forehead: { bpm: 71, snrDb: null },
+      all: { bpm: 72, snrDb: 2 },
+      me: null,
+    }
+    const rows = parseLabRows(JSON.stringify([good, { condition: 'quiet' }, 3]))
+    expect(rows).toHaveLength(1)
+    expect(rows[0].forehead).toBeNull()
+    expect(rows[0].all?.bpm).toBe(72)
+    expect(parseLabRows('깨진 JSON')).toEqual([])
+    expect(parseLabRows('{}')).toEqual([])
   })
 })

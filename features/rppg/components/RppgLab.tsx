@@ -1,6 +1,6 @@
 'use client'
 
-// rPPG spike 실험 페이지 (메뉴 미노출, 검증 후 폐기 예정).
+// rPPG 실험 페이지 (메뉴 미노출).
 // 추정기 3종을 같은 영상에서 나란히 비교한다:
 //  - POS 이마 / POS 이마+볼: face-api 랜드마크(현행 부하 그대로: SSD+랜드마크+표정) ROI 피부 평균 RGB → POS
 //  - ME-rPPG: BlazeFace(매 프레임) 얼굴 박스 → 36×36 → 워커에서 ONNX 추론 → 맥박 파형 → BPM
@@ -11,14 +11,16 @@ import * as faceapi from 'face-api.js'
 import type { FaceDetector } from '@mediapipe/tasks-vision'
 import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
 import {
+  createFrameClock,
   estimateHeartRate,
   heartRateFromBvp,
   meanSkinRgb,
+  parseLabRows,
   roiRects,
   summarizePairs,
   type Condition,
   type HeartRate,
-  type PairRow,
+  type LabRow,
   type Rect,
   type RgbSample,
   type RoiSet,
@@ -67,14 +69,27 @@ interface Live {
   all: HeartRate | null
   me: HeartRate | null
   meLatency: number
+  /** 마지막 영상 프레임 기준 ME 결과가 얼마나 지났는가 (ms) */
+  meAgeMs: number | null
+  meOutFps: number
+  meDropped: number
   fps: number
   skin: number
   face: boolean
 }
 
-type LabRow = PairRow & { t: number; fps: number }
-
-const EMPTY_LIVE: Live = { forehead: null, all: null, me: null, meLatency: 0, fps: 0, skin: 0, face: false }
+const EMPTY_LIVE: Live = {
+  forehead: null,
+  all: null,
+  me: null,
+  meLatency: 0,
+  meAgeMs: null,
+  meOutFps: 0,
+  meDropped: 0,
+  fps: 0,
+  skin: 0,
+  face: false,
+}
 
 function smoothRect(prev: Rect, next: Rect): Rect {
   const mix = (a: number, b: number) => a + ROI_EMA * (b - a)
@@ -121,22 +136,6 @@ function toCsv(rows: LabRow[]): string {
   return [head, ...lines].join('\n')
 }
 
-/**
- * MediaPipe(TFLite) WASM은 "INFO: Created TensorFlow Lite XNNPACK delegate" 같은 정보성 로그를
- * console.error로 찍어 Next 개발 오버레이에 '이슈'로 뜬다 → 'INFO:'로 시작하는 것만 걸러낸다.
- * WASM 모듈이 로드 시점의 console.error를 붙잡으므로 BlazeFace 로드 전에 한 번 설치.
- */
-let mediapipeInfoFiltered = false
-function filterMediapipeInfoLogs() {
-  if (mediapipeInfoFiltered) return
-  mediapipeInfoFiltered = true
-  const original = console.error
-  console.error = (...args: unknown[]) => {
-    if (typeof args[0] === 'string' && args[0].startsWith('INFO:')) return
-    original(...args)
-  }
-}
-
 /** BlazeFace(MediaPipe) — 메인 스레드 전용. WASM 인스턴스를 측정마다 새로 만들면 close() 후에도
  *  메모리가 반납되지 않아(시작/정지 1회당 약 20MB 증가) 페이지에서 한 번만 만들어 재사용한다. */
 let blazePromise: Promise<FaceDetector> | null = null
@@ -149,7 +148,6 @@ function getBlazeFace(): Promise<FaceDetector> {
 }
 
 async function createBlazeFace(): Promise<FaceDetector> {
-  filterMediapipeInfoLogs()
   const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
   const vision = await FilesetResolver.forVisionTasks('/vendor/mediapipe')
   return FaceDetector.createFromOptions(vision, {
@@ -205,7 +203,7 @@ export function RppgLab() {
     try {
       const saved = localStorage.getItem(ROWS_KEY)
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved) setRows(JSON.parse(saved) as LabRow[])
+      if (saved) setRows(parseLabRows(saved))
     } catch {
       // 저장소 접근 불가 — 메모리에서만 유지
     }
@@ -238,7 +236,9 @@ export function RppgLab() {
     let rois: Rois | null = null
     let skin = 0
     let face = false
-    let lastPushWall = 0
+    let lastFrameT = 0
+    let lastFrameWall = 0
+    const frameClock = createFrameClock()
     const buffers: { forehead: RgbSample[]; all: RgbSample[] } = { forehead: [], all: [] }
     const frameWalls: number[] = []
 
@@ -251,9 +251,22 @@ export function RppgLab() {
     let meBox: FaceBox | null = null
     let meKalman: Kalman1D[] | null = null
     let meLastSendT: number | null = null
-    let meLastPushWall = 0
+    let meEpoch = 0
+    let meDropped = 0
     const meBuffer: { t: number; v: number }[] = []
     const meLatencies: number[] = []
+    const meOutWalls: number[] = []
+
+    /** 끊긴 뒤에는 모델 상태·칼만·파형을 모두 버리고 새로 시작한다. 이전 프레임의 늦은 응답은 epoch로 거른다 */
+    const resetMe = () => {
+      meEpoch++
+      meInFlight = 0
+      meOutputs = 0
+      meKalman = null
+      meBuffer.length = 0
+      const msg: MeWorkerIn = { type: 'reset' }
+      worker?.postMessage(msg)
+    }
 
     if (meEnabled) {
       worker = new Worker(new URL('../lib/meRppg.worker.ts', import.meta.url), { type: 'module' })
@@ -263,17 +276,24 @@ export function RppgLab() {
           meReady = true
           if (blaze) setMeStatus('ready')
         } else if (m.type === 'error') {
+          // 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다
+          worker?.terminate()
+          worker = null
+          meReady = false
           setMeStatus('error')
           setError(m.message)
         } else {
+          if (m.epoch !== meEpoch) return
           meInFlight--
           meOutputs++
           meLatencies.push(m.latency)
           if (meLatencies.length > 60) meLatencies.shift()
+          const wall = performance.now()
+          meOutWalls.push(wall)
+          while (meOutWalls.length > 0 && meOutWalls[0] < wall - 2000) meOutWalls.shift()
           if (meOutputs <= ME_WARMUP) return
           meBuffer.push({ t: m.t, v: m.value })
           while (meBuffer.length > 0 && meBuffer[0].t < m.t - BUFFER_MS) meBuffer.shift()
-          meLastPushWall = performance.now()
         }
       }
       getBlazeFace()
@@ -370,12 +390,18 @@ export function RppgLab() {
 
       // ME-rPPG: BlazeFace 박스 → 칼만 → 높이 1.2배·위로 20% → 36×36 → 워커
       const sendMeFrame = (now: number, t: number) => {
-        if (!worker || !blaze || !meReady || meInFlight >= ME_MAX_IN_FLIGHT) return
+        if (!worker || !blaze || !meReady) return
+        if (meInFlight >= ME_MAX_IN_FLIGHT) {
+          meDropped++
+          return
+        }
         const det = blaze.detectForVideo(video, now).detections[0]?.boundingBox
         if (!det) {
           meBox = null
           return
         }
+        // 얼굴을 2초 넘게 놓쳤다 돌아오면 끊긴 구간을 이어 붙이지 않게 새로 시작한다
+        if (meLastSendT !== null && t - meLastSendT > STALE_MS) resetMe()
         if (!meKalman) {
           meKalman = [det.originX, det.originY, det.width, det.height].map((v) => createKalman1D(1e-2, 5e-1, v, 1))
         }
@@ -391,21 +417,19 @@ export function RppgLab() {
         if (!c) return
         cropCtx.drawImage(canvas, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
         const input = rgbaToModelInput(cropCtx.getImageData(0, 0, 36, 36).data)
-        // 얼굴을 2초 넘게 놓쳤다 돌아오면 파형 버퍼를 비움 (끊긴 구간을 이어 붙여 보간하지 않게)
-        if (meLastSendT !== null && t - meLastSendT > STALE_MS) meBuffer.length = 0
         meLastSendT = t
         meInFlight++
-        const msg: MeWorkerIn = { type: 'frame', input, t }
+        const msg: MeWorkerIn = { type: 'frame', input, t, epoch: meEpoch }
         worker.postMessage(msg, [input.buffer])
       }
 
       // 매 프레임: 원본을 한 번 그려서 POS ROI 샘플링 + ME-rPPG 입력에 같이 씀
-      let lastT = -1
       const onFrame = (now: DOMHighResTimeStamp, meta: VideoFrameCallbackMetadata) => {
         if (stopped) return
-        const t = meta.captureTime ?? now
-        if (t !== lastT) {
-          lastT = t
+        const t = frameClock.next(now, meta.captureTime)
+        if (t !== null) {
+          lastFrameT = t
+          lastFrameWall = now
           ctx.drawImage(video, 0, 0, w, h)
           if (rois) {
             const f = sampleRoi(ctx, rois.forehead, w, h)
@@ -421,7 +445,6 @@ export function RppgLab() {
                 g: parts.reduce((s, p) => s + p.g * p.count, 0) / total,
                 b: parts.reduce((s, p) => s + p.b * p.count, 0) / total,
               })
-              lastPushWall = now
             }
             skin = f?.skinRatio ?? 0
             for (const buf of [buffers.forehead, buffers.all]) {
@@ -440,14 +463,21 @@ export function RppgLab() {
 
       estimateTimer = setInterval(() => {
         const nowWall = performance.now()
-        const fresh = nowWall - lastPushWall < STALE_MS
-        const meFresh = nowWall - meLastPushWall < STALE_MS
+        // 신선도는 응답 도착이 아니라 원본 프레임 시각으로 판단하고, 영상이 멈췄으면 모두 무효다
+        const videoAlive = nowWall - lastFrameWall < STALE_MS
+        const fresh = (buf: { t: number }[]) =>
+          videoAlive && buf.length > 0 && lastFrameT - buf[buf.length - 1].t < STALE_MS
         while (frameWalls.length > 0 && frameWalls[0] < nowWall - 2000) frameWalls.shift()
+        while (meOutWalls.length > 0 && meOutWalls[0] < nowWall - 2000) meOutWalls.shift()
+        const meLast = meBuffer[meBuffer.length - 1]
         const next: Live = {
-          forehead: fresh ? estimateHeartRate(windowed(buffers.forehead)) : null,
-          all: fresh ? estimateHeartRate(windowed(buffers.all)) : null,
-          me: meFresh ? heartRateFromBvp(meBuffer) : null,
+          forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
+          all: fresh(buffers.all) ? estimateHeartRate(windowed(buffers.all)) : null,
+          me: fresh(meBuffer) ? heartRateFromBvp(meBuffer) : null,
           meLatency: meLatencies.length ? meLatencies.reduce((s, v) => s + v, 0) / meLatencies.length : 0,
+          meAgeMs: meLast ? lastFrameT - meLast.t : null,
+          meOutFps: meOutWalls.length / 2,
+          meDropped,
           fps: frameWalls.length / 2,
           skin,
           face,
@@ -524,7 +554,7 @@ export function RppgLab() {
     <main className="min-h-screen px-6 py-8">
       <section className="mx-auto w-full max-w-2xl space-y-5">
         <header>
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-400">spike · 검증 후 폐기</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-400">실험 화면 · 메뉴 미노출</p>
           <h1 className="text-2xl font-bold text-ink-900">rPPG 실험실</h1>
           <p className="mt-1 text-sm text-ink-500">
             워치(또는 휴대폰 손가락 심박 앱)를 기준으로, 옆 사람이 15초마다 BPM을 입력하세요. 조건별로 2분씩.
@@ -577,6 +607,11 @@ export function RppgLab() {
             label="ME-rPPG"
             value={fmt(live.me?.bpm, 0)}
             sub={`SNR ${fmt(live.me?.snrDb)} dB · ${meStatusText}`}
+          />
+          <Stat
+            label="ME 처리"
+            value={`${fmt(live.meOutFps, 0)} fps`}
+            sub={`지연 ${live.meAgeMs === null ? '—' : Math.round(live.meAgeMs)}ms · 건너뜀 ${live.meDropped}`}
           />
           <Stat label="처리 fps" value={fmt(live.fps, 0)} sub="목표 ≈ 30" />
           <Stat

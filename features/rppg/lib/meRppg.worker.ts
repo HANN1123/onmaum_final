@@ -5,11 +5,13 @@
 import * as ort from 'onnxruntime-web/wasm'
 import { frameDt, parseStateBin, type StateSpec } from '@/features/rppg/lib/meRppg'
 
-export type MeWorkerIn = { type: 'frame'; input: Float32Array; t: number } | { type: 'reset' }
+export type MeWorkerIn =
+  | { type: 'frame'; input: Float32Array; t: number; epoch: number }
+  | { type: 'reset' }
 export type MeWorkerOut =
   | { type: 'ready' }
   | { type: 'error'; message: string }
-  | { type: 'bvp'; value: number; t: number; latency: number }
+  | { type: 'bvp'; value: number; t: number; latency: number; epoch: number }
 
 ort.env.wasm.wasmPaths = '/vendor/ort/'
 ort.env.wasm.numThreads = 1
@@ -62,7 +64,7 @@ async function handle(msg: MeWorkerIn) {
   const out = await s.run(feeds)
   const latency = performance.now() - t0
   for (let i = 1; i < s.outputNames.length; i++) state[s.inputNames[i]] = out[s.outputNames[i]]
-  post({ type: 'bvp', value: (out[s.outputNames[0]].data as Float32Array)[0], t: msg.t, latency })
+  post({ type: 'bvp', value: (out[s.outputNames[0]].data as Float32Array)[0], t: msg.t, latency, epoch: msg.epoch })
 }
 
 // session.run은 동시에 여러 번 부를 수 없어서 메시지를 순서대로 처리
