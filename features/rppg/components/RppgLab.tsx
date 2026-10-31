@@ -14,6 +14,7 @@ import {
   createFrameClock,
   estimateHeartRate,
   heartRateFromBvp,
+  MAX_SAMPLE_GAP_MS,
   meanSkinRgb,
   parseLabRows,
   roiRects,
@@ -71,6 +72,7 @@ interface Live {
   meLatency: number
   /** 마지막 영상 프레임 기준 ME 결과가 얼마나 지났는가 (ms) */
   meAgeMs: number | null
+  meSentFps: number
   meOutFps: number
   meDropped: number
   fps: number
@@ -84,6 +86,7 @@ const EMPTY_LIVE: Live = {
   me: null,
   meLatency: 0,
   meAgeMs: null,
+  meSentFps: 0,
   meOutFps: 0,
   meDropped: 0,
   fps: 0,
@@ -236,8 +239,6 @@ export function RppgLab() {
     let rois: Rois | null = null
     let skin = 0
     let face = false
-    let lastFrameT = 0
-    let lastFrameWall = 0
     const frameClock = createFrameClock()
     const buffers: { forehead: RgbSample[]; all: RgbSample[] } = { forehead: [], all: [] }
     const frameWalls: number[] = []
@@ -256,6 +257,16 @@ export function RppgLab() {
     const meBuffer: { t: number; v: number }[] = []
     const meLatencies: number[] = []
     const meOutWalls: number[] = []
+    const meSentWalls: number[] = []
+
+    /** 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다 */
+    const failMe = (message: string) => {
+      worker?.terminate()
+      worker = null
+      meReady = false
+      setMeStatus('error')
+      setError(message)
+    }
 
     /** 끊긴 뒤에는 모델 상태·칼만·파형을 모두 버리고 새로 시작한다. 이전 프레임의 늦은 응답은 epoch로 거른다 */
     const resetMe = () => {
@@ -276,12 +287,7 @@ export function RppgLab() {
           meReady = true
           if (blaze) setMeStatus('ready')
         } else if (m.type === 'error') {
-          // 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다
-          worker?.terminate()
-          worker = null
-          meReady = false
-          setMeStatus('error')
-          setError(m.message)
+          failMe(m.message)
         } else {
           if (m.epoch !== meEpoch) return
           meInFlight--
@@ -296,6 +302,7 @@ export function RppgLab() {
           while (meBuffer.length > 0 && meBuffer[0].t < m.t - BUFFER_MS) meBuffer.shift()
         }
       }
+      worker.onerror = (e) => failMe(`ME-rPPG worker 오류: ${e.message}`)
       getBlazeFace()
         .then((d) => {
           if (stopped) return
@@ -400,8 +407,8 @@ export function RppgLab() {
           meBox = null
           return
         }
-        // 얼굴을 2초 넘게 놓쳤다 돌아오면 끊긴 구간을 이어 붙이지 않게 새로 시작한다
-        if (meLastSendT !== null && t - meLastSendT > STALE_MS) resetMe()
+        // 끊겼다 돌아오면 파형만 비우지 않고 모델 상태까지 새로 시작한다. 기준은 신호처리의 공백과 같다
+        if (meLastSendT !== null && t - meLastSendT > MAX_SAMPLE_GAP_MS) resetMe()
         if (!meKalman) {
           meKalman = [det.originX, det.originY, det.width, det.height].map((v) => createKalman1D(1e-2, 5e-1, v, 1))
         }
@@ -419,6 +426,8 @@ export function RppgLab() {
         const input = rgbaToModelInput(cropCtx.getImageData(0, 0, 36, 36).data)
         meLastSendT = t
         meInFlight++
+        meSentWalls.push(now)
+        while (meSentWalls.length > 0 && meSentWalls[0] < now - 2000) meSentWalls.shift()
         const msg: MeWorkerIn = { type: 'frame', input, t, epoch: meEpoch }
         worker.postMessage(msg, [input.buffer])
       }
@@ -428,8 +437,6 @@ export function RppgLab() {
         if (stopped) return
         const t = frameClock.next(now, meta.captureTime)
         if (t !== null) {
-          lastFrameT = t
-          lastFrameWall = now
           ctx.drawImage(video, 0, 0, w, h)
           if (rois) {
             const f = sampleRoi(ctx, rois.forehead, w, h)
@@ -463,19 +470,19 @@ export function RppgLab() {
 
       estimateTimer = setInterval(() => {
         const nowWall = performance.now()
-        // 신선도는 응답 도착이 아니라 원본 프레임 시각으로 판단하고, 영상이 멈췄으면 모두 무효다
-        const videoAlive = nowWall - lastFrameWall < STALE_MS
-        const fresh = (buf: { t: number }[]) =>
-          videoAlive && buf.length > 0 && lastFrameT - buf[buf.length - 1].t < STALE_MS
+        // 신선도는 응답 도착이 아니라 원본 프레임의 시각으로 판단한다
+        const fresh = (buf: { t: number }[]) => buf.length > 0 && nowWall - buf[buf.length - 1].t < STALE_MS
         while (frameWalls.length > 0 && frameWalls[0] < nowWall - 2000) frameWalls.shift()
         while (meOutWalls.length > 0 && meOutWalls[0] < nowWall - 2000) meOutWalls.shift()
+        while (meSentWalls.length > 0 && meSentWalls[0] < nowWall - 2000) meSentWalls.shift()
         const meLast = meBuffer[meBuffer.length - 1]
         const next: Live = {
           forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
           all: fresh(buffers.all) ? estimateHeartRate(windowed(buffers.all)) : null,
           me: fresh(meBuffer) ? heartRateFromBvp(meBuffer) : null,
           meLatency: meLatencies.length ? meLatencies.reduce((s, v) => s + v, 0) / meLatencies.length : 0,
-          meAgeMs: meLast ? lastFrameT - meLast.t : null,
+          meAgeMs: meLast ? nowWall - meLast.t : null,
+          meSentFps: meSentWalls.length / 2,
           meOutFps: meOutWalls.length / 2,
           meDropped,
           fps: frameWalls.length / 2,
@@ -611,7 +618,7 @@ export function RppgLab() {
           <Stat
             label="ME 처리"
             value={`${fmt(live.meOutFps, 0)} fps`}
-            sub={`지연 ${live.meAgeMs === null ? '—' : Math.round(live.meAgeMs)}ms · 건너뜀 ${live.meDropped}`}
+            sub={`전송 ${fmt(live.meSentFps, 0)} fps · 결과 나이 ${live.meAgeMs === null ? '—' : Math.round(live.meAgeMs)}ms · 건너뜀 ${live.meDropped}`}
           />
           <Stat label="처리 fps" value={fmt(live.fps, 0)} sub="목표 ≈ 30" />
           <Stat
