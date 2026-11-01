@@ -1,0 +1,20 @@
+/* 히어로 데모 전용 스타일. 전역 CSS(app/globals.css)를 건드리지 않으려고 모듈로 둔다. */
+.root {
+  --font-heading: 'Pretendard Variable', Pretendard, 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Pretendard Variable', Pretendard, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-body);
+}
+
+.heading {
+  font-family: var(--font-heading);
+  font-weight: 500;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor {
+  animation: blink 1s step-end infinite;
+}
