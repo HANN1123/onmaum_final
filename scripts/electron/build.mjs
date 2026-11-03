@@ -31,6 +31,7 @@ try {
     'out/demo/result/index.html',
     'out/demo/report/index.html',
     'out/demo/records/index.html',
+    'out/demo/survey/index.html',
     // rPPG 모델·WASM 런타임(앱 안에서만 불러온다)
     'out/models/me-rppg/model.onnx',
     'out/models/me-rppg/state.bin',

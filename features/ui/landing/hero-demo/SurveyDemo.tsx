@@ -74,7 +74,7 @@ export default function SurveyDemo() {
         </Link>
       </nav>
 
-      <div className={`${styles.body} ${styles.bodyScroll}`}>
+      <div className={`${styles.body} ${styles.surveyBody}`}>
         <div className={`${styles.left} ${styles.surveyLeft}`}>
           <span className={styles.chip} style={{ alignSelf: 'flex-start' }}>
             나만의 쉬는 법

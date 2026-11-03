@@ -1253,8 +1253,18 @@
   .cta {
     padding: 10px 14px;
   }
-  /* 설문의 질문 칸은 내용 높이만 쓴다 */
-  .bodyScroll > .surveyLeft {
+}
+
+/* 설문 화면 본문: 넘치면 본문만 아래로 스크롤한다(위쪽 메뉴·아래 안내는 고정). 위아래로 쌓일 때 질문 칸은 내용 높이만 쓴다 */
+.body.surveyBody {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 1100px) {
+  .body.surveyBody {
+    grid-template-rows: auto auto;
+  }
+  .surveyBody > .surveyLeft {
     height: auto;
   }
 }
