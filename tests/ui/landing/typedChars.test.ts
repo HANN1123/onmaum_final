@@ -48,6 +48,12 @@ describe('nextTypedChars', () => {
     expect(text(after)).toBe('가다')
   })
 
+  it('되살린 글자(still)는 고쳐도 표시를 지키고, 새로 친 글자에는 붙지 않는다', () => {
+    const restored = nextTypedChars([], '김우', 0).chars.map((c) => ({ ...c, still: true }))
+    const { chars } = nextTypedChars(restored, '김우빈', 2)
+    expect(chars.map((c) => c.still ?? false)).toEqual([true, true, false])
+  })
+
   it('한 번에 여러 글자가 들어오면(붙여넣기) 순서 k 가 0 부터 매겨진다', () => {
     const [, pasted] = typeSequence(['김', '김우빈'])
     expect(pasted.map((c) => c.k)).toEqual([0, 0, 1])

@@ -320,6 +320,9 @@
   animation: fieldCharIn 0.26s var(--ease-out) both;
   animation-delay: calc(var(--k, 0) * 28ms);
 }
+.fieldTypedChar[data-still] {
+  animation: none;
+}
 @keyframes fieldCharIn {
   from {
     opacity: 0;

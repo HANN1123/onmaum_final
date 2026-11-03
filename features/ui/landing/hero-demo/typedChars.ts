@@ -4,6 +4,8 @@ export interface TypedChar {
   ch: string
   /** 한 번에 여러 글자가 들어왔을 때(붙여넣기) 그 안에서의 순서. 나타나는 시차에 쓴다. */
   k: number
+  /** 저장해 둔 이름을 되살린 글자. 처음부터 있던 글자라 떠오르지 않는다. */
+  still?: boolean
 }
 
 /**

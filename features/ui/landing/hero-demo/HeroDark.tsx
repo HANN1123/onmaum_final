@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
+import { readDemoName, saveDemoName } from './demoName'
 import HeroAbout from './HeroAbout'
 import HeroStage from './HeroStage'
 import { DEMO_HOME_HREF } from './routes'
@@ -47,6 +48,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
   const [typed, setTyped] = useState<TypedChar[] | null>(null)
   const typedIdRef = useRef(0)
   const typedLineRef = useRef<HTMLSpanElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
@@ -80,6 +82,17 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
     return () => media.removeEventListener('change', onChange)
   }, [closeMenu])
 
+  // 이 기기에 저장해 둔 이름을 되살린다. 서버 첫 화면과 어긋나지 않게 하이드레이션 뒤에 채우고, 떠오르는 효과 없이 보여준다.
+  useEffect(() => {
+    const saved = readDemoName()
+    const input = nameRef.current
+    if (!saved || !input) return
+    input.value = saved
+    const { chars, nextId } = nextTypedChars([], saved, 0)
+    typedIdRef.current = nextId
+    setTyped(chars.map((c) => ({ ...c, still: true })))
+  }, [])
+
   /** 겹친 글자를 입력 칸의 가로 스크롤에 맞춘다. 이름이 칸보다 길어질 때만 움직인다. */
   const syncTypedScroll = (input: HTMLInputElement) => {
     requestAnimationFrame(() => {
@@ -93,6 +106,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
     typedIdRef.current = nextId
     setTyped(chars)
     syncTypedScroll(input)
+    saveDemoName(input.value)
   }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -209,6 +223,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
               */}
               <div className={styles.field}>
                 <input
+                  ref={nameRef}
                   id="hero-name"
                   name="name"
                   type="text"
@@ -223,7 +238,12 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
                   <span className={styles.fieldTyped} aria-hidden="true">
                     <span ref={typedLineRef} className={styles.fieldTypedLine}>
                       {typed.map((c) => (
-                        <span key={c.id} className={styles.fieldTypedChar} style={{ '--k': c.k } as React.CSSProperties}>
+                        <span
+                          key={c.id}
+                          className={styles.fieldTypedChar}
+                          data-still={c.still ? '' : undefined}
+                          style={{ '--k': c.k } as React.CSSProperties}
+                        >
                           {c.ch}
                         </span>
                       ))}
@@ -245,13 +265,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
                   이 기기에만 저장
                 </span>
               </div>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnGhost} ${styles.focusable}`}
-                onClick={() => router.push(MEASURE_HREF)}
-              >
-                설문 없이 바로 측정
-              </button>
+              {/* 설문 화면이 생기면 "설문 없이 바로 측정"(btnGhost) 버튼을 여기 되살린다. 지금은 두 버튼이 같은 곳으로 가서 뺐다. */}
               <button type="submit" className={`${styles.btn} ${styles.btnSolid} ${styles.focusable}`}>
                 측정 시작
               </button>
@@ -264,8 +278,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
         </div>
 
         <footer className={styles.legal}>
-          측정을 시작하면 기록이 이 기기 안에만 남는 것에 동의하는 것입니다. 온마음은 의료기기가 아닙니다.{' '}
-          <a href="#privacy-notice">개인정보 안내</a> · <a href="#service-contract">이용 안내</a>
+          측정을 시작하면 기록이 이 기기 안에만 남는 것에 동의하는 것입니다. 온마음은 의료기기가 아닙니다.
         </footer>
       </section>
       <HeroAbout theme={theme} />
