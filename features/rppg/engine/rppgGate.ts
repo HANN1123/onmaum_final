@@ -7,6 +7,10 @@ import type { HeartRate } from '../lib/rppg'
  * - 신선도: 마지막 출력에 대응하는 원본 프레임 시각이 2초 이내여야 한다(응답 도착 시각이 아님).
  * - 연속성·밀도: heartRateFromBvp 가 공백 500ms 이하로 이어진 6초 이상, 평균 10fps 이상인 구간만 쓴다.
  * - SNR: minSnrDb 이상. 기본 0dB 는 잠정값이다(2026-10-31 1인 실측 기준, 검증된 최적값 아님).
+ * - 안정화(2026-11-04): 엔진을 시작하거나 다시 시작한 뒤 첫 추정이 나오고 SETTLE_MS 동안은 보이지 않는다.
+ *   10/31 실측에서 시작 직후 약 10초 동안 모델이 134~139 BPM(워치 81)을 냈고 그중 일부가 SNR 기준을 넘었다.
+ *   같은 기록으로 비교하면 12초 보류 시 표시 비율 73% → 70%, MAE 4.04 → 2.40 BPM, 최대 오차 53 → 10 BPM.
+ *   1명·2분 기록이므로 실측으로 다시 확인할 잠정값이다. 중앙값 다듬기는 같은 비교에서 효과가 없어(4.04 → 4.67) 넣지 않았다.
  */
 
 export type RppgStatus =
@@ -39,6 +43,8 @@ export const ME_WARMUP = 30
 export const STALE_MS = 2_000
 /** 잠정 SNR 기준(dB). 작업 지시서 5.3 */
 export const DEFAULT_MIN_SNR_DB = 0
+/** 첫 추정 뒤 표시를 보류하는 시간(ms). 잠정값 */
+export const SETTLE_MS = 12_000
 
 export const OFF_READING: RppgReading = { status: 'off', bpm: null, snrDb: null, ageMs: null }
 
@@ -55,11 +61,13 @@ export interface GateInput {
   now: number
   /** heartRateFromBvp 결과. 연속성·밀도 기준을 못 넘으면 null */
   estimate: HeartRate | null
+  /** 이번 시작(또는 마지막 초기화) 뒤 첫 추정이 나온 시각(ms, now 와 같은 시계). 아직 없으면 null */
+  firstEstimateAt: number | null
   minSnrDb: number
 }
 
 export function gateReading(input: GateInput): RppgReading {
-  const { engine, face, outputs, lastFrameT, now, estimate, minSnrDb } = input
+  const { engine, face, outputs, lastFrameT, now, estimate, firstEstimateAt, minSnrDb } = input
   const ageMs = lastFrameT === null ? null : Math.max(0, now - lastFrameT)
   const snrDb = estimate ? estimate.snrDb : null
   if (engine === 'error') return { status: 'error', bpm: null, snrDb: null, ageMs }
@@ -67,6 +75,7 @@ export function gateReading(input: GateInput): RppgReading {
   if (!face) return { status: 'noFace', bpm: null, snrDb, ageMs }
   const fresh = ageMs !== null && ageMs < STALE_MS
   if (outputs <= ME_WARMUP || !fresh || !estimate) return { status: 'warming', bpm: null, snrDb, ageMs }
+  if (firstEstimateAt === null || now - firstEstimateAt < SETTLE_MS) return { status: 'warming', bpm: null, snrDb, ageMs }
   if (!(estimate.snrDb >= minSnrDb)) return { status: 'lowSignal', bpm: null, snrDb, ageMs }
   return { status: 'live', bpm: estimate.bpm, snrDb, ageMs }
 }
