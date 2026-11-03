@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // rPPG 실험실 WASM 런타임 (node_modules에서 복사된 서드파티 파일)
     "public/vendor/**",
+    // Electron 산출물·패키징 출력
+    "dist-electron/**",
+    "release/**",
   ]),
 ]);
 

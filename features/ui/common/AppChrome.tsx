@@ -15,8 +15,10 @@ interface Props {
 export default function AppChrome({ children }: Props) {
   const pathname = usePathname()
   const isBare = BARE_ROUTES.some((route) => pathname === route || pathname.startsWith(route + '/'))
+  // Electron 위젯 창(/widget)은 오브만 그린다 — 내비·푸터·넛지 숨김
+  const isWidget = pathname === '/widget' || pathname === '/widget/'
 
-  if (isBare) {
+  if (isBare || isWidget) {
     return <>{children}</>
   }
 
