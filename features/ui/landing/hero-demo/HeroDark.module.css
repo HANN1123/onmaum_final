@@ -11,7 +11,6 @@
   --fill-ghost: rgba(255, 255, 255, 0.05);
   --fill-solid: rgba(255, 255, 255, 0.10);
   --gutter: clamp(20px, 5vw, 100px);
-  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
   --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
@@ -141,7 +140,7 @@
   height: 1px;
   background: var(--text);
   transform: translateX(-50%);
-  transition: transform 0.45s var(--ease-premium), top 0.45s var(--ease-premium), opacity 0.25s ease;
+  transition: transform 0.45s var(--ease-out), top 0.45s var(--ease-out), opacity 0.25s ease;
 }
 .bar1 { top: 16px; }
 .bar2 { top: 22px; }
@@ -166,7 +165,7 @@
   clip-path: circle(3% at calc(100% - 42px) 42px);
   opacity: 0;
   pointer-events: none;
-  transition: clip-path 0.7s var(--ease-premium), opacity 0.45s ease;
+  transition: clip-path 0.7s var(--ease-out), opacity 0.45s ease;
 }
 .menuOpen {
   clip-path: circle(150% at calc(100% - 42px) 42px);
@@ -176,7 +175,7 @@
 .menuItem {
   opacity: 0;
   transform: translateY(16px);
-  transition: opacity 0.4s ease, transform 0.5s var(--ease-premium);
+  transition: opacity 0.4s ease, transform 0.5s var(--ease-out);
 }
 .menuOpen .menuItem {
   opacity: 1;

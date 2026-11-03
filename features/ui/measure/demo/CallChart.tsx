@@ -25,7 +25,7 @@ interface Props {
 
 const TOP = 34
 const BOTTOM = 6
-/** Stageshow 의 카메라: 한 번 다가가고(1.1초) 결과를 2.4초 보여준 뒤 빠진다. 곡선도 kit 의 camera 곡선. */
+/** Stageshow 의 카메라: 한 번 다가가고(1.1초) 결과를 2.4초 보여준 뒤 빠진다. 곡선은 --ease-move(motion.css). */
 const CAMERA_MS = 1100
 const CAMERA_HOLD_MS = 2400
 const CAMERA_START_MS = 2000
@@ -200,7 +200,7 @@ export default function CallChart({ points, smooth, durationSec, hardest, shares
     .filter((e) => shares[e] > 0)
     .sort((a, b) => shares[b] - shares[a])
 
-  const ease = `${CAMERA_MS}ms cubic-bezier(0.45, 0, 0.1, 1)`
+  const ease = `${CAMERA_MS}ms var(--ease-move)`
 
   return (
     <div className={styles.callChart}>
