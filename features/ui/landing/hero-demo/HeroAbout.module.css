@@ -1,0 +1,294 @@
+/*
+ * 히어로 아래 소개. 히어로 section 밖이라 토큰이 상속되지 않아 여기 다시 둔다.
+ * 측정·결과 화면 부품(CallChart, Roll, DotOrb)이 쓰는 토큰(--text-rgb, --bg-rgb)도 함께 둔다. 움직임 곡선은 motion.css 의 공용 토큰을 쓴다.
+ */
+.about {
+  --bg: #000000;
+  --bg-rgb: 0, 0, 0;
+  --text: #ffffff;
+  --text-rgb: 255, 255, 255;
+  --text-dim: rgba(255, 255, 255, 0.62);
+  --text-dimmer: rgba(255, 255, 255, 0.42);
+  --line: rgba(255, 255, 255, 0.14);
+  --gutter: clamp(20px, 5vw, 100px);
+  --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  background: var(--bg);
+  color: var(--text);
+  padding: clamp(64px, 8vw, 128px) var(--gutter) clamp(48px, 6vw, 96px);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+.about[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-rgb: 255, 255, 255;
+  --text: #000000;
+  --text-rgb: 0, 0, 0;
+  --text-dim: rgba(0, 0, 0, 0.62);
+  --text-dimmer: rgba(0, 0, 0, 0.42);
+  --line: rgba(0, 0, 0, 0.14);
+}
+.dim {
+  color: var(--text-dim);
+}
+
+/* 한 줄 = 글 + 장면. 둘째 줄은 장면이 왼쪽 */
+.feature {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 96px);
+  padding: clamp(40px, 5vw, 72px) 0;
+  border-top: 1px solid var(--line);
+}
+.flip {
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+}
+.flip .copy {
+  order: 2;
+}
+.copy {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.no {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-dimmer);
+}
+.title {
+  margin: 0;
+  font-weight: 300;
+  font-size: clamp(24px, 2.3vw, 38px);
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+}
+.body {
+  margin: 0;
+  max-width: 30em;
+  font-weight: 300;
+  font-size: clamp(14px, 1vw, 17px);
+  line-height: 1.65;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+
+/* 장면 공통: 한 단계 밝은 면, 테두리 없음 */
+.scene {
+  position: relative;
+  background: rgba(var(--text-rgb), 0.04);
+  border-top: 1px solid rgba(var(--text-rgb), 0.1);
+}
+.read {
+  display: grid;
+  gap: 6px;
+}
+.readLabel {
+  font-size: 14px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.readValue {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 200;
+  font-size: clamp(48px, 4.4vw, 72px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.readValue small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.readEmotion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+.readEmotion i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+.readNote {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-dimmer);
+}
+
+/* 1. 오브 */
+.orbScene {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(28px, 4vw, 64px);
+  min-height: 340px;
+  padding: 32px;
+}
+
+/* 2. 결과 차트 */
+.resultScene {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  height: 480px;
+  padding: 24px 28px 18px;
+}
+.resultScene .readEmotion {
+  margin-left: 12px;
+}
+.chartBox {
+  display: grid;
+  min-height: 0;
+}
+
+/* 3. 기록과 내보내기 */
+.recordsScene {
+  display: grid;
+  gap: 16px;
+  padding: 24px 28px 28px;
+}
+.deviceHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.rows li {
+  display: grid;
+  grid-template-columns: 64px 104px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  height: 34px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.rows .rowToday {
+  color: var(--text);
+}
+.track {
+  position: relative;
+  height: 8px;
+}
+.track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(var(--text-rgb), 0.22);
+}
+.rowToday .track i {
+  background: var(--text);
+}
+.exportRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+  padding-top: 8px;
+}
+.exportBtn {
+  position: relative;
+  flex: none;
+  white-space: nowrap;
+  padding: 12px 20px;
+  font-size: 14px;
+  background: rgba(var(--text-rgb), 0.1);
+  transition: background-color 0.12s ease, transform 0.12s ease;
+}
+.exportBtn[data-pressed] {
+  background: rgba(var(--text-rgb), 0.18);
+  transform: scale(0.97);
+}
+.cursor {
+  position: absolute;
+  right: 6px;
+  bottom: -4px;
+  opacity: 0;
+  translate: 26px 22px;
+  transition: opacity 0.4s ease, translate 0.9s var(--ease-move), scale 0.12s ease;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  pointer-events: none;
+}
+.cursor[data-on] {
+  opacity: 1;
+  translate: 0 0;
+}
+.cursor[data-pressed] {
+  scale: 0.86;
+}
+.file {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.35s ease, transform 0.5s var(--ease-arrive);
+}
+.file[data-on] {
+  opacity: 1;
+  transform: none;
+}
+
+/* 마지막 줄 */
+.closing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding-top: clamp(32px, 4vw, 56px);
+  border-top: 1px solid var(--line);
+}
+.closing p {
+  margin: 0;
+  font-weight: 300;
+  font-size: clamp(15px, 1.1vw, 18px);
+  line-height: 1.7;
+  word-break: keep-all;
+}
+.cta {
+  flex: none;
+  padding: 16px 28px;
+  border: 1px solid rgba(var(--text-rgb), 0.3);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  transition: background-color 0.25s ease;
+}
+.cta:hover {
+  background: rgba(var(--text-rgb), 0.06);
+}
+
+@media (max-width: 900px) {
+  .feature,
+  .flip {
+    grid-template-columns: 1fr;
+  }
+  .flip .copy {
+    order: 0;
+  }
+  .orbScene {
+    flex-direction: column;
+  }
+  .closing {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,18 @@
+/*
+ * 움직임 곡선 토큰. 데모 화면 전체(app/demo/layout.tsx)가 함께 쓴다.
+ * 곡선은 easing.dev 에서 골랐고, 이름은 곡선 모양이 아니라 맡은 일로 붙인다.
+ * 같은 일을 하는 움직임은 화면이 달라도 같은 곡선을 쓴다.
+ */
+:root {
+  /* 기본 반응: 숫자·글자가 바뀔 때, 선이 그려질 때, 메뉴. easing.dev "Snappy Out" */
+  --ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  /* 나타나기: 없던 것이 들어올 때(파일 이름, 카드의 투명도). easing.dev "Quick Out" */
+  --ease-arrive: cubic-bezier(0, 0, 0.2, 1);
+  /* 강조해서 내려앉기: 결과 카드처럼 이야기의 결과가 도착할 때만. 살짝 넘쳤다 돌아온다. easing.dev "Swift Out" */
+  --ease-emphasis: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  /*
+   * 이동: 카메라가 다가가고 커서가 건너갈 때. 출발은 부드럽고 도착은 길게 가라앉는다.
+   * easing.dev 에 같은 성격의 곡선이 없어 Stageshow 의 camera 곡선을 그대로 쓴다.
+   */
+  --ease-move: cubic-bezier(0.45, 0, 0.1, 1);
+}

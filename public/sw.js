@@ -2,7 +2,8 @@
 // - 앱 문서(HTML)와 /_next/ 빌드 자산: network-first (최신 우선, 오프라인일 때만 캐시 폴백)
 //   → 배포/재시작 후에도 항상 최신 페이지를 받음 (cache-first로 인한 stale /stats 문제 해결)
 // - 모델·아이콘·manifest 등 불변 자산: cache-first (오프라인 지원)
-const CACHE_NAME = 'onmaum-v2'
+// v3: 화면 이동 데이터(RSC) 응답이 캐시에 남아 화면 이동이 멈추던 문제 수정. 이름을 올려 옛 캐시를 지운다.
+const CACHE_NAME = 'onmaum-v3'
 
 // 오프라인에 필요한 "불변" 자산만 precache. 앱 HTML(/, /stats 등)은 network-first라 제외.
 const PRECACHE_URLS = [
@@ -85,6 +86,10 @@ self.addEventListener('fetch', (event) => {
   // Next.js HMR / dev 리소스는 SW가 가로채지 않음 (개발 충돌 방지)
   if (url.pathname.startsWith('/_next/webpack-hmr')) return
   if (url.pathname.startsWith('/_next/static/development')) return
+  // 앱 라우터의 화면 이동 데이터(RSC)는 가로채지 않음.
+  // 주소가 /demo/report?_rsc=... 처럼 일반 경로라 아래 cache-first 로 떨어지면, 처음 받은 응답이 영구히 재사용되어
+  // 코드가 바뀐 뒤(재배포·개발 서버 재시작) 없는 청크를 가리키게 되고 화면 이동이 멈춘다.
+  if (url.searchParams.has('_rsc') || event.request.headers.get('RSC') === '1') return
 
   const isDocument =
     event.request.mode === 'navigate' || event.request.destination === 'document'

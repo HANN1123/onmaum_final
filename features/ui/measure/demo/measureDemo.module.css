@@ -1,0 +1,1165 @@
+/* 측정 화면 데모(분할 계기판). 검정 히어로와 같은 토큰. 상자는 모두 각진 사각형, 선은 1px. */
+.shell {
+  --bg: #000000;
+  --bg-rgb: 0, 0, 0;
+  --text: #ffffff;
+  --text-rgb: 255, 255, 255;
+  --text-dim: rgba(255, 255, 255, 0.62);
+  --text-dimmer: rgba(255, 255, 255, 0.42);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-strong: rgba(255, 255, 255, 0.26);
+  --fill-ghost: rgba(255, 255, 255, 0.05);
+  --fill-solid: rgba(255, 255, 255, 0.10);
+  --gutter: clamp(20px, 5vw, 100px);
+  --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 640px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 화이트 모드: 토큰만 뒤집는다. 나머지 규칙은 전부 변수를 쓴다. */
+.shell[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-rgb: 255, 255, 255;
+  --text: #000000;
+  --text-rgb: 0, 0, 0;
+  --text-dim: rgba(0, 0, 0, 0.62);
+  --text-dimmer: rgba(0, 0, 0, 0.42);
+  --line: rgba(0, 0, 0, 0.14);
+  --line-strong: rgba(0, 0, 0, 0.26);
+  --fill-ghost: rgba(0, 0, 0, 0.05);
+  --fill-solid: rgba(0, 0, 0, 0.10);
+}
+
+/* 공통 글자 */
+.mono {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: clamp(11px, 0.78vw, 14px);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.dim { color: var(--text-dim); }
+.display {
+  font-family: var(--font-display);
+  font-weight: 200;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+}
+.focusable:focus-visible {
+  outline: 1px solid rgba(var(--text-rgb), 0.7);
+  outline-offset: 3px;
+}
+
+/* 상단 */
+.nav {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+  padding: clamp(16px, 2vw, 28px) var(--gutter);
+}
+.logo {
+  font-family: var(--font-display);
+  font-weight: 200;
+  font-size: clamp(20px, 1.75vw, 30px);
+  letter-spacing: 0.16em;
+  line-height: 1;
+  color: var(--text);
+  text-decoration: none;
+}
+.navMid {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2vw, 36px);
+}
+.navLink {
+  composes: mono;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+.navLink:hover {
+  color: var(--text);
+}
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.liveDot {
+  width: 6px;
+  height: 6px;
+  background: var(--text);
+  animation: blink 1.1s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.cta {
+  composes: mono;
+  padding: clamp(12px, 1vw, 17px) clamp(20px, 1.8vw, 32px);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.cta:hover {
+  background: var(--fill-ghost);
+  border-color: rgba(var(--text-rgb), 0.5);
+}
+
+/* 영상과 얼굴 상자 */
+.frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scaleX(-1);
+}
+.faceLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.faceBox {
+  position: absolute;
+  border: 1px solid rgba(var(--text-rgb), 0.85);
+  transition: left 0.18s linear, top 0.18s linear, width 0.18s linear, height 0.18s linear;
+}
+.faceTag {
+  composes: mono;
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  background: rgba(var(--bg-rgb), 0.6);
+  white-space: nowrap;
+}
+
+/* 수치 */
+.bpmRow {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(10px, 1vw, 18px);
+}
+.bpm {
+  composes: display;
+  font-size: clamp(72px, 8vw, 150px);
+  font-variant-numeric: tabular-nums;
+}
+.unit {
+  composes: mono;
+  letter-spacing: 0.22em;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  padding: clamp(10px, 1vw, 16px) 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 0.84vw, 15px);
+  letter-spacing: 0.06em;
+}
+.row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.row .k {
+  color: var(--text-dim);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: clamp(11px, 0.72vw, 13px);
+}
+.chip {
+  composes: mono;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  background: rgba(var(--text-rgb), 0.09);
+  padding: clamp(9px, 0.8vw, 14px) clamp(14px, 1.1vw, 20px);
+}
+
+/* 하단 */
+.legal {
+  border-top: 1px solid var(--line);
+  padding: clamp(14px, 1.4vw, 24px) var(--gutter);
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(12px, 0.82vw, 15px);
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.wave {
+  display: block;
+  width: 100%;
+}
+
+/* 본문: 왼쪽 카메라·파형, 오른쪽 계기판 */
+.body {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: clamp(20px, 2.6vw, 48px);
+  padding: 0 var(--gutter) clamp(16px, 2vw, 28px);
+  min-height: 0;
+}
+.left {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: clamp(12px, 1.4vw, 20px);
+  min-height: 0;
+}
+.frame {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  overflow: hidden;
+  min-height: 0;
+}
+.frameTag {
+  composes: mono;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 8px;
+  background: rgba(var(--bg-rgb), 0.6);
+}
+.waveBox {
+  position: relative;
+  height: clamp(72px, 11vh, 120px);
+  border: 1px solid var(--line);
+}
+.waveBox .frameTag {
+  top: 8px;
+}
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 1.8vw, 28px);
+  min-height: 0;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.btnSolid {
+  composes: mono;
+  width: 100%;
+  border: 0;
+  padding: clamp(16px, 1.5vw, 24px) 20px;
+  background: var(--fill-solid);
+  color: var(--text);
+  letter-spacing: 0.22em;
+  cursor: pointer;
+  transition: background-color 0.25s ease;
+}
+.btnSolid:hover {
+  background: rgba(var(--text-rgb), 0.17);
+}
+.btnGhost {
+  composes: mono;
+  width: 100%;
+  border: 0;
+  padding: clamp(16px, 1.5vw, 24px) 20px;
+  background: var(--fill-ghost);
+  color: var(--text-dimmer);
+  letter-spacing: 0.22em;
+  cursor: pointer;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+.btnGhost:hover {
+  background: rgba(var(--text-rgb), 0.09);
+  color: var(--text);
+}
+
+/* 버튼 두 개 나란히 */
+.actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.waveBox .wave,
+.frame video {
+  height: 100%;
+}
+.frame .faceLayer {
+  z-index: 1;
+}
+
+/* 결과 화면: 타임라인 상자, 감정 비율 띠, 판정 문장, 숫자 셋 */
+.resultFrame {
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+.timelineWrap {
+  position: relative;
+  min-height: 0;
+}
+.timeline {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hardLabel {
+  composes: mono;
+  position: absolute;
+  bottom: 10px;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: rgba(var(--bg-rgb), 0.7);
+  white-space: nowrap;
+}
+.ticks {
+  composes: mono;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.shares {
+  display: flex;
+  height: 100%;
+}
+.share {
+  position: relative;
+  height: 100%;
+}
+.shareLabel {
+  composes: mono;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  white-space: nowrap;
+}
+.verdictBox {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1vw, 16px);
+  min-width: 0;
+}
+.verdict {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(26px, 2.5vw, 42px);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+  word-break: keep-all;
+}
+.verdictSub {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(13px, 0.95vw, 16px);
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin: 0;
+  word-break: keep-all;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: clamp(12px, 1.2vw, 18px) 0;
+}
+.stat + .stat {
+  border-left: 1px solid var(--line);
+  padding-left: clamp(12px, 1.4vw, 22px);
+}
+.statK {
+  composes: mono;
+  color: var(--text-dim);
+}
+.statV {
+  composes: display;
+  font-size: clamp(28px, 2.7vw, 48px);
+  font-variant-numeric: tabular-nums;
+}
+.statUnit {
+  composes: mono;
+  margin-left: 6px;
+}
+
+/* 리포트 화면: 14일 막대(단색 잉크), 평소 점선, 오늘 통화 목록 */
+.reportLeft {
+  display: grid;
+  grid-template-rows: 1.35fr 1fr;
+  gap: clamp(12px, 1.4vw, 20px);
+  min-height: 0;
+}
+.chartFrame {
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+.chartArea {
+  position: relative;
+  min-height: 0;
+  padding: 44px 12px 0;
+}
+.bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  border-bottom: 1px solid var(--line);
+}
+.barCol {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.bar {
+  position: relative;
+  width: 100%;
+  max-width: 26px;
+  background: rgba(var(--text-rgb), 0.26);
+  transition: background-color 0.2s ease;
+}
+.barCol:hover .bar {
+  background: rgba(var(--text-rgb), 0.5);
+}
+.barToday,
+.barCol:hover .barToday {
+  background: var(--text);
+}
+.barValue {
+  composes: mono;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.barCol:hover .barValue,
+.barToday .barValue {
+  opacity: 1;
+}
+.barNone {
+  composes: mono;
+  color: var(--text-dimmer);
+  padding-bottom: 6px;
+}
+.baseline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(var(--text-rgb), 0.55);
+  pointer-events: none;
+}
+.baselineTag {
+  composes: mono;
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  padding: 2px 6px;
+  background: rgba(var(--bg-rgb), 0.7);
+  color: var(--text-dim);
+}
+.axis {
+  composes: mono;
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.axis span {
+  flex: 1;
+  text-align: center;
+}
+.axisToday {
+  color: var(--text);
+}
+.callsFrame {
+  display: flex;
+  flex-direction: column;
+  padding-top: 44px;
+  overflow: auto;
+}
+.calls {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px;
+}
+.call {
+  display: grid;
+  grid-template-columns: 56px 64px 1fr auto auto;
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 24px);
+  padding: clamp(8px, 0.9vw, 12px) 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 0.84vw, 15px);
+  letter-spacing: 0.06em;
+}
+.call:first-child {
+  border-top: 0;
+}
+.callDim {
+  color: var(--text-dim);
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.callLink {
+  composes: mono;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+.callLink:hover {
+  color: var(--text);
+}
+
+/*
+ * 읽기 화면(결과·리포트). 내용은 그대로 두고 글자 모양과 선만 바꾼다.
+ * - 한글은 자간을 넓히지 않는다. 넓은 자간의 모노체는 숫자·시각에만 쓴다.
+ * - 행 사이 가로선을 없애고 여백으로 묶는다. 선은 상자 테두리와 숫자 칸 구분만 남긴다.
+ * - 라벨은 작고 흐리게, 값은 본문 크기로 또렷하게.
+ */
+.readable .frameTag,
+.readable .chip,
+.readable .live,
+.readable .shareLabel,
+.readable .hardLabel {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.readable .frameTag {
+  font-size: 13px;
+  color: var(--text-dim);
+  background: rgba(var(--bg-rgb), 0.75);
+}
+.readable .chip {
+  background: none;
+  padding: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.readable .live {
+  font-size: 14px;
+}
+.readable .rows {
+  gap: 2px;
+}
+.readable .row {
+  border-top: 0;
+  padding: 7px 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.readable .row:last-child {
+  border-bottom: 0;
+}
+.readable .row .k {
+  color: var(--text-dimmer);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.readable .stats {
+  border-top: 0;
+  border-bottom: 0;
+}
+.readable .statK {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+  color: var(--text-dimmer);
+}
+.readable .statUnit {
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.readable .verdictSub {
+  font-size: 15px;
+}
+.readable .btnSolid,
+.readable .btnGhost,
+.readable .cta,
+.readable .themeBtn,
+.readable .preset {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.readable .btnSolid,
+.readable .btnGhost {
+  font-size: 15px;
+}
+.readable .call {
+  border-top: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.readable .callLink {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+.readable .legal {
+  font-size: 13px;
+  color: var(--text-dimmer);
+}
+
+/*
+ * Stageshow 에서 가져온 것: 상자 테두리 대신 한 단계 밝은 면, 위쪽 큰 숫자가 읽어 주는 값,
+ * 바뀐 자리만 구르는 숫자, 불은 하나만.
+ */
+.readable .frame {
+  border: 0;
+  background: rgba(var(--text-rgb), 0.035);
+}
+.panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: clamp(8px, 1vw, 16px);
+  min-height: 0;
+  padding: clamp(18px, 1.8vw, 28px) clamp(18px, 2vw, 32px) clamp(14px, 1.4vw, 20px);
+  background: rgba(var(--text-rgb), 0.035);
+}
+.readout {
+  display: grid;
+  gap: 4px;
+}
+.readoutLabel {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.readoutMain {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.readoutValue {
+  font-family: var(--font-display);
+  font-weight: 200;
+  font-size: clamp(48px, 4.6vw, 80px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.readoutUnit {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+.readoutSide {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+.readoutSide i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.readoutSideDim {
+  color: var(--text-dim);
+}
+
+/* 바뀐 자리만 구르는 숫자 */
+.roll {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+.rollCell {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+.rollStrip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.42s var(--ease-out);
+}
+.rollStrip span {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}
+.swap {
+  display: inline-block;
+  animation: swapIn 0.28s var(--ease-out);
+}
+@keyframes swapIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 통화 차트 */
+.callChart {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  min-height: 0;
+}
+.callPlot {
+  position: relative;
+  min-height: 0;
+  overflow: clip;
+  /* 카메라가 다가간 동안 가장자리를 흐린다(kit Camera 의 feather) */
+  --feather: 0px;
+  mask-image:
+    linear-gradient(to right, transparent, #000 var(--feather), #000 calc(100% - var(--feather)), transparent),
+    linear-gradient(to bottom, transparent, #000 var(--feather), #000 calc(100% - var(--feather)), transparent);
+  mask-composite: intersect;
+  transition: --feather 1.1s var(--ease-move);
+}
+.callPlot[data-zoomed] {
+  --feather: 28px;
+}
+@property --feather {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+.callHardBand {
+  cursor: zoom-in;
+}
+.callPeak {
+  stroke: var(--bg);
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.callPeak[data-on] {
+  opacity: 1;
+  transition-delay: 0.9s;
+}
+.callNote[data-hide] {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.ribbon[data-dim] {
+  opacity: 0.35;
+  transition: opacity 0.6s ease;
+}
+.callSvg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.callArea {
+  fill: rgba(var(--text-rgb), 0.05);
+  animation: chartFade 0.6s ease 0.9s both;
+}
+.callLine {
+  fill: none;
+  stroke: rgba(var(--text-rgb), 0.62);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  animation: chartDraw 1.3s var(--ease-out) backwards;
+}
+.callHard {
+  animation: chartFade 0.5s ease 1.3s both;
+}
+.callHardLine {
+  fill: none;
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.callNote {
+  font-family: var(--font-display);
+  font-size: 12px;
+  fill: var(--text-dim);
+}
+.callHair {
+  stroke: rgba(var(--text-rgb), 0.35);
+  stroke-width: 1;
+}
+.callDot {
+  fill: var(--text);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+@keyframes chartDraw {
+  from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  to { stroke-dasharray: 1; stroke-dashoffset: 0; }
+}
+@keyframes chartFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ribbon {
+  display: flex;
+  gap: 1px;
+  height: 6px;
+  margin-top: 10px;
+  animation: chartFade 0.6s ease 0.6s both;
+}
+.chartFoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-top: 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-dimmer);
+  font-variant-numeric: tabular-nums;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  color: var(--text-dim);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.stats2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* 리포트 막대: 숫자는 위쪽 큰 숫자가 말하고, 막대는 회색, 오늘만 불이 켜진다 */
+.readable .reportChart {
+  grid-template-rows: auto 1fr auto;
+  padding: clamp(18px, 1.8vw, 28px) clamp(18px, 2vw, 32px) 0;
+}
+.readable .reportChart .chartArea {
+  padding: 18px 0 0;
+}
+.readable .reportChart .axis {
+  border-top: 0;
+  padding: 10px 0 14px;
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  font-size: 13px;
+}
+.readable .bars {
+  border-bottom-color: var(--line);
+  cursor: crosshair;
+}
+.readable .bar {
+  background: rgba(var(--text-rgb), 0.2);
+}
+.readable .barColOn .bar {
+  background: rgba(var(--text-rgb), 0.5);
+}
+.readable .barToday,
+.readable .barColOn .barToday {
+  background: var(--text);
+}
+.readable .baselineTag {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  background: none;
+  font-size: 12px;
+}
+.panelTitle {
+  position: absolute;
+  top: clamp(14px, 1.4vw, 20px);
+  left: clamp(14px, 1.6vw, 24px);
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* 기록 화면: 하루 한 줄, 막대는 그날 스트레스, 세로 눈금은 평소 */
+.recordsPanel {
+  grid-template-rows: auto 1fr;
+}
+.readoutSub {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.dayList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.day {
+  display: grid;
+  grid-template-columns: 96px 104px minmax(80px, 1fr) 128px 56px;
+  align-items: center;
+  gap: 16px;
+  height: 36px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  cursor: default;
+  transition: color 0.15s ease;
+}
+.dayToday,
+.dayOn {
+  color: var(--text);
+}
+.dayDate em {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dayCalls {
+  color: inherit;
+}
+.dayTrack {
+  position: relative;
+  height: 10px;
+}
+.dayFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(var(--text-rgb), 0.22);
+  transition: background-color 0.15s ease;
+}
+.dayOn .dayFill {
+  background: rgba(var(--text-rgb), 0.5);
+}
+.dayToday .dayFill {
+  background: var(--text);
+}
+.dayBase {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 0;
+  border-left: 1px dashed rgba(var(--text-rgb), 0.55);
+}
+.dayLevel {
+  text-align: right;
+}
+.dayLink {
+  text-align: right;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+}
+.dayLink:hover {
+  color: var(--text);
+}
+
+/* 내 기록 관리 */
+.manage {
+  display: grid;
+  gap: 14px;
+  margin-top: auto;
+}
+.textDanger {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.textDanger:hover {
+  color: var(--text);
+}
+.confirm {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  background: rgba(var(--text-rgb), 0.05);
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.confirm p {
+  margin: 0;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+}
+.btnDanger {
+  composes: btnSolid;
+  background: #c62828;
+  color: #ffffff;
+}
+.btnDanger:hover {
+  background: #b71c1c;
+}
+.notice {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-dim);
+  animation: swapIn 0.28s var(--ease-out);
+}
+
+/* 카메라 칸 위에 덮는 준비 중 뼈대 상자. 준비되면 서서히 걷힌다 */
+.frameSkeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+/* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.switchTrack {
+  position: relative;
+  width: 44px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.switchKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-dimmer);
+  transition: transform 0.35s var(--ease-out), background-color 0.25s ease;
+}
+.switchOn .switchTrack {
+  border-color: var(--text);
+}
+.switchOn .switchKnob {
+  background: var(--text);
+  transform: translateX(22px);
+}
+
+/* 표 안의 작은 선택 버튼(모의 심박·색 반응) */
+.presets {
+  display: inline-flex;
+  gap: 6px;
+}
+.preset {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 0.72vw, 13px);
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dimmer);
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+}
+.preset:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.presetOn {
+  color: var(--text);
+  border-color: var(--text);
+  background: var(--fill-ghost);
+}
+
+/* 검정/흰색 전환 버튼 */
+.themeBtn {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: clamp(11px, 0.78vw, 14px);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.25s ease;
+}
+.themeBtn:hover {
+  color: var(--text);
+}
