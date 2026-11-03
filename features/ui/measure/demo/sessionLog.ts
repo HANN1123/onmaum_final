@@ -100,8 +100,11 @@ export interface CallSummary {
 
 /** 감정별 부담 가중치(표본). 실제 지수는 algorithm/stress 가 계산한다. */
 const STRAIN: Record<Emotion, number> = { angry: 1, sad: 0.6, calm: 0, happy: 0 }
-/** 이보다 짧은 통화는 힘든 구간을 표시하지 않는다(초). */
-const MIN_HARDEST_CALL_SEC = 60
+/**
+ * 이보다 짧은 통화는 힘든 구간을 표시하지 않는다(초). 구간 창이 최소 10초라,
+ * 20초 미만이면 창이 통화의 절반을 넘어 "가장 힘든 순간"이라는 말이 무의미해진다.
+ */
+const MIN_HARDEST_CALL_SEC = 20
 /** 표본 기준선: 지난 14일 통화의 평균 부담(0~1). 실제 값은 algorithm/baseline 에서 온다. */
 const SAMPLE_BASELINE_STRAIN = 0.24
 
@@ -134,7 +137,7 @@ export function summarizeSession(session: DemoSession): CallSummary {
   const strain = samples.map((s) => 0.6 * bpmStrain(s.bpm) + 0.4 * STRAIN[s.emotion])
   const meanStrain = strain.reduce((a, b) => a + b, 0) / n
 
-  // 가장 힘들었던 구간: 통화의 15%(최소 10초) 창을 밀며 평균 부담이 가장 큰 곳. 1분 미만 통화는 나누지 않는다.
+  // 가장 힘들었던 구간: 통화의 15%(최소 10초) 창을 밀며 평균 부담이 가장 큰 곳. 20초 미만 통화는 나누지 않는다.
   const win = Math.max(10, Math.round(durationSec * 0.15))
   let hardest: CallSummary['hardest'] = null
   if (durationSec >= MIN_HARDEST_CALL_SEC && n > win) {
