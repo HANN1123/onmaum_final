@@ -139,6 +139,17 @@ describe('deleteAllPersonalData', () => {
     expect(localStorage.getItem('other_app_key')).toBe('x')
   })
 
+  it('이 탭의 sessionStorage 에 남은 온마음 기록(데모 측정 결과)도 지우고 다른 앱 값은 둔다', async () => {
+    sessionStorage.setItem('onmaum_demo_session', '{"samples":[]}')
+    sessionStorage.setItem('other_app_session', 'y')
+
+    await deleteAllPersonalData({}, LATER)
+
+    expect(sessionStorage.getItem('onmaum_demo_session')).toBeNull()
+    expect(sessionStorage.getItem('other_app_session')).toBe('y')
+    sessionStorage.clear()
+  })
+
   it('includePreferences: 설정·설문·온보딩 여부까지 모두 지운다', async () => {
     await deleteAllPersonalData({ includePreferences: true }, LATER)
 
