@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
+import { mmss, Row, Stat, usePulseAt } from './demoBits'
 import { LEGAL, SAMPLE_TODAY } from './demoCopy'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
@@ -22,6 +23,7 @@ import { useStoredSession } from './useStoredSession'
 
 const MEASURE_HREF = '/demo/measure'
 const HERO_HREF = '/demo/hero-dark'
+const REPORT_HREF = '/demo/report'
 const EMOTION_ORDER: Emotion[] = ['calm', 'happy', 'sad', 'angry']
 const WHITE: Rgb = [255, 255, 255]
 const BLACK: Rgb = [0, 0, 0]
@@ -51,12 +53,7 @@ export default function ResultDemo() {
 
   // 오브는 통화의 우세 감정색으로, 평균 심박 빠르기로 두근거린다.
   const avgBpm = summary.avgBpm
-  const getPulse = useCallback(() => {
-    const phase = ((performance.now() / 1000) * (avgBpm / 60)) % 1
-    const systolic = Math.exp(-(((phase - 0.16) / 0.06) ** 2))
-    const dicrotic = 0.32 * Math.exp(-(((phase - 0.44) / 0.1) ** 2))
-    return Math.min(1, systolic + dicrotic)
-  }, [avgBpm])
+  const getPulse = usePulseAt(avgBpm)
 
   const sub = summary.hardest
     ? `가장 힘들었던 구간은 ${mmss(summary.hardest.start)}–${mmss(summary.hardest.end)}, 그때 심박이 ${summary.hardest.peakBpm}까지 올랐습니다.`
@@ -168,7 +165,7 @@ export default function ResultDemo() {
             <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
               다음 통화
             </Link>
-            <Link href="/stats" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+            <Link href={REPORT_HREF} className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
               리포트 보기
             </Link>
           </div>
@@ -176,33 +173,5 @@ export default function ResultDemo() {
       </div>
       <p className={styles.legal}>{LEGAL}</p>
     </section>
-  )
-}
-
-/** 초 → 07:12. 결과 화면의 짧은 표기. 상단은 측정 화면과 같은 00:07:12 를 쓴다. */
-function mmss(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function Stat({ k, v, unit }: { k: string; v: string; unit?: string }) {
-  return (
-    <div className={styles.stat}>
-      <span className={styles.statK}>{k}</span>
-      <span className={styles.statV}>
-        {v}
-        {unit && <span className={styles.statUnit}>{unit}</span>}
-      </span>
-    </div>
-  )
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className={styles.row}>
-      <span className={styles.k}>{k}</span>
-      <span>{v}</span>
-    </div>
   )
 }

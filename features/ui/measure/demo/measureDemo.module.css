@@ -428,6 +428,147 @@
   margin-left: 6px;
 }
 
+/* 리포트 화면: 14일 막대(단색 잉크), 평소 점선, 오늘 통화 목록 */
+.reportLeft {
+  display: grid;
+  grid-template-rows: 1.35fr 1fr;
+  gap: clamp(12px, 1.4vw, 20px);
+  min-height: 0;
+}
+.chartFrame {
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+.chartArea {
+  position: relative;
+  min-height: 0;
+  padding: 44px 12px 0;
+}
+.bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  border-bottom: 1px solid var(--line);
+}
+.barCol {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.bar {
+  position: relative;
+  width: 100%;
+  max-width: 26px;
+  background: rgba(var(--text-rgb), 0.26);
+  transition: background-color 0.2s ease;
+}
+.barCol:hover .bar {
+  background: rgba(var(--text-rgb), 0.5);
+}
+.barToday,
+.barCol:hover .barToday {
+  background: var(--text);
+}
+.barValue {
+  composes: mono;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.barCol:hover .barValue,
+.barToday .barValue {
+  opacity: 1;
+}
+.barNone {
+  composes: mono;
+  color: var(--text-dimmer);
+  padding-bottom: 6px;
+}
+.baseline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(var(--text-rgb), 0.55);
+  pointer-events: none;
+}
+.baselineTag {
+  composes: mono;
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  padding: 2px 6px;
+  background: rgba(var(--bg-rgb), 0.7);
+  color: var(--text-dim);
+}
+.axis {
+  composes: mono;
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.axis span {
+  flex: 1;
+  text-align: center;
+}
+.axisToday {
+  color: var(--text);
+}
+.callsFrame {
+  display: flex;
+  flex-direction: column;
+  padding-top: 44px;
+  overflow: auto;
+}
+.calls {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px;
+}
+.call {
+  display: grid;
+  grid-template-columns: 56px 64px 1fr auto auto;
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 24px);
+  padding: clamp(8px, 0.9vw, 12px) 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 0.84vw, 15px);
+  letter-spacing: 0.06em;
+}
+.call:first-child {
+  border-top: 0;
+}
+.callDim {
+  color: var(--text-dim);
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.callLink {
+  composes: mono;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+.callLink:hover {
+  color: var(--text);
+}
+
 /* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
 .switch {
   display: inline-flex;

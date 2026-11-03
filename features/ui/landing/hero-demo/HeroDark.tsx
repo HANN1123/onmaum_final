@@ -20,7 +20,7 @@ const MEASURE_HREF = '/demo/measure'
 
 const NAV_LINKS = [
   { href: MEASURE_HREF, label: '측정' },
-  { href: '/stats', label: '리포트' },
+  { href: '/demo/report', label: '리포트' },
   { href: '/records', label: '기록' },
   { href: '/', label: '소개' },
 ] as const
