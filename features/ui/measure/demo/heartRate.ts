@@ -1,26 +1,43 @@
+import type { RefObject } from 'react'
+import { useMeRppg } from '@/features/rppg/engine/useMeRppg'
+import { RPPG_STATUS_TEXT, type RppgReading } from '@/features/rppg/engine/rppgGate'
+
 /**
- * 심박 입력 자리. rPPG(또는 기준 센서)를 붙일 때 useHeartRateSource 가 실제 값을 돌려주게 바꾼다.
- * 지금은 연결된 심박 원천이 없어 bpm 은 null, 파형은 0 이다. 모의 신호는 만들지 않는다.
- * 화면은 bpm 이 null 이면 숫자 대신 "--" 와 "rPPG 연결 전"을 보여주고, 파형은 평평한 선으로 둔다.
+ * 측정 화면의 심박 원천. 같은 카메라 영상에서 감정 분석(face-api)과 함께 ME-rPPG 엔진을 돌린다.
+ * 품질 게이트(features/rppg/engine/rppgGate.ts)를 넘은 동안에만 bpm 이 있고, 그 밖에는 null("--")이다.
+ * 모의 신호는 만들지 않는다.
  */
 export interface HeartRateSource {
-  /** 현재 심박(BPM). 원천이 없거나 신호를 잃으면 null */
+  /** 현재 심박(BPM). 원천이 없거나 게이트를 못 넘으면 null */
   bpm: number | null
-  /** 매 프레임 읽는 맥박 파형 값(0~1). 원천이 없으면 0 */
+  /** 매 프레임 읽는 맥박 파형 값(0~1, 시각화 전용). 게이트를 못 넘으면 0 */
   getPulse: () => number
+  /** 엔진 상태와 SNR. 화면에 사유를 보여줄 때 쓴다 */
+  reading: RppgReading
 }
 
 /** 맥박이 없을 때의 파형. 오브는 두근거리지 않고 파형은 평평하다. */
 export const NO_PULSE = (): number => 0
 
-const NO_SOURCE: HeartRateSource = { bpm: null, getPulse: NO_PULSE }
-
-/** 측정 화면의 심박 원천. rPPG 연결 전이라 항상 "값 없음"을 돌려준다. */
-export function useHeartRateSource(): HeartRateSource {
-  return NO_SOURCE
+/** 측정 화면의 심박 원천. enabled 가 false 이면 엔진을 돌리지 않는다. */
+export function useHeartRateSource(videoRef: RefObject<HTMLVideoElement | null>, enabled: boolean): HeartRateSource {
+  const { reading, getPulse } = useMeRppg(videoRef, enabled)
+  return { bpm: reading.bpm, getPulse, reading }
 }
 
 /** bpm 을 화면 글자로. 값이 없으면 "--" */
 export function bpmText(bpm: number | null): string {
   return bpm === null ? '--' : String(Math.round(bpm))
+}
+
+/** 파형 칸 표지: 상태와, 신호가 있으면 SNR */
+export function pulseTag(reading: RppgReading): string {
+  if (reading.status === 'live' && reading.snrDb !== null) return `맥박 파형 · rPPG · SNR ${reading.snrDb.toFixed(1)}dB`
+  return `맥박 파형 · rPPG ${RPPG_STATUS_TEXT[reading.status]}`
+}
+
+/** 상태 행 글: 상태와, 추정이 있으면 SNR */
+export function signalText(reading: RppgReading): string {
+  const status = RPPG_STATUS_TEXT[reading.status]
+  return reading.snrDb !== null && reading.status !== 'off' ? `${status} · SNR ${reading.snrDb.toFixed(1)}dB` : status
 }

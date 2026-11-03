@@ -10,7 +10,7 @@ import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { useWebcam } from '@/features/ui/landing/hero-demo/useWebcam'
 import { LEGAL } from './demoCopy'
 import FaceLayer from './FaceLayer'
-import { bpmText, useHeartRateSource } from './heartRate'
+import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
 import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
 import PulseCanvas from './PulseCanvas'
@@ -26,7 +26,8 @@ import { useStoredSession } from './useStoredSession'
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
  * 왼쪽은 카메라 프레임과 맥박 파형, 오른쪽은 BPM·오브·상태 행이다.
- * 카메라와 얼굴 추적·감정은 실제 값이다. 심박은 rPPG 를 붙일 자리(useHeartRateSource)만 있고, 연결 전에는 "--"로 둔다.
+ * 카메라와 얼굴 추적·감정, 심박(ME-rPPG)은 모두 같은 카메라 영상에서 나온 실제 값이다.
+ * 심박은 품질 게이트를 넘은 동안에만 숫자로 보이고, 그 밖에는 "--"와 사유(준비 중·얼굴 찾는 중·신호 모으는 중·신호 약함)를 보인다.
  * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
  * 측정 종료를 누르면 이번 측정 기록을 sessionStorage 로 넘기고 결과 화면으로 간다(저장 계층에는 저장하지 않는다).
  */
@@ -57,7 +58,7 @@ export default function MeasureDemo() {
   const face = useFaceTrack(videoRef, webcam === 'ready')
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
-  const { bpm, getPulse } = useHeartRateSource()
+  const { bpm, getPulse, reading: rppg } = useHeartRateSource(videoRef, webcam === 'ready' && active)
   const elapsed = useElapsed(active)
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
   const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode)
@@ -74,7 +75,8 @@ export default function MeasureDemo() {
     router.push(RESULT_HREF)
   }
 
-  const quality = webcam !== 'ready' ? '대기' : face.box ? '양호' : '낮음'
+  // 심박 신호: rPPG 엔진의 상태와 SNR(품질 게이트 기준)
+  const quality = webcam !== 'ready' ? '대기' : signalText(rppg)
   const faceState = webcam !== 'ready' ? '카메라 대기' : face.box ? '얼굴 추적 중' : '얼굴 찾는 중'
   const emotion = face.emotionLabel ?? '—'
   const elapsedText = formatElapsed(elapsed)
@@ -142,7 +144,7 @@ export default function MeasureDemo() {
             <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
               <div className={styles.waveBox} skullet-block="">
                 <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>{bpm === null ? '맥박 파형 · rPPG 연결 전' : '맥박 파형'}</span>
+                <span className={styles.frameTag}>{pulseTag(rppg)}</span>
               </div>
             </Skeleton>
           </div>
@@ -189,7 +191,7 @@ export default function MeasureDemo() {
                 rows={[
                   ['측정 시간', elapsedText],
                   ['얼굴', faceState],
-                  ['신호 품질', quality],
+                  ['심박 신호', quality],
                   ['현재 감정', emotion],
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
