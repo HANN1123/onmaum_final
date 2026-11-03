@@ -14,7 +14,8 @@ import { isTrustedUrl } from './trust'
  */
 export const APP_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // 'wasm-unsafe-eval': rPPG(ONNX Runtime Web·MediaPipe)의 WASM 컴파일만 허용한다. eval 은 여전히 막힌다
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",

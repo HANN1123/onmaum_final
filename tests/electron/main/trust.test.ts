@@ -8,7 +8,7 @@ import {
   isTrustedUrl,
   isWidgetUrl,
 } from '@/features/electron/main/trust'
-import { resolveRunMode, widgetUrl } from '@/features/electron/main/runMode'
+import { homeUrl, resolveRunMode, widgetUrl } from '@/features/electron/main/runMode'
 
 describe('isTrustedUrl (패키지)', () => {
   it.each(['app://onmaum/', 'app://onmaum/measure/', 'app://onmaum/measure/index.txt?_rsc=1'])(
@@ -100,5 +100,10 @@ describe('resolveRunMode', () => {
   it('위젯 URL은 /widget/이다', () => {
     expect(widgetUrl(resolveRunMode(true))).toBe('app://onmaum/widget/')
     expect(widgetUrl(resolveRunMode(false))).toBe('http://localhost:3003/widget/')
+  })
+
+  it('메인 창은 같은 출처의 새 디자인 메인을 연다', () => {
+    expect(homeUrl(resolveRunMode(true))).toBe('app://onmaum/demo/hero-stage/')
+    expect(homeUrl(resolveRunMode(false))).toBe('http://localhost:3003/demo/hero-stage/')
   })
 })

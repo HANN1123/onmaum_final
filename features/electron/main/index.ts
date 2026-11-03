@@ -20,7 +20,7 @@ import {
 import { CHANNELS, type WindowRole } from '../types/bridge'
 import { handleAppProtocol, registerAppSchemePrivileges } from './appProtocol'
 import { isTrustedSender, parseEnabledFlag, parseSnapshot } from './ipcGuards'
-import { APP_USER_MODEL_ID, resolveRunMode, widgetUrl } from './runMode'
+import { APP_USER_MODEL_ID, homeUrl, resolveRunMode, widgetUrl } from './runMode'
 import { installGlobalGuards, installPermissionHandlers, restrictNavigation } from './security'
 import { DesktopSettingsStore } from './settingsStore'
 import {
@@ -231,7 +231,7 @@ function start(): void {
   startDevDiagnostics()
 
   // 로드 실패(중간에 다른 이동으로 취소 등)는 앱을 끝낼 이유가 아니므로 기록만 한다.
-  win.loadURL(mode.startUrl).catch((err: unknown) => {
+  win.loadURL(homeUrl(mode)).catch((err: unknown) => {
     console.error('[onmaum] 메인 화면 로드 실패:', err)
   })
 }

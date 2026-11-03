@@ -43,7 +43,7 @@ function fixture(t) {
   }
 }
 
-test('check runs tooling tests, application tests, lint, Electron typecheck and build in order with two workers by default', (t) => {
+test('check는 기본 워커 2개로 도구 테스트·앱 테스트·lint·Electron 타입 검사·build를 차례로 실행한다', (t) => {
   const f = fixture(t)
   const result = f.run('check')
   assert.equal(result.status, 0, result.stderr)

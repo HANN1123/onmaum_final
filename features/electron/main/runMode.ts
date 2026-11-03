@@ -40,6 +40,17 @@ export function resolveRunMode(isPackaged: boolean): RunMode {
   }
 }
 
+/**
+ * 메인 창이 처음 여는 화면. 옛 디자인은 폐기하기로 해서(2026-11-04) 새 디자인 메인을 연다.
+ * 출처(startUrl)는 그대로 두어 신뢰 판정·권한 규칙은 바뀌지 않는다. 새 화면이 실제 경로로 옮겨지면 이 값만 바꾼다.
+ */
+export const HOME_PATH = 'demo/hero-stage/'
+
+/** 메인 창이 처음 여는 URL */
+export function homeUrl(mode: RunMode): string {
+  return new URL(HOME_PATH, mode.startUrl).toString()
+}
+
 /** 위젯 창 URL */
 export function widgetUrl(mode: RunMode): string {
   return new URL('widget/', mode.startUrl).toString()
