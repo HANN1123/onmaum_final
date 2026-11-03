@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
+import HeroAbout from './HeroAbout'
 import HeroStage from './HeroStage'
 import { jetbrainsMono, sora } from './fonts'
 import { useDemoTheme } from './useDemoTheme'
@@ -23,8 +24,8 @@ const MEASURE_HREF = '/demo/measure'
 const NAV_LINKS = [
   { href: MEASURE_HREF, label: '측정' },
   { href: '/demo/report', label: '리포트' },
-  { href: '/records', label: '기록' },
-  { href: '/', label: '소개' },
+  { href: '/demo/records', label: '기록' },
+  { href: '#about', label: '소개' },
 ] as const
 
 const DESKTOP_MENU_QUERY = '(min-width: 901px)'
@@ -78,135 +79,138 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
   const useFallback = webcam === 'denied'
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.hero}`} data-theme={theme}>
-      {media === 'webcam' && (
-        <>
-          <div className={styles.media} style={{ '--poster': `url(${DEMO_FALLBACK_POSTER_DARK})` } as React.CSSProperties}>
-            <video
-              ref={videoRef}
-              src={useFallback ? DEMO_FALLBACK_VIDEO_DARK : undefined}
-              poster={useFallback ? DEMO_FALLBACK_POSTER_DARK : undefined}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              className={webcam === 'ready' ? styles.mirror : undefined}
-            />
-          </div>
-          <div className={styles.scrim} aria-hidden="true" />
-        </>
-      )}
+    <>
+      <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.hero}`} data-theme={theme}>
+        {media === 'webcam' && (
+          <>
+            <div className={styles.media} style={{ '--poster': `url(${DEMO_FALLBACK_POSTER_DARK})` } as React.CSSProperties}>
+              <video
+                ref={videoRef}
+                src={useFallback ? DEMO_FALLBACK_VIDEO_DARK : undefined}
+                poster={useFallback ? DEMO_FALLBACK_POSTER_DARK : undefined}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className={webcam === 'ready' ? styles.mirror : undefined}
+              />
+            </div>
+            <div className={styles.scrim} aria-hidden="true" />
+          </>
+        )}
 
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.logo}>
-          ONMAUM
-        </Link>
-        <div className={styles.cluster}>
-          <div className={styles.links}>
-            {NAV_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className={`${styles.link} ${styles.focusable}`}>
-                {link.label}
-              </Link>
-            ))}
-          </div>
-          <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
-            {theme === 'dark' ? '화이트' : '다크'}
-          </button>
-          <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
-            측정 시작
+        <nav className={styles.nav}>
+          <Link href="/" className={styles.logo}>
+            ONMAUM
           </Link>
-          <button
-            ref={toggleRef}
-            type="button"
-            className={`${styles.toggle} ${styles.focusable} ${menuOpen ? styles.toggleOpen : ''}`}
-            aria-expanded={menuOpen}
-            aria-controls="mobileMenu"
-            aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span className={`${styles.bar} ${styles.bar1}`} />
-            <span className={`${styles.bar} ${styles.bar2}`} />
-            <span className={`${styles.bar} ${styles.bar3}`} />
-          </button>
-        </div>
-      </nav>
+          <div className={styles.cluster}>
+            <div className={styles.links}>
+              {NAV_LINKS.map((link) => (
+                <Link key={link.href} href={link.href} className={`${styles.link} ${styles.focusable}`}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+            <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
+              {theme === 'dark' ? '화이트' : '다크'}
+            </button>
+            <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
+              측정 시작
+            </Link>
+            <button
+              ref={toggleRef}
+              type="button"
+              className={`${styles.toggle} ${styles.focusable} ${menuOpen ? styles.toggleOpen : ''}`}
+              aria-expanded={menuOpen}
+              aria-controls="mobileMenu"
+              aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <span className={`${styles.bar} ${styles.bar1}`} />
+              <span className={`${styles.bar} ${styles.bar2}`} />
+              <span className={`${styles.bar} ${styles.bar3}`} />
+            </button>
+          </div>
+        </nav>
 
-      <div
-        id="mobileMenu"
-        role="dialog"
-        aria-modal="true"
-        aria-label="사이트 메뉴"
-        aria-hidden={!menuOpen}
-        inert={!menuOpen}
-        className={`${styles.menu} ${menuOpen ? styles.menuOpen : ''}`}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) closeMenu()
-        }}
-      >
-        {NAV_LINKS.map((link, i) => (
+        <div
+          id="mobileMenu"
+          role="dialog"
+          aria-modal="true"
+          aria-label="사이트 메뉴"
+          aria-hidden={!menuOpen}
+          inert={!menuOpen}
+          className={`${styles.menu} ${menuOpen ? styles.menuOpen : ''}`}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeMenu()
+          }}
+        >
+          {NAV_LINKS.map((link, i) => (
+            <Link
+              key={link.href}
+              ref={i === 0 ? firstMenuLinkRef : undefined}
+              href={link.href}
+              className={`${styles.menuItem} ${styles.menuLink} ${styles.focusable}`}
+              style={{ '--i': i } as React.CSSProperties}
+              onClick={closeMenu}
+            >
+              {link.label}
+            </Link>
+          ))}
           <Link
-            key={link.href}
-            ref={i === 0 ? firstMenuLinkRef : undefined}
-            href={link.href}
-            className={`${styles.menuItem} ${styles.menuLink} ${styles.focusable}`}
-            style={{ '--i': i } as React.CSSProperties}
+            href={MEASURE_HREF}
+            className={`${styles.menuItem} ${styles.menuCta} ${styles.focusable}`}
+            style={{ '--i': NAV_LINKS.length } as React.CSSProperties}
             onClick={closeMenu}
           >
-            {link.label}
-          </Link>
-        ))}
-        <Link
-          href={MEASURE_HREF}
-          className={`${styles.menuItem} ${styles.menuCta} ${styles.focusable}`}
-          style={{ '--i': NAV_LINKS.length } as React.CSSProperties}
-          onClick={closeMenu}
-        >
-          측정 시작
-        </Link>
-      </div>
-
-      <div className={`${styles.body} ${media === 'stage' ? styles.bodyStage : ''}`}>
-        {media === 'stage' && <HeroStage scheme={theme} />}
-        <div className={styles.panel}>
-          <span className={styles.chip}>[ 측정 준비 ]</span>
-          <h1 className={styles.h1}>ONMAUM</h1>
-          <p className={styles.tagline}>온마음 · 통화 중인 당신의 표정과 맥박을 읽는, 본인만 보는 기록.</p>
-
-          <form className={styles.form} action="#" method="post" noValidate onSubmit={onSubmit}>
-            <label htmlFor="hero-nickname" className={styles.srOnly}>
-              별명
-            </label>
-            <input
-              id="hero-nickname"
-              name="nickname"
-              type="text"
-              autoComplete="nickname"
-              placeholder="별명 (이 기기에만 저장)"
-              className={`${styles.input} ${styles.focusable}`}
-            />
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnGhost} ${styles.focusable}`}
-              onClick={() => router.push(MEASURE_HREF)}
-            >
-              설문 없이 바로 측정
-            </button>
-            <button type="submit" className={`${styles.btn} ${styles.btnSolid} ${styles.focusable}`}>
-              측정 시작
-            </button>
-          </form>
-
-          <Link href="/records" className={`${styles.referral} ${styles.focusable}`}>
-            이미 기록이 있어요
+            측정 시작
           </Link>
         </div>
-      </div>
 
-      <footer className={styles.legal}>
-        측정을 시작하면 기록이 이 기기 안에만 남는 것에 동의하는 것입니다. 온마음은 의료기기가 아닙니다.{' '}
-        <a href="#privacy-notice">개인정보 안내</a> · <a href="#service-contract">이용 안내</a>
-      </footer>
-    </section>
+        <div className={`${styles.body} ${media === 'stage' ? styles.bodyStage : ''}`}>
+          {media === 'stage' && <HeroStage scheme={theme} />}
+          <div className={styles.panel}>
+            <span className={styles.chip}>[ 측정 준비 ]</span>
+            <h1 className={styles.h1}>ONMAUM</h1>
+            <p className={styles.tagline}>온마음 · 통화 중인 당신의 표정과 맥박을 읽는, 본인만 보는 기록.</p>
+
+            <form className={styles.form} action="#" method="post" noValidate onSubmit={onSubmit}>
+              <label htmlFor="hero-nickname" className={styles.srOnly}>
+                별명
+              </label>
+              <input
+                id="hero-nickname"
+                name="nickname"
+                type="text"
+                autoComplete="nickname"
+                placeholder="별명 (이 기기에만 저장)"
+                className={`${styles.input} ${styles.focusable}`}
+              />
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost} ${styles.focusable}`}
+                onClick={() => router.push(MEASURE_HREF)}
+              >
+                설문 없이 바로 측정
+              </button>
+              <button type="submit" className={`${styles.btn} ${styles.btnSolid} ${styles.focusable}`}>
+                측정 시작
+              </button>
+            </form>
+
+            <Link href="/demo/records" className={`${styles.referral} ${styles.focusable}`}>
+              이미 기록이 있어요
+            </Link>
+          </div>
+        </div>
+
+        <footer className={styles.legal}>
+          측정을 시작하면 기록이 이 기기 안에만 남는 것에 동의하는 것입니다. 온마음은 의료기기가 아닙니다.{' '}
+          <a href="#privacy-notice">개인정보 안내</a> · <a href="#service-contract">이용 안내</a>
+        </footer>
+      </section>
+      <HeroAbout theme={theme} />
+    </>
   )
 }

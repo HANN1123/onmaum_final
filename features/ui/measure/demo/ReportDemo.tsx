@@ -223,7 +223,7 @@ export default function ReportDemo() {
             <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
               다음 통화
             </Link>
-            <Link href="/records" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+            <Link href="/demo/records" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
               기록 보기
             </Link>
           </div>

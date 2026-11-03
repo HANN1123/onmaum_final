@@ -1,0 +1,66 @@
+/* 히어로 아래 소개. 히어로와 같은 토큰을 따로 둔다(히어로 section 밖이라 상속되지 않는다). */
+.about {
+  --bg: #000000;
+  --text: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.62);
+  --text-dimmer: rgba(255, 255, 255, 0.42);
+  --line: rgba(255, 255, 255, 0.14);
+  --gutter: clamp(20px, 5vw, 100px);
+  --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  scroll-margin-top: 0;
+  background: var(--bg);
+  color: var(--text);
+  padding: clamp(72px, 9vw, 140px) var(--gutter) clamp(80px, 10vw, 160px);
+  -webkit-font-smoothing: antialiased;
+}
+.about[data-theme='light'] {
+  --bg: #ffffff;
+  --text: #000000;
+  --text-dim: rgba(0, 0, 0, 0.62);
+  --text-dimmer: rgba(0, 0, 0, 0.42);
+  --line: rgba(0, 0, 0, 0.14);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(28px, 4vw, 72px);
+}
+.block {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.no {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-dimmer);
+}
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(22px, 2vw, 32px);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+}
+.body {
+  margin: 0;
+  max-width: 34em;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(14px, 1vw, 17px);
+  line-height: 1.65;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

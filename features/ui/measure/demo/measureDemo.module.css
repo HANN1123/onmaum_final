@@ -940,6 +940,141 @@
   color: var(--text-dim);
 }
 
+/* 기록 화면: 하루 한 줄, 막대는 그날 스트레스, 세로 눈금은 평소 */
+.recordsPanel {
+  grid-template-rows: auto 1fr;
+}
+.readoutSub {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.dayList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.day {
+  display: grid;
+  grid-template-columns: 96px 104px minmax(80px, 1fr) 128px 56px;
+  align-items: center;
+  gap: 16px;
+  height: 36px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  cursor: default;
+  transition: color 0.15s ease;
+}
+.dayToday,
+.dayOn {
+  color: var(--text);
+}
+.dayDate em {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dayCalls {
+  color: inherit;
+}
+.dayTrack {
+  position: relative;
+  height: 10px;
+}
+.dayFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(var(--text-rgb), 0.22);
+  transition: background-color 0.15s ease;
+}
+.dayOn .dayFill {
+  background: rgba(var(--text-rgb), 0.5);
+}
+.dayToday .dayFill {
+  background: var(--text);
+}
+.dayBase {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 0;
+  border-left: 1px dashed rgba(var(--text-rgb), 0.55);
+}
+.dayLevel {
+  text-align: right;
+}
+.dayLink {
+  text-align: right;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 13px;
+}
+.dayLink:hover {
+  color: var(--text);
+}
+
+/* 내 기록 관리 */
+.manage {
+  display: grid;
+  gap: 14px;
+  margin-top: auto;
+}
+.textDanger {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.textDanger:hover {
+  color: var(--text);
+}
+.confirm {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  background: rgba(var(--text-rgb), 0.05);
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.confirm p {
+  margin: 0;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+}
+.btnDanger {
+  composes: btnSolid;
+  background: #c62828;
+  color: #ffffff;
+}
+.btnDanger:hover {
+  background: #b71c1c;
+}
+.notice {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-dim);
+  animation: swapIn 0.28s var(--ease-premium);
+}
+
 /* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
 .switch {
   display: inline-flex;
