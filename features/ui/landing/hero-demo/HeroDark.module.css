@@ -358,6 +358,29 @@
   color: var(--text-dim);
 }
 
+/* 제품 장면 모드: 왼쪽 칸이 장면. 창은 로고와 같은 여백에서 시작하고 잘리지 않는다 */
+.bodyStage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 34vw);
+  align-items: stretch;
+  gap: var(--gutter);
+  overflow: hidden;
+}
+.bodyStage .panel {
+  align-self: center;
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .bodyStage {
+    display: flex;
+    padding-left: var(--gutter);
+  }
+  .bodyStage > :first-child {
+    display: none;
+  }
+}
+
 /* 포커스 */
 .focusable:focus-visible {
   outline: 1px solid rgba(var(--text-rgb), 0.7);

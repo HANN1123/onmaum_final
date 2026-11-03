@@ -1,0 +1,266 @@
+/*
+ * 히어로 제품 장면. 색과 글꼴은 감싸는 .hero 의 토큰(--text-rgb, --bg, --font-display 등)을 그대로 쓴다.
+ * 깊이는 그림자 대신 한 단계 밝은 면과 위쪽 가는 선으로 낸다(Stageshow 의 어두운 히어로 규칙).
+ */
+.wrap {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.stage {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  transform-origin: 0 50%;
+  font-family: var(--font-display);
+  color: var(--text);
+}
+
+/* 측정 화면 창 */
+.window {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  width: 640px;
+  padding-bottom: 24px;
+  background: rgba(var(--text-rgb), 0.045);
+  border-top: 1px solid rgba(var(--text-rgb), 0.14);
+}
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 54px;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.08);
+}
+.logo {
+  font-weight: 200;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+}
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.live i {
+  width: 6px;
+  height: 6px;
+  background: rgba(var(--text-rgb), 0.3);
+  transition: background-color 0.3s ease;
+}
+.live i[data-on] {
+  background: var(--text);
+}
+.endBtn,
+.nextBtn {
+  display: inline-block;
+  flex: none;
+  white-space: nowrap;
+  padding: 9px 16px;
+  font-size: 13px;
+  border: 1px solid rgba(var(--text-rgb), 0.3);
+  transition: background-color 0.12s ease, transform 0.12s ease;
+}
+.endBtn[data-pressed],
+.nextBtn[data-pressed] {
+  background: rgba(var(--text-rgb), 0.14);
+  transform: scale(0.97);
+}
+.body {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 22px;
+  padding: 22px 24px 0;
+}
+.left {
+  display: grid;
+  gap: 12px;
+}
+.camera {
+  position: relative;
+  height: 268px;
+  background: rgba(var(--text-rgb), 0.05);
+}
+.tag {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  height: 128px;
+  translate: -50% -46%;
+  border: 1px solid rgba(var(--text-rgb), 0.45);
+}
+.wave {
+  height: 64px;
+  background: rgba(var(--text-rgb), 0.03);
+}
+.waveCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.right {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bpm {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 200;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.bpm small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+.rows {
+  display: grid;
+  gap: 2px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  font-size: 13px;
+}
+.row > span:first-child {
+  color: var(--text-dimmer);
+}
+.row b {
+  display: block;
+  height: 6px;
+  background: rgba(var(--text-rgb), 0.12);
+}
+.emotion {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.emotion i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+/* 결과 카드: 창보다 한 단계 더 밝은 면 */
+.card {
+  position: absolute;
+  left: 440px;
+  top: 250px;
+  width: 304px;
+  padding: 20px 24px 18px;
+  background: #161616;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.45, 0, 0.1, 1);
+  pointer-events: none;
+}
+.card[data-on] {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.8s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.9s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+[data-theme='light'] .card {
+  background: #ffffff;
+  border-top-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.cardKicker {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.cardVerdict {
+  margin: 8px 0 14px;
+  font-weight: 300;
+  font-size: 22px;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+.spark {
+  display: block;
+  overflow: visible;
+}
+.sparkLine {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  animation: sparkDraw 1s cubic-bezier(0.45, 0, 0.1, 1) 0.25s backwards;
+}
+.sparkHot {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.sparkHot[data-on] {
+  opacity: 1;
+}
+@keyframes sparkDraw {
+  from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  to { stroke-dasharray: 1; stroke-dashoffset: 0; }
+}
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 커서: 가로는 이동 곡선, 세로는 도착 곡선이라 경로가 완만하게 휜다 */
+.cursorX,
+.cursorY {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.cursorX {
+  z-index: 5;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.45, 0, 0.1, 1);
+}
+.cursorY {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.cursor {
+  /* 화살표 끝이 좌표에 오도록 */
+  translate: -10px -7px;
+  transition: scale 0.12s ease;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+.cursor[data-pressed] {
+  scale: 0.86;
+}

@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
-import CallChart from './CallChart'
+import CallChart, { type ScrubReason } from './CallChart'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
 import { LEGAL, SAMPLE_TODAY } from './demoCopy'
 import styles from './measureDemo.module.css'
@@ -56,9 +56,16 @@ export default function ResultDemo() {
   const session = stored ?? SAMPLE_SESSION
   const [report, setReport] = useState<SelfReport | null>(null)
   const [active, setActive] = useState<number | null>(null)
+  const [reason, setReason] = useState<ScrubReason>('pointer')
+  const onScrub = useCallback((index: number | null, why: ScrubReason = 'pointer') => {
+    setActive(index)
+    setReason(why)
+  }, [])
 
   const summary = useMemo(() => summarizeSession(session), [session])
   const smooth = useMemo(() => smoothBpm(session.samples.map((s) => s.bpm)), [session])
+  // 최고 심박은 차트 선과 같은 다듬은 값에서 읽어, 카메라가 읽어 주는 숫자와 어긋나지 않게 한다.
+  const maxBpm = useMemo(() => Math.round(Math.max(...smooth)), [smooth])
   // 힘든 구간의 색은 그 구간에서 가장 오래 머문 감정
   const hardest = useMemo(() => {
     if (!summary.hardest) return null
@@ -73,7 +80,7 @@ export default function ResultDemo() {
 
   // 위쪽 큰 숫자: 평소엔 통화 평균, 차트를 훑는 동안엔 그 순간
   const point = active !== null ? session.samples[active] : null
-  const readLabel = point ? mmss(point.t) : '통화 평균'
+  const readLabel = point ? (reason === 'camera' ? `가장 힘든 순간 · ${mmss(point.t)}` : mmss(point.t)) : '통화 평균'
   const readBpm = point ? Math.round(smooth[active!]) : summary.avgBpm
   const readEmotion = point ? point.emotion : summary.dominant
 
@@ -115,7 +122,7 @@ export default function ResultDemo() {
             shares={summary.shares}
             scheme={theme}
             active={active}
-            onScrub={setActive}
+            onScrub={onScrub}
           />
         </div>
 
@@ -130,7 +137,7 @@ export default function ResultDemo() {
 
           <div className={`${styles.stats} ${styles.stats2}`}>
             <Stat k="통화 시간" v={mmss(session.durationSec)} />
-            <Stat k="최고 심박" v={String(summary.maxBpm)} unit="BPM" />
+            <Stat k="최고 심박" v={String(maxBpm)} unit="BPM" />
           </div>
 
           <div className={styles.rows}>

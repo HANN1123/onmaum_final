@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
+import HeroStage from './HeroStage'
 import { jetbrainsMono, sora } from './fonts'
 import { useDemoTheme } from './useDemoTheme'
 import { useWebcam } from './useWebcam'
@@ -13,6 +14,7 @@ import { useWebcam } from './useWebcam'
  * 검정 배경 전체 화면 히어로 데모.
  * 왼쪽·가운데는 영상(기본은 전면 웹캠, 거절하면 참고 시안의 영상), 오른쪽은 측정 입장 패널.
  * 라틴 표시 글자는 Sora·JetBrains Mono, 한글은 전역 Pretendard 로 떨어진다.
+ * media="stage" 이면 웹캠 대신 왼쪽에 반복 재생되는 제품 장면(HeroStage)을 둔다. 웹캠은 켜지 않는다.
  */
 
 /** 측정 시작이 여는 화면. 데모가 실제 /measure 로 옮겨지면 되돌린다. */
@@ -27,12 +29,12 @@ const NAV_LINKS = [
 
 const DESKTOP_MENU_QUERY = '(min-width: 901px)'
 
-export default function HeroDark() {
+export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'stage' }) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const firstMenuLinkRef = useRef<HTMLAnchorElement>(null)
-  const webcam = useWebcam(videoRef, true)
+  const webcam = useWebcam(videoRef, media === 'webcam')
   const [menuOpen, setMenuOpen] = useState(false)
   const [theme, toggleTheme] = useDemoTheme()
 
@@ -77,20 +79,24 @@ export default function HeroDark() {
 
   return (
     <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.hero}`} data-theme={theme}>
-      <div className={styles.media} style={{ '--poster': `url(${DEMO_FALLBACK_POSTER_DARK})` } as React.CSSProperties}>
-        <video
-          ref={videoRef}
-          src={useFallback ? DEMO_FALLBACK_VIDEO_DARK : undefined}
-          poster={useFallback ? DEMO_FALLBACK_POSTER_DARK : undefined}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className={webcam === 'ready' ? styles.mirror : undefined}
-        />
-      </div>
-      <div className={styles.scrim} aria-hidden="true" />
+      {media === 'webcam' && (
+        <>
+          <div className={styles.media} style={{ '--poster': `url(${DEMO_FALLBACK_POSTER_DARK})` } as React.CSSProperties}>
+            <video
+              ref={videoRef}
+              src={useFallback ? DEMO_FALLBACK_VIDEO_DARK : undefined}
+              poster={useFallback ? DEMO_FALLBACK_POSTER_DARK : undefined}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              className={webcam === 'ready' ? styles.mirror : undefined}
+            />
+          </div>
+          <div className={styles.scrim} aria-hidden="true" />
+        </>
+      )}
 
       <nav className={styles.nav}>
         <Link href="/" className={styles.logo}>
@@ -160,7 +166,8 @@ export default function HeroDark() {
         </Link>
       </div>
 
-      <div className={styles.body}>
+      <div className={`${styles.body} ${media === 'stage' ? styles.bodyStage : ''}`}>
+        {media === 'stage' && <HeroStage scheme={theme} />}
         <div className={styles.panel}>
           <span className={styles.chip}>[ 측정 준비 ]</span>
           <h1 className={styles.h1}>ONMAUM</h1>
