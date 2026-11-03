@@ -5,6 +5,7 @@ import type { FaceDetector } from '@mediapipe/tasks-vision'
 import { createFrameClock, heartRateFromBvp, MAX_SAMPLE_GAP_MS } from '../lib/rppg'
 import { clampCrop, createKalman1D, expandFaceBox, rgbaToModelInput, type Kalman1D } from '../lib/meRppg'
 import type { MeWorkerIn, MeWorkerOut } from '../lib/meRppg.worker'
+import type { CameraRotation } from '@/shared/storage/cameraRotation'
 import { getBlazeFace } from './blazeFace'
 import { DEFAULT_MIN_SNR_DB, gateReading, OFF_READING, pulseLevel, type RppgReading } from './rppgGate'
 
@@ -18,6 +19,8 @@ const ESTIMATE_MS = 1_000
 interface Options {
   /** SNR 기준(dB). 기본은 잠정값 0dB */
   minSnrDb?: number
+  /** 카메라 회전(시계 방향). 돌린 프레임을 BlazeFace·crop 입력으로 쓴다(측정 화면과 같은 규칙) */
+  rotation?: CameraRotation
 }
 
 /**
@@ -30,11 +33,16 @@ interface Options {
 export function useMeRppg(
   videoRef: RefObject<HTMLVideoElement | null>,
   enabled: boolean,
-  { minSnrDb = DEFAULT_MIN_SNR_DB }: Options = {},
+  { minSnrDb = DEFAULT_MIN_SNR_DB, rotation = 0 }: Options = {},
 ): { reading: RppgReading; getPulse: () => number } {
   const [reading, setReading] = useState<RppgReading>(OFF_READING)
   const bufferRef = useRef<{ t: number; v: number }[]>([])
   const liveRef = useRef(false)
+  // 회전은 엔진(worker·모델)을 다시 만들지 않고 프레임 처리에서 바꾼다. 바뀐 순간 상태를 모두 버린다
+  const rotationRef = useRef<CameraRotation>(rotation)
+  useEffect(() => {
+    rotationRef.current = rotation
+  }, [rotation])
 
   useEffect(() => {
     if (!enabled) return
@@ -58,6 +66,28 @@ export function useMeRppg(
     const buffer: { t: number; v: number }[] = []
     bufferRef.current = buffer
     liveRef.current = false
+
+    let appliedRotation = rotationRef.current
+    const rotatedCanvas = document.createElement('canvas')
+    const rotatedCtx = rotatedCanvas.getContext('2d')
+    /** 돌린(비반전) 프레임을 그린다. 크기는 해상도·방향이 바뀔 때만 다시 정한다 */
+    const drawRotated = (r: CameraRotation): boolean => {
+      if (!rotatedCtx) return false
+      const w = video.videoWidth
+      const h = video.videoHeight
+      const sideways = r === 90 || r === 270
+      const cw = sideways ? h : w
+      const ch = sideways ? w : h
+      if (rotatedCanvas.width !== cw || rotatedCanvas.height !== ch) {
+        rotatedCanvas.width = cw
+        rotatedCanvas.height = ch
+      }
+      rotatedCtx.setTransform(1, 0, 0, 1, 0, 0)
+      rotatedCtx.translate(cw / 2, ch / 2)
+      rotatedCtx.rotate((r * Math.PI) / 180)
+      rotatedCtx.drawImage(video, -w / 2, -h / 2, w, h)
+      return true
+    }
 
     const crop = document.createElement('canvas')
     crop.width = 36
@@ -107,8 +137,23 @@ export function useMeRppg(
     const sendFrame = (now: number, t: number) => {
       if (!worker || !blaze || !workerReady || !cropCtx) return
       if (video.readyState < 2 || video.videoWidth === 0) return
+      // 방향이 바뀌면 이전 방향의 모델 상태·칼만·파형·표시값을 즉시 버린다. 늦은 이전 응답은 epoch 로 걸러진다
+      const r = rotationRef.current
+      if (r !== appliedRotation) {
+        appliedRotation = r
+        reset()
+        face = false
+        lastSendT = null
+        liveRef.current = false
+        setReading({ status: 'warming', bpm: null, snrDb: null, ageMs: null })
+      }
       if (inFlight >= ME_MAX_IN_FLIGHT) return
-      const det = blaze.detectForVideo(video, now).detections[0]?.boundingBox
+      // 0°는 영상을 그대로 쓴다(추가 비용 없음). BlazeFace 시간축은 원본 영상의 프레임 시각(now)을 그대로 쓴다
+      if (r !== 0 && !drawRotated(r)) return
+      const source = r === 0 ? video : rotatedCanvas
+      const sw = r === 0 ? video.videoWidth : rotatedCanvas.width
+      const sh = r === 0 ? video.videoHeight : rotatedCanvas.height
+      const det = blaze.detectForVideo(source, now).detections[0]?.boundingBox
       if (!det) {
         face = false
         return
@@ -126,10 +171,10 @@ export function useMeRppg(
         width: kw.update(det.width),
         height: kh.update(det.height),
       })
-      const c = clampCrop(box, video.videoWidth, video.videoHeight)
+      const c = clampCrop(box, sw, sh)
       if (!c) return
       // 전체 프레임을 다시 그리지 않고 영상에서 얼굴 부분만 바로 36×36 으로 줄인다
-      cropCtx.drawImage(video, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
+      cropCtx.drawImage(source, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
       const input = rgbaToModelInput(cropCtx.getImageData(0, 0, 36, 36).data)
       lastSendT = t
       inFlight++

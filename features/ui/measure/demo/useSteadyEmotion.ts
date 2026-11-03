@@ -15,7 +15,16 @@ export const EMOTION_RESPONSE: Record<EmotionResponseMode, { dwell: number; hold
  * - 한번 바뀌면 hold 동안은 지킨다(색이 쉴 새 없이 흔들리지 않게).
  * 얼굴을 못 찾으면(null) 마지막 색을 유지한다.
  */
-export function useSteadyEmotion(raw: Emotion | null, mode: EmotionResponseMode, initial: Emotion = 'calm'): Emotion {
+/**
+ * resetKey 가 바뀌면(예: 카메라 회전) 후보와 유지 시간을 처음부터 센다. 이전 방향의 후보가 새 방향 값과 섞이지 않게 하고,
+ * 새 방향에서 안정된 감정이 나오면 유지 시간(hold)을 기다리지 않고 바로 바꾼다. 오브 색은 끊기지 않게 마지막 값을 유지한다.
+ */
+export function useSteadyEmotion(
+  raw: Emotion | null,
+  mode: EmotionResponseMode,
+  initial: Emotion = 'calm',
+  resetKey: unknown = null,
+): Emotion {
   const [steady, setSteady] = useState<Emotion>(initial)
   const candidateRef = useRef<{ emotion: Emotion; since: number } | null>(null)
   const changedAtRef = useRef(0)
@@ -24,6 +33,11 @@ export function useSteadyEmotion(raw: Emotion | null, mode: EmotionResponseMode,
   useEffect(() => {
     steadyRef.current = steady
   }, [steady])
+
+  useEffect(() => {
+    candidateRef.current = null
+    changedAtRef.current = 0
+  }, [resetKey])
 
   useEffect(() => {
     const { dwell, hold } = EMOTION_RESPONSE[mode]
