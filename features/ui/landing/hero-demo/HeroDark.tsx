@@ -7,6 +7,7 @@ import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
 import HeroAbout from './HeroAbout'
 import HeroStage from './HeroStage'
+import { DEMO_HOME_HREF } from './routes'
 import { jetbrainsMono, sora } from './fonts'
 import { useDemoTheme } from './useDemoTheme'
 import { useWebcam } from './useWebcam'
@@ -101,7 +102,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
         )}
 
         <nav className={styles.nav}>
-          <Link href="/" className={styles.logo}>
+          <Link href={DEMO_HOME_HREF} className={styles.logo}>
             ONMAUM
           </Link>
           <div className={styles.cluster}>

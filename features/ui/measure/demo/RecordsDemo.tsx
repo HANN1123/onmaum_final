@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { BASELINE_WINDOW_DAYS, classifyStress, computeBaselineState, type StressLevel } from '@/features/algorithm/baseline/baseline'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { Row, Stat } from './demoBits'
 import { LEGAL } from './demoCopy'
@@ -22,7 +23,7 @@ import { useStoredSession } from './useStoredSession'
 
 const MEASURE_HREF = '/demo/measure'
 const REPORT_HREF = '/demo/report'
-const HERO_HREF = '/demo/hero-dark'
+const HERO_HREF = DEMO_HOME_HREF
 
 /** 분 단위의 지금. 서버에서는 0 이라 날짜 글자가 어긋나지 않고, 하이드레이션 뒤 한 번 채워진다. */
 const subscribe = () => () => {}

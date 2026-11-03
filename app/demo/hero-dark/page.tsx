@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
-import HeroDark from '@/features/ui/landing/hero-demo/HeroDark'
+import { redirect } from 'next/navigation'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 
-export const metadata: Metadata = {
-  title: '온마음 — 통화 중인 당신의 마음을 읽는 기록',
-}
-
-// 검정 배경 전체 화면 히어로 데모. 앱 chrome 은 AppChrome 에서 이 경로를 제외한다.
+// 웹캠 배경 히어로는 쓰지 않기로 했다(2026-11-03). 예전 링크로 들어와도 메인(제품 장면 히어로)으로 보낸다.
 export default function HeroDarkPage() {
-  return <HeroDark />
+  redirect(DEMO_HOME_HREF)
 }

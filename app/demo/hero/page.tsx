@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
-import HeroDemo from '@/features/ui/landing/hero-demo/HeroDemo'
+import { redirect } from 'next/navigation'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 
-export const metadata: Metadata = {
-  title: '온마음 — 히어로 데모',
-}
-
-// 전체 화면 히어로 데모. 앱 chrome(상단 탭·푸터)은 AppChrome 에서 이 경로를 제외한다.
+// 밝은 타자 히어로 시안은 쓰지 않기로 했다. 예전 링크로 들어와도 메인(제품 장면 히어로)으로 보낸다.
 export default function HeroDemoPage() {
-  return <HeroDemo />
+  redirect(DEMO_HOME_HREF)
 }

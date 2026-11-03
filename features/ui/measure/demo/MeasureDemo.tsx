@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { useWebcam } from '@/features/ui/landing/hero-demo/useWebcam'
 import { LEGAL, SAMPLE_TODAY, SAMPLE_VERDICT } from './demoCopy'
@@ -24,7 +25,7 @@ import { useStoredSession } from './useStoredSession'
  * 오늘 지수와 기준선 문구는 표본이다. 전화 종료를 누르면 통화 기록을 sessionStorage 로 넘기고 결과 화면으로 간다.
  */
 
-const HERO_HREF = '/demo/hero-dark'
+const HERO_HREF = DEMO_HOME_HREF
 const RESULT_HREF = '/demo/result'
 /** 시연용 모의 심박 목표값. rPPG 가 붙으면 이 줄은 사라진다. */
 const BPM_PRESETS = [60, 75, 95, 120] as const

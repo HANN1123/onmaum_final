@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useMemo, useState } from 'react'
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import CallChart, { type ScrubReason } from './CallChart'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
@@ -23,7 +24,7 @@ import { useStoredSession } from './useStoredSession'
 
 const MEASURE_HREF = '/demo/measure'
 const REPORT_HREF = '/demo/report'
-const HERO_HREF = '/demo/hero-dark'
+const HERO_HREF = DEMO_HOME_HREF
 /** 넘겨받은 통화가 없을 때 보여줄 표본. 결정적이라 서버와 클라이언트가 같은 그림을 그린다. */
 const SAMPLE_SESSION = makeSampleSession()
 

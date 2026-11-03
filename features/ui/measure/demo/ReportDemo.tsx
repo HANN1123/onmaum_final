@@ -6,6 +6,7 @@ import { classifyStress, computeBaselineState, BASELINE_WINDOW_DAYS } from '@/fe
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { PERIOD_BUCKET_HOURS } from '@/features/algorithm/stress/dailyStress'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
+import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
 import { LEGAL, SAMPLE_TODAY } from './demoCopy'
@@ -35,7 +36,7 @@ import { useStoredSession } from './useStoredSession'
 
 const MEASURE_HREF = '/demo/measure'
 const RESULT_HREF = '/demo/result'
-const HERO_HREF = '/demo/hero-dark'
+const HERO_HREF = DEMO_HOME_HREF
 const SHARE_ORDER: Emotion[] = ['calm', 'happy', 'sad', 'angry']
 
 /** 분 단위의 지금. 서버에서는 0 이라 날짜·시각 글자가 어긋나지 않고, 하이드레이션 뒤 한 번 채워진다. */
