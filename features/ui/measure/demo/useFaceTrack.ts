@@ -26,7 +26,8 @@ export interface FaceTrack {
 const DETECTOR_OPTIONS = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
 
 /**
- * 시연용 얼굴 추적. 기존 face-api 모델(/models)로 얼굴 상자와 현재 감정을 얻는다.
+ * 시연용 얼굴 추적. 기존 face-api 모델(/models)과 같은 검출·정렬·정규화로 얼굴 상자와 현재 감정을 얻는다.
+ * rPPG 를 붙일 때 원래 앱의 표정 인식과 한 번의 얼굴 검출로 합친다.
  * 저장하지 않고 화면에만 쓴다. mirrored 가 true 면 상자 x 를 좌우 반전한다.
  */
 export function useFaceTrack(
@@ -61,7 +62,9 @@ export function useFaceTrack(
       if (!video || video.readyState < 2 || busy) return
       busy = true
       try {
-        const result = await faceapi.detectSingleFace(video, DETECTOR_OPTIONS).withFaceExpressions()
+        // 원래 앱(faceDetection.analyzeEmotion)과 같이 랜드마크로 얼굴을 반듯하게 정렬한 뒤 표정을 읽는다.
+        // 랜드마크를 건너뛰면 검출 상자를 그대로 잘라 읽어, 고개를 돌렸을 때 감정이 원래 앱과 달라질 수 있다.
+        const result = await faceapi.detectSingleFace(video, DETECTOR_OPTIONS).withFaceLandmarks().withFaceExpressions()
         if (cancelled) return
         if (!result) {
           setBox(null)
