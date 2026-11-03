@@ -15,16 +15,17 @@ import { useWebcam } from './useWebcam'
  * 라틴 표시 글자는 Sora·JetBrains Mono, 한글은 전역 Pretendard 로 떨어진다.
  */
 
+/** 측정 시작이 여는 화면. 데모가 실제 /measure 로 옮겨지면 되돌린다. */
+const MEASURE_HREF = '/demo/measure'
+
 const NAV_LINKS = [
-  { href: '/measure', label: '측정' },
+  { href: MEASURE_HREF, label: '측정' },
   { href: '/stats', label: '리포트' },
   { href: '/records', label: '기록' },
   { href: '/', label: '소개' },
 ] as const
 
 const DESKTOP_MENU_QUERY = '(min-width: 901px)'
-/** 측정 시작이 여는 화면. 측정 화면 시안이 정해지면 /measure 로 되돌린다. */
-const MEASURE_HREF = '/demo/measure/a'
 
 export default function HeroDark() {
   const router = useRouter()

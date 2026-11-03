@@ -1,4 +1,4 @@
-/* 측정 화면 시안 A·B·C. 검정 히어로와 같은 토큰. 상자는 모두 각진 사각형, 선은 1px. */
+/* 측정 화면 데모(분할 계기판). 검정 히어로와 같은 토큰. 상자는 모두 각진 사각형, 선은 1px. */
 .shell {
   --bg: #000000;
   --bg-rgb: 0, 0, 0;
@@ -52,7 +52,6 @@
   text-transform: uppercase;
 }
 .dim { color: var(--text-dim); }
-.dimmer { color: var(--text-dimmer); }
 .display {
   font-family: var(--font-display);
   font-weight: 200;
@@ -88,17 +87,13 @@
   align-items: center;
   gap: clamp(16px, 2vw, 36px);
 }
-.switcher {
-  display: flex;
-  gap: 12px;
-}
-.switcher a {
-  color: var(--text-dimmer);
+.navLink {
+  composes: mono;
+  color: var(--text-dim);
   text-decoration: none;
   transition: color 0.25s ease;
 }
-.switcher a:hover,
-.switcher a.current {
+.navLink:hover {
   color: var(--text);
 }
 .live {
@@ -132,27 +127,12 @@
 }
 
 /* 영상과 얼굴 상자 */
-.media {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--bg);
-}
-.media video,
 .frame video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
   transform: scaleX(-1);
-}
-.scrim {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(to right, transparent 0%, transparent 45%, rgba(var(--bg-rgb), 0.45) 72%, rgba(var(--bg-rgb), 0.72) 100%),
-    linear-gradient(to bottom, rgba(var(--bg-rgb), 0.55) 0%, transparent 22%, transparent 78%, rgba(var(--bg-rgb), 0.65) 100%);
 }
 .faceLayer {
   position: absolute;
@@ -239,40 +219,15 @@
   width: 100%;
 }
 
-/* ───────── A: 풀블리드 ───────── */
-.aBody {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 var(--gutter);
-  min-height: 0;
-}
-.aPanel {
-  width: min(34vw, 620px);
-  min-width: 380px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: clamp(18px, 2vw, 32px);
-}
-.aFooter {
-  display: grid;
-  grid-template-rows: auto auto;
-}
-.aWave {
-  height: clamp(72px, 10vh, 120px);
-  border-top: 1px solid var(--line);
-}
-
-/* ───────── B: 분할 계기판 ───────── */
-.bBody {
+/* 본문: 왼쪽 카메라·파형, 오른쪽 계기판 */
+.body {
   display: grid;
   grid-template-columns: 1.55fr 1fr;
   gap: clamp(20px, 2.6vw, 48px);
   padding: 0 var(--gutter) clamp(16px, 2vw, 28px);
   min-height: 0;
 }
-.bLeft {
+.left {
   display: grid;
   grid-template-rows: 1fr auto;
   gap: clamp(12px, 1.4vw, 20px);
@@ -293,21 +248,21 @@
   padding: 4px 8px;
   background: rgba(var(--bg-rgb), 0.6);
 }
-.bWaveBox {
+.waveBox {
   position: relative;
   height: clamp(72px, 11vh, 120px);
   border: 1px solid var(--line);
 }
-.bWaveBox .frameTag {
+.waveBox .frameTag {
   top: 8px;
 }
-.bRight {
+.right {
   display: flex;
   flex-direction: column;
   gap: clamp(16px, 1.8vw, 28px);
   min-height: 0;
 }
-.bHead {
+.head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -343,50 +298,7 @@
   color: var(--text);
 }
 
-/* ───────── C: 오브 중심 ───────── */
-.cBody {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: clamp(8px, 1vw, 16px);
-  min-height: 0;
-}
-.cThumb {
-  position: absolute;
-  top: 0;
-  left: var(--gutter);
-  width: clamp(160px, 16vw, 240px);
-  aspect-ratio: 16 / 9;
-}
-.cEmotion {
-  font-family: 'Pretendard Variable', Pretendard, sans-serif;
-  font-weight: 300;
-  font-size: clamp(20px, 2vw, 30px);
-  letter-spacing: 0.08em;
-}
-.cMeta {
-  display: flex;
-  gap: clamp(16px, 2vw, 36px);
-}
-.cWave {
-  height: clamp(56px, 8vh, 88px);
-  border-top: 1px solid var(--line);
-}
-
-/* 종료 화면 */
-.ended {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: clamp(14px, 1.6vw, 24px);
-  width: 100%;
-}
-.endedTitle {
-  composes: display;
-  font-size: clamp(40px, 4.5vw, 72px);
-}
+/* 버튼 두 개 나란히 */
 .actions {
   display: flex;
   gap: 12px;
@@ -394,25 +306,9 @@
 }
 
 @media (max-width: 1100px) {
-  .aPanel {
-    width: min(70vw, 520px);
-    min-width: 0;
-  }
-  .bBody {
+  .body {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-  }
-}
-@media (max-width: 720px) {
-  .aBody {
-    justify-content: center;
-  }
-  .aPanel {
-    width: 100%;
-  }
-  .cThumb {
-    position: static;
-    width: 60%;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -424,12 +320,112 @@
   }
 }
 
-.bWaveBox .wave,
+.waveBox .wave,
 .frame video {
   height: 100%;
 }
 .frame .faceLayer {
   z-index: 1;
+}
+
+/* 결과 화면: 타임라인 상자, 감정 비율 띠, 판정 문장, 숫자 셋 */
+.resultFrame {
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+.timelineWrap {
+  position: relative;
+  min-height: 0;
+}
+.timeline {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hardLabel {
+  composes: mono;
+  position: absolute;
+  bottom: 10px;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: rgba(var(--bg-rgb), 0.7);
+  white-space: nowrap;
+}
+.ticks {
+  composes: mono;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.shares {
+  display: flex;
+  height: 100%;
+}
+.share {
+  position: relative;
+  height: 100%;
+}
+.shareLabel {
+  composes: mono;
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  white-space: nowrap;
+}
+.verdictBox {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1vw, 16px);
+  min-width: 0;
+}
+.verdict {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(26px, 2.5vw, 42px);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+  word-break: keep-all;
+}
+.verdictSub {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(13px, 0.95vw, 16px);
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin: 0;
+  word-break: keep-all;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: clamp(12px, 1.2vw, 18px) 0;
+}
+.stat + .stat {
+  border-left: 1px solid var(--line);
+  padding-left: clamp(12px, 1.4vw, 22px);
+}
+.statK {
+  composes: mono;
+  color: var(--text-dim);
+}
+.statV {
+  composes: display;
+  font-size: clamp(28px, 2.7vw, 48px);
+  font-variant-numeric: tabular-nums;
+}
+.statUnit {
+  composes: mono;
+  margin-left: 6px;
 }
 
 /* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */

@@ -47,7 +47,7 @@ export default function OrbLab() {
       style={{ gridTemplateRows: 'auto 1fr' }}
     >
       <nav className={styles.nav}>
-        <Link href="/demo/measure/b" className={`${styles.logo} ${styles.focusable}`}>
+        <Link href="/demo/measure" className={`${styles.logo} ${styles.focusable}`}>
           ONMAUM
         </Link>
         <span className={`${styles.mono} ${styles.dim}`}>
@@ -57,7 +57,7 @@ export default function OrbLab() {
           <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
             {theme === 'dark' ? '화이트' : '다크'}
           </button>
-          <Link href="/demo/measure/b" className={`${styles.cta} ${styles.focusable}`}>
+          <Link href="/demo/measure" className={`${styles.cta} ${styles.focusable}`}>
             시안 B로
           </Link>
         </span>
