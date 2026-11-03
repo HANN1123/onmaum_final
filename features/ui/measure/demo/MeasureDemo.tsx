@@ -119,7 +119,7 @@ export default function MeasureDemo() {
           </button>
         </nav>
 
-        <div className={styles.body}>
+        <div className={`${styles.body} ${styles.bodyScroll}`}>
           <div className={styles.left}>
             <div className={styles.frame}>
               <video ref={videoRef} muted playsInline autoPlay />

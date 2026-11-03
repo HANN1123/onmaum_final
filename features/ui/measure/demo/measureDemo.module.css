@@ -1163,3 +1163,21 @@
 .themeBtn:hover {
   color: var(--text);
 }
+
+/*
+ * 본문 스크롤(측정·설문 화면). 창이 낮거나(1280×720 이하) 좁아 두 열이 위아래로 쌓이면 오른쪽 열이 화면 밖으로 밀린다.
+ * 틀은 창 높이에 고정이므로, 넘치는 본문만 아래로 스크롤한다. 위쪽 메뉴와 아래 안내는 그대로 둔다.
+ */
+.bodyScroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (max-width: 1100px) {
+  /* 위아래로 쌓일 때는 두 칸 모두 내용 높이를 쓰고, 카메라 칸은 보기 좋은 높이를 지킨다 */
+  .bodyScroll {
+    grid-template-rows: auto auto;
+  }
+  .bodyScroll > .left {
+    height: min(62svh, 560px);
+  }
+}
