@@ -30,7 +30,7 @@ const CAMERA_MS = 1100
 const CAMERA_HOLD_MS = 2400
 const CAMERA_START_MS = 2000
 const CAMERA_MAX = 2.2
-const CAMERA_PAD = 32
+const CAMERA_PAD = 22
 
 type CameraPhase = 'idle' | 'in' | 'out'
 

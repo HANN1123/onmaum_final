@@ -14,6 +14,11 @@ interface Props {
   /** 바탕이 흰색이면 뒤쪽 점은 연하게, 파동은 어둡게 찍는다. */
   scheme?: 'dark' | 'light'
   size?: number
+  /**
+   * 새 감정색으로 다가가는 빠르기(프레임당 비율). 기본 0.01 은 약 3초에 걸쳐 천천히 바뀐다(측정 화면).
+   * 글자와 함께 바뀌어야 하는 소개 장면은 더 빠르게 준다.
+   */
+  colorEase?: number
   className?: string
 }
 
@@ -59,7 +64,7 @@ function intensityFromBpm(bpm: number): number {
  * 박동마다 빛의 띠가 북극에서 남극으로 구 표면을 훑고 지나간다.
  * 색은 감정이 정하고, 두근거림의 빠르기와 세기는 심박수가 정한다.
  */
-export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 'dark', size = 280, className }: Props) {
+export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 'dark', size = 280, colorEase = 0.01, className }: Props) {
   const surface = useMemo(() => fibonacciSphere(700), [])
   const frame = useMemo(() => meridians(6, 56), [])
   const inner = useMemo(() => fibonacciSphere(160), [])
@@ -79,7 +84,7 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
       // 심박이 빠르면 파동도 짧게 끝나야 겹치지 않는다.
       const waveLife = Math.min(1.0, Math.max(0.4, (60 / bpm) * 0.95))
       wavesRef.current = wavesRef.current.filter((born) => t - born < waveLife)
-      paletteRef.current = approachPalette(paletteRef.current, ORB_PALETTE[emotion], 0.01)
+      paletteRef.current = approachPalette(paletteRef.current, ORB_PALETTE[emotion], colorEase)
       const palette = paletteRef.current
       const white: [number, number, number] = [255, 255, 255]
       // 검정 바탕: 뒤쪽은 바닥색 → 앞쪽은 주색, 파동은 흰색.
@@ -153,7 +158,7 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
       for (const pt of frame) drawPoint(pt, angle, R, 0.35, 0.9, true)
       for (const pt of surface) drawPoint(pt, angle, R, 0.85, 1.25, true)
     },
-    [getPulse, emotion, bpm, scheme, surface, frame, inner],
+    [getPulse, emotion, bpm, scheme, colorEase, surface, frame, inner],
   )
 
   const ref = useOrbCanvas(size, draw)

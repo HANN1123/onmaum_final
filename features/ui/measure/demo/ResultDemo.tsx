@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useMemo, useState } from 'react'
-import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import { EMOTION_LABELS } from '@/features/algorithm/emotion/emotionAnalysis'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
@@ -12,7 +12,7 @@ import { LEGAL, SAMPLE_TODAY } from './demoCopy'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
-import { LEVEL_COPY, makeSampleSession, summarizeSession } from './sessionLog'
+import { hardestWithEmotion, LEVEL_COPY, makeSampleSession, smoothBpm, summarizeSession } from './sessionLog'
 import { useStoredSession } from './useStoredSession'
 
 /**
@@ -36,20 +36,6 @@ const SELF_REPORT: { key: SelfReport; label: string }[] = [
   { key: 'better', label: '더 괜찮음' },
 ]
 
-/** 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다. */
-function smoothBpm(values: number[]): number[] {
-  const half = values.length > 60 ? 4 : 1
-  return values.map((_, i) => {
-    let sum = 0
-    let n = 0
-    for (let k = Math.max(0, i - half); k <= Math.min(values.length - 1, i + half); k += 1) {
-      sum += values[k]
-      n += 1
-    }
-    return sum / n
-  })
-}
-
 export default function ResultDemo() {
   const [theme, toggleTheme] = useDemoTheme()
   const light = theme === 'light'
@@ -68,14 +54,7 @@ export default function ResultDemo() {
   // 최고 심박은 차트 선과 같은 다듬은 값에서 읽어, 카메라가 읽어 주는 숫자와 어긋나지 않게 한다.
   const maxBpm = useMemo(() => Math.round(Math.max(...smooth)), [smooth])
   // 힘든 구간의 색은 그 구간에서 가장 오래 머문 감정
-  const hardest = useMemo(() => {
-    if (!summary.hardest) return null
-    const { start, end } = summary.hardest
-    const count: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
-    for (const s of session.samples) if (s.t >= start && s.t <= end) count[s.emotion] += 1
-    const emotion = (Object.keys(count) as Emotion[]).reduce((a, b) => (count[b] > count[a] ? b : a))
-    return { start, end, emotion }
-  }, [summary, session])
+  const hardest = useMemo(() => hardestWithEmotion(session, summary), [summary, session])
   const needsRest = summary.level === 'high' || summary.level === 'veryHigh'
   const getPulse = usePulseAt(summary.avgBpm)
 

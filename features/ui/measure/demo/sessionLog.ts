@@ -162,6 +162,33 @@ export function summarizeSession(session: DemoSession): CallSummary {
   return { avgBpm: Math.round(sum / n), maxBpm, shares, dominant, hardest, level }
 }
 
+/** 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다. */
+export function smoothBpm(values: number[]): number[] {
+  const half = values.length > 60 ? 4 : 1
+  return values.map((_, i) => {
+    let sum = 0
+    let n = 0
+    for (let k = Math.max(0, i - half); k <= Math.min(values.length - 1, i + half); k += 1) {
+      sum += values[k]
+      n += 1
+    }
+    return sum / n
+  })
+}
+
+/** 가장 힘든 구간과 그 구간에서 가장 오래 머문 감정(구간의 색). */
+export function hardestWithEmotion(
+  session: DemoSession,
+  summary: CallSummary,
+): { start: number; end: number; emotion: Emotion } | null {
+  if (!summary.hardest) return null
+  const { start, end } = summary.hardest
+  const count: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
+  for (const s of session.samples) if (s.t >= start && s.t <= end) count[s.emotion] += 1
+  const emotion = (Object.keys(count) as Emotion[]).reduce((a, b) => (count[b] > count[a] ? b : a))
+  return { start, end, emotion }
+}
+
 /** 판정 문장(표본). 실제 문구 선택은 feedback/lib/checkinCopy 가 맡는다. */
 export const LEVEL_COPY: Record<CallLevel, string> = {
   low: '평소보다 가벼운 통화였습니다',

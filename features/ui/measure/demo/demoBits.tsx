@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import styles from './measureDemo.module.css'
 import { mixRgb, ORB_PALETTE, rgba } from './orbs/emotionPalette'
@@ -21,6 +21,23 @@ export function mmss(seconds: number): string {
 export function swatchColor(emotion: Emotion, light: boolean): string {
   const p = ORB_PALETTE[emotion]
   return rgba(light ? mixRgb(p.base, p.deep, 0.45) : p.base, 1)
+}
+
+/**
+ * 바뀌는 BPM 으로 뛰는 합성 맥박. 함수는 한 번만 만들고 심박은 ref 로 읽어,
+ * 값이 바뀌어도 파형 캔버스·오브가 처음부터 다시 시작하지 않는다.
+ */
+export function useLivePulse(bpm: number): () => number {
+  const bpmRef = useRef(bpm)
+  useEffect(() => {
+    bpmRef.current = bpm
+  }, [bpm])
+  return useCallback(() => {
+    const phase = ((performance.now() / 1000) * (bpmRef.current / 60)) % 1
+    const systolic = Math.exp(-(((phase - 0.16) / 0.06) ** 2))
+    const dicrotic = 0.32 * Math.exp(-(((phase - 0.44) / 0.1) ** 2))
+    return Math.min(1, systolic + dicrotic)
+  }, [])
 }
 
 /** 정해진 BPM 으로 뛰는 합성 맥박. 정지 화면의 오브도 두근거리게 한다. */
