@@ -17,7 +17,8 @@ import {
 
 type Status = { kind: 'idle' } | { kind: 'done'; text: string } | { kind: 'error'; text: string }
 
-function downloadJson(json: string, fileName: string): void {
+// 아래 세 함수는 데모 기록 화면(features/ui/measure/demo/RecordsDemo.tsx)도 같은 문구·동작으로 쓴다.
+export function downloadJson(json: string, fileName: string): void {
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
   const a = document.createElement('a')
   a.href = url
@@ -27,7 +28,7 @@ function downloadJson(json: string, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function importResultText(s: ImportSummary): string {
+export function importResultText(s: ImportSummary): string {
   const parts = [`기록 ${s.emotions.added}개를 가져왔어요`]
   if (s.emotions.duplicate > 0) parts.push(`이미 있던 ${s.emotions.duplicate}개는 건너뛰었어요`)
   const invalid = s.emotions.invalid + s.sessions.invalid
@@ -39,7 +40,7 @@ function importResultText(s: ImportSummary): string {
   return parts.join('. ')
 }
 
-function importErrorText(err: unknown): string {
+export function importErrorText(err: unknown): string {
   if (err instanceof MeasurementActiveError) {
     return '측정이 진행 중이에요. 측정을 멈추고 2분 뒤에 다시 시도해 주세요'
   }

@@ -147,7 +147,24 @@ export async function isMeasurementActive(now: Date = new Date()): Promise<boole
 }
 
 /**
- * 측정 기록(감정·세션)과 체크인·넛지 기록을 지운다.
+ * 이 탭의 sessionStorage 에 남은 onmaum_ 키(데모 측정 결과처럼 탭이 닫히면 사라지는 기록)를 지운다.
+ * sessionStorage 는 탭마다 따로라 다른 탭의 값에는 닿지 않는다. 접근할 수 없는 환경이면 저장된 것도 없으므로 넘어간다.
+ */
+function clearOnmaumSessionKeys(): void {
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i)
+      if (k?.startsWith(KEY_PREFIX)) keys.push(k)
+    }
+    for (const k of keys) sessionStorage.removeItem(k)
+  } catch {
+    // 위 설명대로 넘어간다
+  }
+}
+
+/**
+ * 측정 기록(감정·세션)과 체크인·넛지 기록을 지운다. 이 탭의 sessionStorage 에 남은 온마음 기록도 함께 지운다.
  * 기본은 설정·설문·온보딩 여부를 남기지만, 체크인으로 쌓인 보정값은 기록에서 나온 값이므로 0으로 되돌린다.
  * 측정 중이면 MeasurementActiveError, 기기 저장소 일부를 지우지 못하면 PartialDeleteError를 던진다.
  */
@@ -162,6 +179,8 @@ export async function deleteAllPersonalData(
     await db.emotions.clear()
     await db.sessions.clear()
   })
+
+  clearOnmaumSessionKeys()
 
   // 키 목록을 읽지 못하면 무엇이 남았는지 알 수 없으므로 실패로 알린다
   let targets: string[]

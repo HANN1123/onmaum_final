@@ -6,11 +6,13 @@ import CallChart, { type ScrubReason } from '@/features/ui/measure/demo/CallChar
 import { mmss, swatchColor, useLivePulse } from '@/features/ui/measure/demo/demoBits'
 import DotOrb from '@/features/ui/measure/demo/orbs/DotOrb'
 import { Roll, Swap } from '@/features/ui/measure/demo/Roll'
-import { hardestWithEmotion, makeSampleSession, smoothBpm, summarizeSession } from '@/features/ui/measure/demo/sessionLog'
+import { peakWithEmotion, smoothBpm, summarizeSession } from '@/features/ui/measure/demo/sessionLog'
+import { makeAboutSampleSession } from './aboutSample'
 import styles from './HeroAbout.module.css'
 
 /**
  * 소개 섹션의 제품 장면 셋. 모두 실제 측정·결과·기록 화면의 부품을 그대로 쓴다.
+ * 장면의 숫자(심박·기록 목록)는 rPPG 를 붙였을 때의 모습을 보여주는 연출용 예시이며, 실제 화면에서는 쓰지 않는다.
  * 화면에 보일 때만 움직이고, 보이기 시작하면 처음부터 다시 시작한다. 움직임 줄이기 설정이면 멈춘 한 장면만 보여준다.
  * 장면은 잘리지 않고 통째로 보인다.
  */
@@ -35,7 +37,7 @@ function useInView<T extends Element>(): [RefObject<T | null>, boolean] {
   return [ref, inView]
 }
 
-/* ───────── 1. 통화하는 동안: 오브의 색은 감정, 빠르기는 심박 ───────── */
+/* ───────── 1. 측정하는 동안: 오브의 색은 감정, 빠르기는 심박 ───────── */
 
 const ORB_STEPS: { emotion: Emotion; bpm: number }[] = [
   { emotion: 'calm', bpm: 72 },
@@ -62,7 +64,7 @@ export function OrbScene({ scheme }: { scheme: Scheme }) {
     <div ref={ref} className={`${styles.scene} ${styles.orbScene}`} aria-hidden="true">
       <DotOrb getPulse={getPulse} emotion={emotion} bpm={bpm} scheme={scheme} size={220} colorEase={0.08} />
       <div className={styles.read}>
-        <span className={styles.readLabel}>통화 중 · 지금</span>
+        <span className={styles.readLabel}>측정 중 · 지금</span>
         <span className={styles.readValue}>
           <Roll value={String(bpm)} />
           <small>BPM</small>
@@ -77,9 +79,9 @@ export function OrbScene({ scheme }: { scheme: Scheme }) {
   )
 }
 
-/* ───────── 2. 통화가 끝나면: 실제 결과 차트, 가장 힘든 구간으로 다가간다 ───────── */
+/* ───────── 2. 측정이 끝나면: 실제 결과 차트, 심박이 가장 높았던 구간으로 다가간다 ───────── */
 
-const SESSION = makeSampleSession()
+const SESSION = makeAboutSampleSession()
 const CYCLE_MS = 9800
 
 export function ResultScene({ scheme }: { scheme: Scheme }) {
@@ -101,12 +103,13 @@ export function ResultScene({ scheme }: { scheme: Scheme }) {
 
   const summary = useMemo(() => summarizeSession(SESSION), [])
   const smooth = useMemo(() => smoothBpm(SESSION.samples.map((s) => s.bpm)), [])
-  const hardest = useMemo(() => hardestWithEmotion(SESSION, summary), [summary])
+  const peak = useMemo(() => peakWithEmotion(SESSION, summary), [summary])
 
+  // 예시 측정은 모든 표본에 심박·감정이 있다.
   const point = active !== null ? SESSION.samples[active] : null
-  const label = point ? (reason === 'camera' ? `가장 힘든 순간 · ${mmss(point.t)}` : mmss(point.t)) : '통화 평균'
-  const value = point ? Math.round(smooth[active!]) : summary.avgBpm
-  const emotion = point ? point.emotion : summary.dominant
+  const label = point ? (reason === 'camera' ? `심박이 가장 높은 순간 · ${mmss(point.t)}` : mmss(point.t)) : '측정 평균'
+  const value = Math.round((point ? smooth[active!] : summary.avgBpm) ?? 0)
+  const emotion = (point ? point.emotion : summary.dominant) ?? 'calm'
 
   return (
     <div ref={ref} className={`${styles.scene} ${styles.resultScene}`}>
@@ -128,7 +131,7 @@ export function ResultScene({ scheme }: { scheme: Scheme }) {
             points={SESSION.samples}
             smooth={smooth}
             durationSec={SESSION.durationSec}
-            hardest={hardest}
+            highlight={peak}
             shares={summary.shares}
             scheme={scheme}
             active={active}
@@ -146,11 +149,11 @@ export function ResultScene({ scheme }: { scheme: Scheme }) {
 /* ───────── 3. 이 기기 안에만: 기록 목록에서 파일로 내보낸다 ───────── */
 
 const ROWS = [
-  { day: '오늘', calls: '6건 · 45분', w: 0.42, today: true },
-  { day: '어제', calls: '11건 · 99분', w: 0.62 },
-  { day: '2일 전', calls: '8건 · 72분', w: 0.48 },
-  { day: '3일 전', calls: '10건 · 94분', w: 0.58 },
-  { day: '4일 전', calls: '15건 · 131분', w: 0.86 },
+  { day: '오늘', calls: '측정 6회 · 45분', w: 0.42, today: true },
+  { day: '어제', calls: '측정 11회 · 99분', w: 0.62 },
+  { day: '2일 전', calls: '측정 8회 · 72분', w: 0.48 },
+  { day: '3일 전', calls: '측정 10회 · 94분', w: 0.58 },
+  { day: '4일 전', calls: '측정 15회 · 131분', w: 0.86 },
 ]
 
 type ExportPhase = 'idle' | 'arrive' | 'press' | 'done'

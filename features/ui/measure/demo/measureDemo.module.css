@@ -427,7 +427,7 @@
   margin-left: 6px;
 }
 
-/* 리포트 화면: 14일 막대(단색 잉크), 평소 점선, 오늘 통화 목록 */
+/* 리포트 화면: 14일 막대(단색 잉크), 평소 점선, 오늘 측정 목록 */
 .reportLeft {
   display: grid;
   grid-template-rows: 1.35fr 1fr;
@@ -758,7 +758,7 @@
   to { opacity: 1; transform: none; }
 }
 
-/* 통화 차트 */
+/* 측정 차트 */
 .callChart {
   display: grid;
   grid-template-rows: 1fr auto auto;
@@ -1083,7 +1083,7 @@
   transition: opacity 0.45s ease;
 }
 
-/* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
+/* 측정 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
 .switch {
   display: inline-flex;
   align-items: center;

@@ -11,18 +11,19 @@ import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { ORB_PALETTE, rgba } from './orbs/emotionPalette'
 import ShaderOrb from './orbs/ShaderOrb'
+import { bpmText, useHeartRateSource } from './heartRate'
 import { useFaceTrack } from './useFaceTrack'
-import { useSimulatedVitals } from './useSimulatedVitals'
 
 /**
  * 오브 후보 비교. 같은 맥박으로 움직이고, 감정에 따라 색이 바뀐다.
  * 감정은 카메라가 읽은 값을 따르고, 버튼을 누르면 그 감정으로 고정해 볼 수 있다.
+ * 맥박은 측정 화면과 같은 심박 원천을 쓴다. rPPG 연결 전에는 두근거리지 않는다.
  */
 export default function OrbLab() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const webcam = useWebcam(videoRef, true)
   const face = useFaceTrack(videoRef, webcam === 'ready')
-  const { bpm, getPulse } = useSimulatedVitals(true)
+  const { bpm, getPulse } = useHeartRateSource()
   const [manual, setManual] = useState<Emotion | null>(null)
   const [theme, toggleTheme] = useDemoTheme()
   const emotion: Emotion = manual ?? face.emotion ?? 'calm'
@@ -51,7 +52,7 @@ export default function OrbLab() {
           ONMAUM
         </Link>
         <span className={`${styles.mono} ${styles.dim}`}>
-          오브 후보 · {bpm} BPM · 감정 <span style={{ color: rgba(ORB_PALETTE[emotion].base, 1) }}>{EMOTION_LABELS[emotion]}</span> ({source})
+          오브 후보 · {bpmText(bpm)} BPM · 감정 <span style={{ color: rgba(ORB_PALETTE[emotion].base, 1) }}>{EMOTION_LABELS[emotion]}</span> ({source})
         </span>
         <span style={{ display: 'inline-flex', gap: 24, alignItems: 'center' }}>
           <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>

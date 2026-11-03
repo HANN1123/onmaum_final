@@ -11,14 +11,14 @@ import styles from './HeroStage.module.css'
 /**
  * 히어로의 제품 장면(Stageshow 방식). 실제 측정 화면을 단순하게 줄여 한 가지 일이 일어나는 13초 반복 장면이다.
  *
- * 이야기: 통화 중 심박이 오르고 오브가 붉어진다 → 커서가 전화 종료를 누른다 → 결과 카드가 떠오르고
- * 가장 힘든 구간이 켜진다 → 2초 넘게 보여준다 → 커서가 다음 통화를 누르면 카드가 내려가고 새 통화가 시작된다.
+ * 이야기: 측정 중 심박이 오르고 오브가 붉어진다 → 커서가 측정 종료를 누른다 → 결과 카드가 떠오르고
+ * 심박이 가장 높았던 구간이 켜진다 → 2초 넘게 보여준다 → 커서가 다시 측정을 누르면 카드가 내려가고 새 측정이 시작된다.
  *
  * Stageshow 에서 지킨 것
  * - 진짜 글자는 이야기에 필요한 것만(심박·감정·버튼·판정). 나머지는 회색 막대.
  * - 창은 잘리지 않고 통째로 보인다(잘린 창이 깨져 보인다는 사용자 판단). 결과 카드만 창의 오른쪽 가장자리에 걸친다.
  * - 커서는 거리에 따라 시간을 들여 완만한 호로 움직이고, 누르는 게 보인다. 글자를 가리지 않게 버튼 오른쪽 아래를 겨눈다.
- * - 되돌림에는 원인이 있다(다음 통화를 누름). 결과는 2초 넘게 머문다.
+ * - 되돌림에는 원인이 있다(다시 측정을 누름). 결과는 2초 넘게 머문다.
  * - 움직임 줄이기 설정이면 결과가 떠 있는 한 장면(포스터)만 보여준다.
  * 커서 모양은 Stageshow kit(MIT, Benji Taylor)의 macOS 화살표를 옮겨 왔다.
  */
@@ -55,7 +55,7 @@ const START: Scene = {
 }
 const POSTER: Scene = { ...START, bpm: 110, emotion: 'angry', live: false, card: true, lit: true }
 
-/** 결과 카드 속 작은 차트. 회색 선 하나에 가장 힘든 구간만 불이 켜진다. */
+/** 결과 카드 속 작은 차트. 회색 선 하나에 심박이 가장 높았던 구간만 불이 켜진다. */
 const SPARK = (() => {
   const n = 60
   const pts: [number, number][] = []
@@ -102,7 +102,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
     return () => observer.disconnect()
   }, [])
 
-  // 통화 중이면 1초마다 통화 시간이 흐른다.
+  // 측정 중이면 1초마다 측정 시간이 흐른다.
   useEffect(() => {
     if (!scene.live) return
     const id = window.setInterval(() => setScene((s) => ({ ...s, elapsed: s.elapsed + 1 })), 1000)
@@ -144,7 +144,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
 
     const run = async () => {
       while (alive) {
-        // 1. 평온한 통화
+        // 1. 평온한 측정
         await wait(1600)
         // 2. 심박이 오르고, 화남이 안정되자 오브가 붉어진다(시스템이 스스로 하는 일)
         set({ bpm: 86 })
@@ -155,17 +155,17 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
         await wait(900)
         set({ bpm: 110 })
         await wait(700)
-        // 3. 전화 종료
+        // 3. 측정 종료
         await move(aim(endRef))
         await wait(120)
         await press('end')
-        // 4. 통화가 끝나고 결과 카드가 떠오른다. 선이 그려진 뒤 가장 힘든 구간이 켜진다
+        // 4. 측정이 끝나고 결과 카드가 떠오른다. 선이 그려진 뒤 심박이 가장 높았던 구간이 켜진다
         set({ live: false, card: true })
         await wait(1100)
         set({ lit: true })
         // 5. 결과가 머문다
         await wait(2400)
-        // 6. 다음 통화: 카드가 내려가고 새 통화가 시작된다(되돌림의 원인)
+        // 6. 다시 측정: 카드가 내려가고 새 측정이 시작된다(되돌림의 원인)
         await move(aim(nextRef))
         await wait(120)
         await press('next')
@@ -193,10 +193,10 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
             <span className={styles.logo}>ONMAUM</span>
             <span className={styles.live}>
               <i data-on={scene.live ? '' : undefined} />
-              <Swap text={scene.live ? '통화 중' : '통화 종료'} /> <Roll value={elapsed} />
+              <Swap text={scene.live ? '측정 중' : '측정 종료'} /> <Roll value={elapsed} />
             </span>
             <span ref={endRef} className={styles.endBtn} data-pressed={scene.pressed === 'end' ? '' : undefined}>
-              전화 종료
+              측정 종료
             </span>
           </div>
           <div className={styles.body}>
@@ -244,8 +244,8 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
 
         {/* 결과 카드: 창의 오른쪽 가장자리에 걸친다 */}
         <div className={styles.card} data-on={scene.card ? '' : undefined}>
-          <span className={styles.cardKicker}>통화 결과 · 14일 기준선 대비</span>
-          <p className={styles.cardVerdict}>평소보다 무거운 통화였습니다</p>
+          <span className={styles.cardKicker}>측정 결과 · 14일 기준선 대비</span>
+          <p className={styles.cardVerdict}>평소보다 무거운 시간이었습니다</p>
           <svg key={scene.card ? 'on' : 'off'} width="268" height="76" className={styles.spark}>
             <rect
               x={SPARK.x0}
@@ -263,7 +263,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
           <div className={styles.cardRow}>
             <span>최고 110 BPM</span>
             <span ref={nextRef} className={styles.nextBtn} data-pressed={scene.pressed === 'next' ? '' : undefined}>
-              다음 통화
+              다시 측정
             </span>
           </div>
         </div>

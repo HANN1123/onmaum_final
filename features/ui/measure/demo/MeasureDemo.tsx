@@ -8,23 +8,27 @@ import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { useWebcam } from '@/features/ui/landing/hero-demo/useWebcam'
-import { LEGAL, SAMPLE_TODAY, SAMPLE_VERDICT } from './demoCopy'
+import { LEGAL } from './demoCopy'
 import FaceLayer from './FaceLayer'
+import { bpmText, useHeartRateSource } from './heartRate'
 import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
 import PulseCanvas from './PulseCanvas'
 import styles from './measureDemo.module.css'
+import { levelShort } from './storedOverview'
+import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
 import { useSessionLog } from './useSessionLog'
-import { formatElapsed, useSimulatedVitals } from './useSimulatedVitals'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
+import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
 
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
  * 왼쪽은 카메라 프레임과 맥박 파형, 오른쪽은 BPM·오브·상태 행이다.
- * 카메라와 얼굴 추적·감정은 실제 값이고, 맥박 파형과 BPM 은 시연용 모의 신호다.
- * 오늘 지수와 기준선 문구는 표본이다. 전화 종료를 누르면 통화 기록을 sessionStorage 로 넘기고 결과 화면으로 간다.
+ * 카메라와 얼굴 추적·감정은 실제 값이다. 심박은 rPPG 를 붙일 자리(useHeartRateSource)만 있고, 연결 전에는 "--"로 둔다.
+ * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
+ * 측정 종료를 누르면 이번 측정 기록을 sessionStorage 로 넘기고 결과 화면으로 간다(저장 계층에는 저장하지 않는다).
  */
 
 const HERO_HREF = DEMO_HOME_HREF
@@ -41,14 +45,11 @@ const SKULLET_THEME = {
   speed: 'slow',
   text: { top: 'cap-height', bottom: 'baseline' },
 } as const
-/** 시연용 모의 심박 목표값. rPPG 가 붙으면 이 줄은 사라진다. */
-const BPM_PRESETS = [60, 75, 95, 120] as const
 
 export default function MeasureDemo() {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [active, setActive] = useState(true)
-  const [targetBpm, setTargetBpm] = useState<number>(75)
   const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
@@ -56,14 +57,17 @@ export default function MeasureDemo() {
   const face = useFaceTrack(videoRef, webcam === 'ready')
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
-  const { bpm, elapsed, getPulse } = useSimulatedVitals(active, targetBpm)
+  const { bpm, getPulse } = useHeartRateSource()
+  const elapsed = useElapsed(active)
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
   const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode)
-  const finishLog = useSessionLog(active, bpm, orbEmotion)
+  // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
+  const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null)
   const lastSession = useStoredSession()
+  const stored = useStoredOverview()
 
-  /** 통화 종료: 기록을 넘기고 결과 화면으로 간다. */
-  const endCall = () => {
+  /** 측정 종료: 기록을 넘기고 결과 화면으로 간다. */
+  const endMeasure = () => {
     if (!active) return
     finishLog()
     setActive(false)
@@ -74,6 +78,20 @@ export default function MeasureDemo() {
   const faceState = webcam !== 'ready' ? '카메라 대기' : face.box ? '얼굴 추적 중' : '얼굴 찾는 중'
   const emotion = face.emotionLabel ?? '—'
   const elapsedText = formatElapsed(elapsed)
+  const todayText =
+    stored === null
+      ? '읽는 중'
+      : stored.today.scores
+        ? `긍정 ${Math.round(stored.today.scores.positive)} · 스트레스 ${Math.round(stored.today.stress ?? stored.today.scores.stress)}`
+        : '저장된 기록 없음'
+  const baselineText =
+    stored === null
+      ? '읽는 중'
+      : stored.today.level === null
+        ? '오늘 기록 없음'
+        : stored.baseline.mode === 'relative'
+          ? levelShort(stored.today.level, stored.baseline)
+          : `기록 3일 미만 · ${levelShort(stored.today.level, stored.baseline)}`
 
   return (
     <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
@@ -85,19 +103,19 @@ export default function MeasureDemo() {
           <div className={styles.navMid}>
             {lastSession && (
               <Link href={RESULT_HREF} className={`${styles.navLink} ${styles.focusable}`}>
-                지난 통화 결과
+                지난 측정 결과
               </Link>
             )}
             <span className={`${styles.live} ${styles.mono}`}>
               {active && <span className={styles.liveDot} aria-hidden="true" />}
-              <Morph>{`${active ? '통화 중' : '통화 종료'} ${elapsedText}`}</Morph>
+              <Morph>{`${active ? '측정 중' : '측정 종료'} ${elapsedText}`}</Morph>
             </span>
             <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
           </div>
-          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? endCall() : setActive(true))}>
-            {active ? '전화 종료' : '전화 시작'}
+          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? endMeasure() : setActive(true))}>
+            {active ? '측정 종료' : '측정 시작'}
           </button>
         </nav>
 
@@ -124,7 +142,7 @@ export default function MeasureDemo() {
             <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
               <div className={styles.waveBox} skullet-block="">
                 <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>맥박 파형 · 모의 신호</span>
+                <span className={styles.frameTag}>{bpm === null ? '맥박 파형 · rPPG 연결 전' : '맥박 파형'}</span>
               </div>
             </Skeleton>
           </div>
@@ -133,33 +151,18 @@ export default function MeasureDemo() {
             <Skeleton loading={!ready} id="measure-head" label="심박 준비 중">
               <div className={styles.head}>
                 <div className={styles.bpmRow}>
-                  <Morph className={styles.bpm}>{String(bpm)}</Morph>
+                  <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
                   <span className={styles.unit}>BPM</span>
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm} scheme={theme} size={128} />
+                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} />
                 </span>
               </div>
             </Skeleton>
             <div className={styles.rows}>
               <div className={styles.row}>
-                <span className={styles.k}>통화</span>
-                <CallSwitch on={active} onToggle={() => (active ? endCall() : setActive(true))} />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.k}>모의 심박</span>
-                <span className={styles.presets}>
-                  {BPM_PRESETS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      className={`${styles.preset} ${styles.focusable} ${preset === targetBpm ? styles.presetOn : ''}`}
-                      onClick={() => setTargetBpm(preset)}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </span>
+                <span className={styles.k}>측정</span>
+                <CallSwitch on={active} onToggle={() => (active ? endMeasure() : setActive(true))} />
               </div>
               <div className={styles.row}>
                 <span className={styles.k}>색 반응</span>
@@ -184,18 +187,18 @@ export default function MeasureDemo() {
             <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
               <Rows
                 rows={[
-                  ['통화 시간', elapsedText],
+                  ['측정 시간', elapsedText],
                   ['얼굴', faceState],
                   ['신호 품질', quality],
                   ['현재 감정', emotion],
-                  ['오늘', `긍정 ${SAMPLE_TODAY.positive} · 스트레스 ${SAMPLE_TODAY.stress}`],
-                  ['14일 기준선', SAMPLE_VERDICT],
+                  ['오늘', todayText],
+                  ['14일 기준선', baselineText],
                 ]}
               />
             </Skeleton>
             <div style={{ marginTop: 'auto' }}>
-              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endCall}>
-                전화 종료
+              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endMeasure}>
+                측정 종료
               </button>
             </div>
           </div>
@@ -206,7 +209,7 @@ export default function MeasureDemo() {
   )
 }
 
-/** 전화 시작/종료 스위치. 켜짐이 측정 중이다. */
+/** 측정 시작/종료 스위치. 켜짐이 측정 중이다. */
 function CallSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <button
