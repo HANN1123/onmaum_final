@@ -211,7 +211,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
           <div className={styles.panel}>
             <span className={styles.chip}>[ 측정 준비 ]</span>
             <h1 className={styles.h1}>ONMAUM</h1>
-            <p className={styles.tagline}>온마음 · 통화 중인 당신의 표정과 맥박을 읽는, 본인만 보는 기록.</p>
+            <p className={styles.tagline}>온마음 · 당신의 표정과 맥박을 읽는, 본인만 보는 기록.</p>
 
             <form className={styles.form} action="#" method="post" noValidate onSubmit={onSubmit}>
               {/*

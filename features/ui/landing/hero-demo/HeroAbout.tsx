@@ -19,7 +19,7 @@ export default function HeroAbout({ theme }: { theme: 'dark' | 'light' }) {
       <article className={styles.feature}>
         <div className={styles.copy}>
           <span className={styles.no}>01</span>
-          <h2 className={styles.title}>통화하는 동안 저절로 잽니다</h2>
+          <h2 className={styles.title}>켜 두기만 하면 저절로 잽니다</h2>
           <p className={styles.body}>웹캠 하나로 표정에서 감정을, 얼굴의 미세한 색 변화에서 심박을 추정합니다. 누를 것도, 몸에 붙일 것도 없습니다.</p>
         </div>
         <OrbScene scheme={theme} />
@@ -28,8 +28,8 @@ export default function HeroAbout({ theme }: { theme: 'dark' | 'light' }) {
       <article className={`${styles.feature} ${styles.flip}`}>
         <div className={styles.copy}>
           <span className={styles.no}>02</span>
-          <h2 className={styles.title}>끝나면 가장 힘든 순간을 짚어 줍니다</h2>
-          <p className={styles.body}>통화 한 건을 심박 선 하나로 그리고, 가장 힘들었던 구간으로 다가가 그때의 심박과 감정을 읽어 줍니다. 차트를 훑으면 그 순간의 값이 보입니다.</p>
+          <h2 className={styles.title}>끝나면 심박이 가장 높았던 순간을 짚어 줍니다</h2>
+          <p className={styles.body}>측정 한 번을 심박 선 하나로 그리고, 심박이 가장 높았던 구간으로 다가가 그때의 심박과 감정을 읽어 줍니다. 차트를 훑으면 그 순간의 값이 보입니다.</p>
         </div>
         <ResultScene scheme={theme} />
       </article>
