@@ -19,6 +19,7 @@ import {
 } from 'electron'
 import { CHANNELS, type WindowRole } from '../types/bridge'
 import { handleAppProtocol, registerAppSchemePrivileges } from './appProtocol'
+import { installBluetoothChooser, installBluetoothPairingDenial } from './bluetooth'
 import { isTrustedSender, parseEnabledFlag, parseSnapshot } from './ipcGuards'
 import { APP_USER_MODEL_ID, homeUrl, resolveRunMode, widgetUrl } from './runMode'
 import { installGlobalGuards, installPermissionHandlers, restrictNavigation } from './security'
@@ -207,6 +208,9 @@ function start(): void {
   const win = createMainWindow(ses)
   mainWindow = win
   restrictNavigation(win.webContents, mode.name, 'main')
+  // 워치 연동(Web Bluetooth): 메인 창에서만 장치를 고른다. 위젯 창에는 설치하지 않는다
+  installBluetoothChooser(win, mode.name)
+  installBluetoothPairingDenial(ses)
   forwardRendererErrors(win.webContents, '메인')
 
   win.on('minimize', () => dispatch({ type: 'minimize' }))
