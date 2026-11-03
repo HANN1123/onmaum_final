@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
 import HeroAbout from './HeroAbout'
 import HeroStage from './HeroStage'
 import { DEMO_HOME_HREF } from './routes'
+import { nextTypedChars, type TypedChar } from './typedChars'
 import { jetbrainsMono, sora } from './fonts'
 import { useDemoTheme } from './useDemoTheme'
 import { useWebcam } from './useWebcam'
@@ -30,6 +31,8 @@ const NAV_LINKS = [
 ] as const
 
 const DESKTOP_MENU_QUERY = '(min-width: 901px)'
+/** 이름 칸의 이름표. 한 글자씩 떠오르므로 짧게 둔다. */
+const NAME_LABEL = '이름'
 
 export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'stage' }) {
   const router = useRouter()
@@ -39,6 +42,11 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
   const webcam = useWebcam(videoRef, media === 'webcam')
   const [menuOpen, setMenuOpen] = useState(false)
   const [theme, toggleTheme] = useDemoTheme()
+  // 이름 칸에 겹쳐 그리는 글자. 처음 입력하기 전(null)에는 입력 칸 글자를 그대로 보여준다.
+  // 그래야 브라우저가 이전 값을 되살려 둔 경우에도 글자가 사라지지 않는다.
+  const [typed, setTyped] = useState<TypedChar[] | null>(null)
+  const typedIdRef = useRef(0)
+  const typedLineRef = useRef<HTMLSpanElement>(null)
 
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
@@ -71,6 +79,21 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
     media.addEventListener('change', onChange)
     return () => media.removeEventListener('change', onChange)
   }, [closeMenu])
+
+  /** 겹친 글자를 입력 칸의 가로 스크롤에 맞춘다. 이름이 칸보다 길어질 때만 움직인다. */
+  const syncTypedScroll = (input: HTMLInputElement) => {
+    requestAnimationFrame(() => {
+      if (typedLineRef.current) typedLineRef.current.style.transform = `translateX(${-input.scrollLeft}px)`
+    })
+  }
+
+  const onNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget
+    const { chars, nextId } = nextTypedChars(typed ?? [], input.value, typedIdRef.current)
+    typedIdRef.current = nextId
+    setTyped(chars)
+    syncTypedScroll(input)
+  }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -177,17 +200,51 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
             <p className={styles.tagline}>온마음 · 통화 중인 당신의 표정과 맥박을 읽는, 본인만 보는 기록.</p>
 
             <form className={styles.form} action="#" method="post" noValidate onSubmit={onSubmit}>
-              <label htmlFor="hero-nickname" className={styles.srOnly}>
-                별명
-              </label>
-              <input
-                id="hero-nickname"
-                name="nickname"
-                type="text"
-                autoComplete="nickname"
-                placeholder="별명 (이 기기에만 저장)"
-                className={`${styles.input} ${styles.focusable}`}
-              />
+              {/*
+                이름 칸: 누르면 이름표가 한 글자씩 시차를 두고 위로 떠오르고, 밑줄 가운데에서 선이 양옆으로 펼쳐진다
+                (uiverse "afraid-yak-99" 발상을 흑백 토큰·선택 입력·접근성에 맞게 옮김).
+                이름표와 "이 기기에만 저장"은 입력하는 동안에도 남는다. 쪼갠 글자는 화면 읽기에서 숨기고 온전한 이름표를 읽힌다.
+                쓰는 글자는 입력 칸 위에 한 글자씩 겹쳐 그려, 새로 친 글자만 아래에서 떠오르게 한다(입력 칸 글자는 투명, 커서는 그대로).
+                한글을 조합하는 동안(ㄱ→기→김)은 같은 자리 글자라 다시 떠오르지 않는다.
+              */}
+              <div className={styles.field}>
+                <input
+                  id="hero-name"
+                  name="name"
+                  type="text"
+                  autoComplete="nickname"
+                  placeholder=" "
+                  aria-describedby="hero-name-hint"
+                  className={`${styles.fieldInput} ${typed ? styles.fieldInputTyped : ''}`}
+                  onChange={onNameChange}
+                  onSelect={(event) => syncTypedScroll(event.currentTarget)}
+                />
+                {typed && (
+                  <span className={styles.fieldTyped} aria-hidden="true">
+                    <span ref={typedLineRef} className={styles.fieldTypedLine}>
+                      {typed.map((c) => (
+                        <span key={c.id} className={styles.fieldTypedChar} style={{ '--k': c.k } as React.CSSProperties}>
+                          {c.ch}
+                        </span>
+                      ))}
+                    </span>
+                  </span>
+                )}
+                <span className={styles.fieldBar} aria-hidden="true" />
+                <label htmlFor="hero-name" className={styles.fieldLabel}>
+                  <span className={styles.srOnly}>{NAME_LABEL}</span>
+                  <span className={styles.fieldChars} aria-hidden="true">
+                    {Array.from(NAME_LABEL).map((ch, i) => (
+                      <span key={i} className={styles.fieldChar} style={{ '--i': i } as React.CSSProperties}>
+                        {ch}
+                      </span>
+                    ))}
+                  </span>
+                </label>
+                <span id="hero-name-hint" className={styles.fieldHint}>
+                  이 기기에만 저장
+                </span>
+              </div>
               <button
                 type="button"
                 className={`${styles.btn} ${styles.btnGhost} ${styles.focusable}`}

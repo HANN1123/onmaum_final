@@ -265,28 +265,146 @@
   white-space: nowrap;
   border: 0;
 }
-.input {
+/* 이름 칸: 떠오르는 이름표 + 가운데서 펼쳐지는 밑줄 */
+.field {
+  position: relative;
+  width: 100%;
+  padding-top: 22px;
+}
+.fieldInput {
+  /* 글자 줄 위에 얹히면 1px 내려앉아 이름표·겹친 글자와 어긋난다. */
+  display: block;
   width: 100%;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--line-strong);
   border-radius: 0;
-  padding: 0 2px clamp(12px, 1.1vw, 18px);
+  outline: none;
+  padding: 0 2px 6px;
   font-family: var(--font-display);
   font-weight: 300;
   font-size: clamp(16px, 0.95vw, 18px);
+  line-height: 1.4;
   color: var(--text);
-  transition: border-color 0.25s ease;
+  /* 겹쳐 그리는 글자와 글자 폭이 같아야 커서가 어긋나지 않는다. 글자 사이 맞춤·합자를 끈다. */
+  font-kerning: none;
+  font-variant-ligatures: none;
 }
-.input::placeholder {
+/* 쓰기 시작하면 입력 칸 글자는 투명하게 두고 위에 겹친 글자를 보여준다. 커서와 선택 영역은 입력 칸 것을 쓴다. */
+.fieldInputTyped {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--text);
+}
+.fieldTyped {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 22px;
+  overflow-x: clip;
+  pointer-events: none;
+  white-space: pre;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(16px, 0.95vw, 18px);
+  line-height: 1.4;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  color: var(--text);
+}
+.fieldTypedLine {
+  display: inline-block;
+}
+.fieldTypedChar {
+  display: inline-block;
+  animation: fieldCharIn 0.26s var(--ease-out) both;
+  animation-delay: calc(var(--k, 0) * 28ms);
+}
+@keyframes fieldCharIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(3px);
+  }
+}
+.fieldLabel {
+  position: absolute;
+  left: 2px;
+  top: 22px;
+  display: flex;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(16px, 0.95vw, 18px);
+  line-height: 1.4;
   color: var(--text-dim);
-  transition: color 0.25s ease;
 }
-.input:focus {
-  border-bottom-color: rgba(var(--text-rgb), 0.85);
+.fieldChars {
+  display: flex;
 }
-.input:focus::placeholder {
+.fieldChar {
+  display: inline-block;
+  transition:
+    transform 0.32s var(--ease-out),
+    font-size 0.32s var(--ease-out),
+    color 0.32s var(--ease-out);
+  transition-delay: calc(var(--i) * 50ms);
+}
+.fieldInput:focus ~ .fieldLabel .fieldChar,
+.fieldInput:not(:placeholder-shown) ~ .fieldLabel .fieldChar {
+  transform: translateY(-24px);
+  font-size: 13px;
+  color: var(--text);
+}
+/* 다 쓰고 칸을 떠나면 이름표는 다시 흐리게(위에 남은 채로) */
+.fieldInput:not(:focus):not(:placeholder-shown) ~ .fieldLabel .fieldChar {
+  color: var(--text-dim);
+}
+.fieldBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+}
+.fieldBar::before,
+.fieldBar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 0;
+  height: 2px;
+  background: var(--text);
+  transition: width 0.32s var(--ease-out);
+}
+.fieldBar::before {
+  left: 50%;
+}
+.fieldBar::after {
+  right: 50%;
+}
+.fieldInput:focus ~ .fieldBar::before,
+.fieldInput:focus ~ .fieldBar::after {
+  width: 50%;
+}
+.fieldHint {
+  position: absolute;
+  right: 2px;
+  top: -1px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text-dimmer);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fieldChar {
+    transition-delay: 0s;
+  }
+  .fieldTypedChar {
+    animation: none;
+  }
 }
 .btn {
   width: 100%;
