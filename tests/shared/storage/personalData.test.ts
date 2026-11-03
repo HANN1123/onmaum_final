@@ -143,6 +143,7 @@ describe('deleteAllPersonalData', () => {
     saveSettings({ ...DEFAULT_SETTINGS, calibrationOffset: 9, nudge: { ...DEFAULT_SETTINGS.nudge, enabled: true } })
     localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: ['산책'] }))
     localStorage.setItem('onmaum_onboarded', 'true')
+    localStorage.setItem('onmaum_camera_rotation', '90')
     localStorage.setItem('other_app_key', 'x')
   })
 
@@ -157,6 +158,7 @@ describe('deleteAllPersonalData', () => {
     expect(loadSettings().nudge.enabled).toBe(true)
     expect(localStorage.getItem('onmaum_profile')).not.toBeNull()
     expect(localStorage.getItem('onmaum_onboarded')).toBe('true')
+    expect(localStorage.getItem('onmaum_camera_rotation')).toBe('90')
     expect(localStorage.getItem('other_app_key')).toBe('x')
   })
 
