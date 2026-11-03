@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { classifyStress, computeBaselineState, BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { PERIOD_BUCKET_HOURS } from '@/features/algorithm/stress/dailyStress'
@@ -11,6 +11,7 @@ import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
 import { LEGAL, SAMPLE_TODAY } from './demoCopy'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
+import { Roll, Swap } from './Roll'
 import {
   DAY_LEVEL_COPY,
   formatClock,
@@ -26,6 +27,7 @@ import { useStoredSession } from './useStoredSession'
 
 /**
  * 하루 리포트 화면 데모. 측정·결과 화면과 같은 틀.
+ * 14일 막대 위의 큰 숫자가 읽어 주는 값이다. 막대를 훑으면 그날의 스트레스와 평소와의 차이로 굴러 바뀐다(Stageshow 의 차트 스크럽).
  * 왼쪽은 14일 스트레스 막대(점선이 평소)와 오늘 통화 목록, 오른쪽은 하루 판정·숫자 셋·행·버튼.
  * 숫자는 표본이지만 "평소" 기준선과 판정은 algorithm/baseline 의 실제 함수로 계산한다.
  * 방금 끝낸 통화가 있으면 목록 맨 위에 올리고 결과 화면으로 잇는다.
@@ -58,10 +60,17 @@ export default function ReportDemo() {
   const level = classifyStress(SAMPLE_TODAY.stress, baseline)
   const baselineN = baseline.baselineN
   const validDays = history.slice(0, -1).filter((p) => p.scores !== null).length
+  const [active, setActive] = useState<number | null>(null)
+  // 막대 눈금 상한: 가장 높은 날의 1.3배를 10 단위로 올림. 평소선도 같은 눈금을 쓴다.
+  const scaleMax = useMemo(() => {
+    const max = history.reduce((m, p) => Math.max(m, p.scores?.stress ?? 0), baselineN ?? 0)
+    return Math.max(40, Math.ceil((max * 1.3) / 10) * 10)
+  }, [history, baselineN])
+  const pct = (v: number) => `${(v / scaleMax) * 100}%`
 
   const stored = useStoredSession()
   const calls = useMemo<CallRow[]>(() => {
-    const sample = sampleCalls(now ?? new Date(0))
+    const sample = sampleCalls(stored ? new Date(stored.endedAt) : (now ?? new Date(0)))
     if (!stored) return sample
     const summary = summarizeSession(stored)
     const recent: CallRow = {
@@ -82,10 +91,20 @@ export default function ReportDemo() {
   const dateLabel = now ? now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : ''
   const hardestHour = sampleHardestHour(now ?? new Date(0))
   const hardestText = `${hardestHour}–${hardestHour + PERIOD_BUCKET_HOURS}시`
-  const sub = `힘들었던 시간대는 ${hardestText}, 통화 ${calls.length}건 중 ${heavyCalls}건이 평소보다 무거웠습니다.`
+  const sub = `통화 ${calls.length}건 중 ${heavyCalls}건이 평소보다 무거웠습니다.`
+
+  // 위쪽 큰 숫자: 평소엔 오늘, 막대를 훑는 동안엔 그날
+  const todayIndex = history.length - 1
+  const shown = active ?? todayIndex
+  const shownDay = history[shown]
+  const shownValue = shownDay.scores ? Math.round(shownDay.scores.stress) : null
+  const readLabel = shown === todayIndex ? '오늘 스트레스' : `${axisLabel(shownDay.date, false, now)} 스트레스`
+  const diff = shownValue !== null && baselineN !== null ? shownValue - Math.round(baselineN) : null
+  const readSide =
+    shownValue === null ? '측정 없음' : diff === null ? '' : diff === 0 ? '평소와 같음' : `평소보다 ${diff > 0 ? '+' : '−'}${Math.abs(diff)}`
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
+    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell} ${styles.readable}`} data-theme={theme}>
       <nav className={styles.nav}>
         <Link href={HERO_HREF} className={`${styles.logo} ${styles.focusable}`}>
           ONMAUM
@@ -103,12 +122,20 @@ export default function ReportDemo() {
 
       <div className={styles.body}>
         <div className={styles.reportLeft}>
-          <div className={`${styles.frame} ${styles.chartFrame}`}>
-            <span className={styles.frameTag}>{BASELINE_WINDOW_DAYS}일 추이 · 스트레스 지수 · 점선은 평소</span>
-            <div className={styles.chartArea}>
+          <div className={`${styles.frame} ${styles.chartFrame} ${styles.reportChart}`}>
+            <div className={styles.readout}>
+              <Swap text={readLabel} className={styles.readoutLabel} />
+              <div className={styles.readoutMain}>
+                <Roll value={shownValue === null ? '–' : String(shownValue)} className={styles.readoutValue} />
+                <span className={`${styles.readoutSide} ${styles.readoutSideDim}`}>
+                  <Swap text={readSide} />
+                </span>
+              </div>
+            </div>
+            <div className={styles.chartArea} onPointerLeave={() => setActive(null)}>
               <div className={styles.bars}>
                 {baselineN !== null && (
-                  <div className={styles.baseline} style={{ bottom: `${baselineN}%` }}>
+                  <div className={styles.baseline} style={{ bottom: pct(baselineN) }}>
                     <span className={styles.baselineTag}>평소 {Math.round(baselineN)}</span>
                   </div>
                 )}
@@ -118,13 +145,12 @@ export default function ReportDemo() {
                   return (
                     <div
                       key={p.date}
-                      className={styles.barCol}
+                      className={`${styles.barCol} ${active === i ? styles.barColOn : ''}`}
                       aria-label={`${axisLabel(p.date, isToday, now)} 스트레스 ${value ?? '없음'}`}
+                      onPointerEnter={() => setActive(i)}
                     >
                       {value !== null ? (
-                        <div className={`${styles.bar} ${isToday ? styles.barToday : ''}`} style={{ height: `${value}%` }}>
-                          <span className={styles.barValue}>{value}</span>
-                        </div>
+                        <div className={`${styles.bar} ${isToday ? styles.barToday : ''}`} style={{ height: pct(value) }} />
                       ) : (
                         <span className={styles.barNone}>–</span>
                       )}
@@ -147,7 +173,7 @@ export default function ReportDemo() {
           </div>
 
           <div className={`${styles.frame} ${styles.callsFrame}`}>
-            <span className={styles.frameTag}>오늘 통화 · {calls.length}건 · {mmss(totalSec)}</span>
+            <span className={styles.panelTitle}>오늘 통화 {calls.length}건 · {mmss(totalSec)}</span>
             <ul className={styles.calls}>
               {calls.map((c, i) => (
                 <li key={`${c.time}-${i}`} className={styles.call}>
@@ -174,7 +200,7 @@ export default function ReportDemo() {
         <div className={styles.right}>
           <div className={styles.head}>
             <div className={styles.verdictBox}>
-              <span className={styles.chip}>[ 오늘 · {BASELINE_WINDOW_DAYS}일 기준선 대비 ]</span>
+              <span className={styles.chip}>{BASELINE_WINDOW_DAYS}일 기준선 대비</span>
               <p className={styles.verdict}>{DAY_LEVEL_COPY[level]}</p>
               <p className={styles.verdictSub}>{sub}</p>
             </div>
@@ -183,16 +209,13 @@ export default function ReportDemo() {
 
           <div className={styles.stats}>
             <Stat k="긍정" v={String(SAMPLE_TODAY.positive)} />
-            <Stat k="스트레스" v={String(SAMPLE_TODAY.stress)} />
-            <Stat k="평소" v={baselineN === null ? '–' : String(Math.round(baselineN))} />
+            <Stat k="통화" v={String(calls.length)} unit="건" />
+            <Stat k="평균 심박" v={String(SAMPLE_AVG_BPM)} unit="BPM" />
           </div>
 
           <div className={styles.rows}>
-            <Row k="오늘 상태" v={LEVEL_SHORT[level]} />
-            <Row k="통화" v={`${calls.length}건 · ${mmss(totalSec)}`} />
             <Row k="힘들었던 시간대" v={hardestText} />
             <Row k="감정 비율" v={SHARE_ORDER.map((e) => `${EMOTION_LABELS[e]} ${SAMPLE_SHARES[e]}`).join(' · ')} />
-            <Row k="평균 심박" v={`${SAMPLE_AVG_BPM} BPM`} />
             <Row k="기준선" v={baseline.mode === 'relative' ? `최근 ${BASELINE_WINDOW_DAYS}일 중 ${validDays}일` : '기록 3일 미만 · 절대 기준'} />
           </div>
 

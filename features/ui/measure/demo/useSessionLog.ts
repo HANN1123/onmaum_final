@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
-import { saveDemoSession, type DemoSession } from './sessionLog'
-import type { TimelinePoint } from './TimelineCanvas'
+import { saveDemoSession, type DemoSession, type TimelinePoint } from './sessionLog'
 
 /**
  * 통화 중 1초마다 (경과 초, BPM, 안정된 감정)을 쌓는다.

@@ -5,28 +5,25 @@ import { useMemo, useState } from 'react'
 import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
-import { mmss, Row, Stat, usePulseAt } from './demoBits'
+import CallChart from './CallChart'
+import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
 import { LEGAL, SAMPLE_TODAY } from './demoCopy'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
-import { mixRgb, ORB_PALETTE, rgba, type Rgb } from './orbs/emotionPalette'
-import { LEVEL_COPY, LEVEL_SHORT, makeSampleSession, summarizeSession } from './sessionLog'
-import TimelineCanvas from './TimelineCanvas'
-import { formatElapsed } from './useSimulatedVitals'
+import { Roll, Swap } from './Roll'
+import { LEVEL_COPY, makeSampleSession, summarizeSession } from './sessionLog'
 import { useStoredSession } from './useStoredSession'
 
 /**
- * 통화가 끝난 뒤 나오는 결과 화면 데모. 측정 화면과 같은 틀(상단·좌우 분할·모노 행·각진 상자).
- * 왼쪽은 통화 타임라인(감정색 띠 + 심박 선)과 감정 비율, 오른쪽은 판정 한 줄·숫자 셋·오늘 누적·자기보고·버튼.
- * 측정 화면이 넘긴 기록이 없으면 표본 통화를 보여준다. 판정 문구·기준선·오늘 누적은 표본이다.
+ * 통화가 끝난 뒤 나오는 결과 화면 데모. 측정 화면과 같은 틀.
+ * 왼쪽은 한 단계 밝은 면 위의 통화 차트. 위쪽 큰 숫자가 읽어 주는 값이고, 차트를 훑으면 그 순간의 심박과 감정으로 굴러 바뀐다.
+ * 오른쪽은 판정 한 줄, 숫자 둘, 행, 자기보고, 버튼. 같은 정보는 한 곳에서만 말한다.
+ * 측정 화면이 넘긴 기록이 없으면 표본 통화를 보여준다. 판정 문구와 기준선은 표본이다.
  */
 
 const MEASURE_HREF = '/demo/measure'
-const HERO_HREF = '/demo/hero-dark'
 const REPORT_HREF = '/demo/report'
-const EMOTION_ORDER: Emotion[] = ['calm', 'happy', 'sad', 'angry']
-const WHITE: Rgb = [255, 255, 255]
-const BLACK: Rgb = [0, 0, 0]
+const HERO_HREF = '/demo/hero-dark'
 /** 넘겨받은 통화가 없을 때 보여줄 표본. 결정적이라 서버와 클라이언트가 같은 그림을 그린다. */
 const SAMPLE_SESSION = makeSampleSession()
 
@@ -38,38 +35,56 @@ const SELF_REPORT: { key: SelfReport; label: string }[] = [
   { key: 'better', label: '더 괜찮음' },
 ]
 
+/** 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다. */
+function smoothBpm(values: number[]): number[] {
+  const half = values.length > 60 ? 4 : 1
+  return values.map((_, i) => {
+    let sum = 0
+    let n = 0
+    for (let k = Math.max(0, i - half); k <= Math.min(values.length - 1, i + half); k += 1) {
+      sum += values[k]
+      n += 1
+    }
+    return sum / n
+  })
+}
+
 export default function ResultDemo() {
   const [theme, toggleTheme] = useDemoTheme()
+  const light = theme === 'light'
   const stored = useStoredSession()
   const session = stored ?? SAMPLE_SESSION
   const [report, setReport] = useState<SelfReport | null>(null)
+  const [active, setActive] = useState<number | null>(null)
 
   const summary = useMemo(() => summarizeSession(session), [session])
-  const light = theme === 'light'
-  const paper = light ? WHITE : BLACK
-  const durationText = formatElapsed(session.durationSec)
-  const highlight = summary.hardest ? { start: summary.hardest.start, end: summary.hardest.end } : null
+  const smooth = useMemo(() => smoothBpm(session.samples.map((s) => s.bpm)), [session])
+  // 힘든 구간의 색은 그 구간에서 가장 오래 머문 감정
+  const hardest = useMemo(() => {
+    if (!summary.hardest) return null
+    const { start, end } = summary.hardest
+    const count: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
+    for (const s of session.samples) if (s.t >= start && s.t <= end) count[s.emotion] += 1
+    const emotion = (Object.keys(count) as Emotion[]).reduce((a, b) => (count[b] > count[a] ? b : a))
+    return { start, end, emotion }
+  }, [summary, session])
   const needsRest = summary.level === 'high' || summary.level === 'veryHigh'
+  const getPulse = usePulseAt(summary.avgBpm)
 
-  // 오브는 통화의 우세 감정색으로, 평균 심박 빠르기로 두근거린다.
-  const avgBpm = summary.avgBpm
-  const getPulse = usePulseAt(avgBpm)
-
-  const sub = summary.hardest
-    ? `가장 힘들었던 구간은 ${mmss(summary.hardest.start)}–${mmss(summary.hardest.end)}, 그때 심박이 ${summary.hardest.peakBpm}까지 올랐습니다.`
-    : '통화가 짧아 구간을 나누지 않았습니다.'
-  const hardLeft = summary.hardest
-    ? Math.min(88, Math.max(12, (((summary.hardest.start + summary.hardest.end) / 2) / session.durationSec) * 100))
-    : 0
+  // 위쪽 큰 숫자: 평소엔 통화 평균, 차트를 훑는 동안엔 그 순간
+  const point = active !== null ? session.samples[active] : null
+  const readLabel = point ? mmss(point.t) : '통화 평균'
+  const readBpm = point ? Math.round(smooth[active!]) : summary.avgBpm
+  const readEmotion = point ? point.emotion : summary.dominant
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
+    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell} ${styles.readable}`} data-theme={theme}>
       <nav className={styles.nav}>
         <Link href={HERO_HREF} className={`${styles.logo} ${styles.focusable}`}>
           ONMAUM
         </Link>
         <div className={styles.navMid}>
-          <span className={`${styles.live} ${styles.mono}`}>통화 종료 {durationText}</span>
+          <span className={`${styles.live} ${styles.mono}`}>통화 종료 {mmss(session.durationSec)}</span>
           <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
             {theme === 'dark' ? '화이트' : '다크'}
           </button>
@@ -80,72 +95,49 @@ export default function ResultDemo() {
       </nav>
 
       <div className={styles.body}>
-        <div className={styles.left}>
-          <div className={`${styles.frame} ${styles.resultFrame}`}>
-            <div className={styles.timelineWrap}>
-              <TimelineCanvas
-                points={session.samples}
-                durationSec={session.durationSec}
-                highlight={highlight}
-                scheme={theme}
-                className={styles.timeline}
-              />
-              {summary.hardest && (
-                <span className={styles.hardLabel} style={{ left: `${hardLeft}%` }}>
-                  가장 힘들었던 구간 · {mmss(summary.hardest.start)}–{mmss(summary.hardest.end)}
-                </span>
-              )}
-              <span className={styles.frameTag}>통화 타임라인 · 띠는 감정, 선은 심박</span>
-            </div>
-            <div className={styles.ticks}>
-              <span>00:00</span>
-              <span>{mmss(session.durationSec / 2)}</span>
-              <span>{mmss(session.durationSec)}</span>
+        <div className={styles.panel}>
+          <div className={styles.readout}>
+            <Swap text={readLabel} className={styles.readoutLabel} />
+            <div className={styles.readoutMain}>
+              <Roll value={String(readBpm)} className={styles.readoutValue} />
+              <span className={styles.readoutUnit}>BPM</span>
+              <span className={styles.readoutSide}>
+                <i style={{ background: swatchColor(readEmotion, light) }} aria-hidden="true" />
+                <Swap text={EMOTION_LABELS[readEmotion]} />
+              </span>
             </div>
           </div>
-          <div className={styles.waveBox}>
-            <div className={styles.shares}>
-              {EMOTION_ORDER.filter((e) => summary.shares[e] > 0).map((e) => (
-                <div
-                  key={e}
-                  className={styles.share}
-                  style={{ flex: summary.shares[e], background: rgba(mixRgb(paper, ORB_PALETTE[e].base, light ? 0.42 : 0.5), 1) }}
-                >
-                  {summary.shares[e] >= 0.1 && (
-                    <span className={styles.shareLabel}>
-                      {EMOTION_LABELS[e]} {Math.round(summary.shares[e] * 100)}%
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <span className={styles.frameTag}>통화 중 감정 비율</span>
-          </div>
+          <CallChart
+            points={session.samples}
+            smooth={smooth}
+            durationSec={session.durationSec}
+            hardest={hardest}
+            shares={summary.shares}
+            scheme={theme}
+            active={active}
+            onScrub={setActive}
+          />
         </div>
 
         <div className={styles.right}>
           <div className={styles.head}>
             <div className={styles.verdictBox}>
-              <span className={styles.chip}>[ 통화 종료 · 14일 기준선 대비 ]</span>
+              <span className={styles.chip}>14일 기준선 대비</span>
               <p className={styles.verdict}>{LEVEL_COPY[summary.level]}</p>
-              <p className={styles.verdictSub}>{sub}</p>
             </div>
-            <DotOrb getPulse={getPulse} emotion={summary.dominant} bpm={avgBpm} scheme={theme} size={112} />
+            <DotOrb getPulse={getPulse} emotion={summary.dominant} bpm={summary.avgBpm} scheme={theme} size={112} />
           </div>
 
-          <div className={styles.stats}>
+          <div className={`${styles.stats} ${styles.stats2}`}>
             <Stat k="통화 시간" v={mmss(session.durationSec)} />
-            <Stat k="평균 심박" v={String(summary.avgBpm)} unit="BPM" />
             <Stat k="최고 심박" v={String(summary.maxBpm)} unit="BPM" />
           </div>
 
           <div className={styles.rows}>
-            <Row k="우세 감정" v={EMOTION_LABELS[summary.dominant]} />
-            <Row k="이번 통화" v={LEVEL_SHORT[summary.level]} />
             <Row k="오늘" v={`긍정 ${SAMPLE_TODAY.positive} · 스트레스 ${SAMPLE_TODAY.stress} · 통화 ${SAMPLE_TODAY.calls}건`} />
             {needsRest && <Row k="권장" v="다음 통화 전 2분 휴식" />}
             <div className={styles.row}>
-              <span className={styles.k}>자기보고</span>
+              <span className={styles.k}>이 판정이 맞나요</span>
               <span className={styles.presets}>
                 {SELF_REPORT.map((item) => (
                   <button
