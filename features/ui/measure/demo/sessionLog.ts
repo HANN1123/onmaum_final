@@ -1,39 +1,41 @@
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
-/** 통화 중 1초마다 남기는 표본. */
+/** 측정 중 1초마다 남기는 표본. */
 export interface TimelinePoint {
-  /** 통화 시작부터 지난 초 */
+  /** 측정 시작부터 지난 초 */
   t: number
-  bpm: number
-  emotion: Emotion
+  /** 심박(BPM). rPPG 연결 전이거나 신호를 잃으면 null */
+  bpm: number | null
+  /** 그 순간의 안정된 감정. 얼굴을 찾지 못했으면 null */
+  emotion: Emotion | null
 }
 
 /**
- * 통화 한 건의 기록(데모). 측정 화면이 1초마다 표본을 쌓고, 종료 때 sessionStorage 에 넣어
- * 결과 화면으로 넘긴다. 실제 저장 계층(shared/storage)은 쓰지 않는다.
+ * 측정 한 번의 기록(데모). 측정 화면이 1초마다 표본을 쌓고, 종료 때 sessionStorage 에 넣어
+ * 결과 화면으로 넘긴다. 실제 저장 계층(shared/storage)에는 저장하지 않는다.
  */
 export interface DemoSession {
   startedAt: number
   endedAt: number
   durationSec: number
-  /** t 오름차순, 1초 간격 */
+  /** t 오름차순 */
   samples: TimelinePoint[]
 }
 
-const STORAGE_KEY = 'onmaum_demo_session'
+export const DEMO_SESSION_KEY = 'onmaum_demo_session'
 
 export function saveDemoSession(session: DemoSession): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+    sessionStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(session))
   } catch {
-    // 저장 불가 환경이면 결과 화면이 표본 통화를 쓴다.
+    // 저장할 수 없는 환경이면 결과 화면이 "기록 없음"을 보여준다.
   }
 }
 
 /** 저장된 원문. 없거나 못 읽으면 null. 문자열이라 useSyncExternalStore 스냅샷으로 안전하다. */
 export function readDemoSessionRaw(): string | null {
   try {
-    return sessionStorage.getItem(STORAGE_KEY)
+    return sessionStorage.getItem(DEMO_SESSION_KEY)
   } catch {
     return null
   }
@@ -50,159 +52,136 @@ export function parseDemoSession(raw: string | null): DemoSession | null {
   }
 }
 
-/** 결정적 난수(mulberry32). 표본 통화가 열 때마다 같은 모양이 되게 한다. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0
-    let t = a
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+/** 같은 로컬 날짜인지. 리포트·기록의 "오늘"에 어제 끝낸 측정이 섞이지 않게 한다. */
+export function isSameLocalDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-/** 결과 화면을 바로 열었을 때 쓰는 표본 통화. 7분 12초, 중반에 힘든 구간이 있다. */
-export function makeSampleSession(): DemoSession {
-  const duration = 432
-  const rand = mulberry32(7)
-  const samples: TimelinePoint[] = []
-  let bpm = 74
-  for (let t = 0; t <= duration; t += 1) {
-    const f = t / duration
-    let emotion: Emotion = 'calm'
-    if (f >= 0.2 && f < 0.28) emotion = 'happy'
-    else if (f >= 0.3 && f < 0.57) emotion = 'angry'
-    else if (f >= 0.57 && f < 0.7) emotion = 'sad'
-    // 화남 구간 한가운데 잠깐 평온이 끼어든다(안정화가 걸러내지 못한 짧은 전환).
-    if (f >= 0.41 && f < 0.43) emotion = 'calm'
-    // 심박: 기본 74, 힘든 구간 가운데가 108 근처.
-    const hump = Math.exp(-(((f - 0.47) / 0.11) ** 2)) * 34
-    bpm += (74 + hump - bpm) * 0.25 + (rand() - 0.5) * 2.4
-    samples.push({ t, bpm: Math.round(bpm), emotion })
-  }
-  // 시각은 쓰지 않으므로 고정값. 렌더 중 호출해도 순수하다.
-  return { startedAt: 0, endedAt: duration * 1000, durationSec: duration, samples }
-}
-
-export type CallLevel = 'low' | 'typical' | 'high' | 'veryHigh'
-
-export interface CallSummary {
-  avgBpm: number
-  maxBpm: number
-  /** 감정별 시간 비율 0~1 */
+export interface SessionSummary {
+  /** 심박 표본 평균·최고. 심박 표본이 하나도 없으면(rPPG 연결 전) null */
+  avgBpm: number | null
+  maxBpm: number | null
+  /** 얼굴을 찾은 표본 중 감정별 비율 0~1. 찾은 표본이 없으면 모두 0 */
   shares: Record<Emotion, number>
-  dominant: Emotion
-  /** 가장 힘들었던 구간(초). 통화가 너무 짧으면 null */
-  hardest: { start: number; end: number; peakBpm: number } | null
-  level: CallLevel
+  /** 가장 오래 머문 감정. 얼굴을 한 번도 찾지 못했으면 null */
+  dominant: Emotion | null
+  /** 전체 표본 중 얼굴을 찾은 비율 0~1 */
+  detectedRatio: number
+  /** 심박이 가장 높았던 구간(초). 심박 표본이 없거나 측정이 짧으면 null */
+  peakWindow: { start: number; end: number; peakBpm: number } | null
 }
 
-/** 감정별 부담 가중치(표본). 실제 지수는 algorithm/stress 가 계산한다. */
-const STRAIN: Record<Emotion, number> = { angry: 1, sad: 0.6, calm: 0, happy: 0 }
 /**
- * 이보다 짧은 통화는 힘든 구간을 표시하지 않는다(초). 구간 창이 최소 10초라,
- * 20초 미만이면 창이 통화의 절반을 넘어 "가장 힘든 순간"이라는 말이 무의미해진다.
+ * 이보다 짧은 측정은 심박이 가장 높았던 구간을 표시하지 않는다(초). 구간 창이 최소 10초라,
+ * 20초 미만이면 창이 측정의 절반을 넘어 "가장 높았던 구간"이라는 말이 무의미해진다.
  */
-const MIN_HARDEST_CALL_SEC = 20
-/** 표본 기준선: 지난 14일 통화의 평균 부담(0~1). 실제 값은 algorithm/baseline 에서 온다. */
-const SAMPLE_BASELINE_STRAIN = 0.24
+const MIN_PEAK_SESSION_SEC = 20
 
-/** 심박을 0~1 로. 60 이하를 0, 120 이상을 1 로 본다. */
-function bpmStrain(bpm: number): number {
-  return Math.min(1, Math.max(0, (bpm - 60) / 60))
+/**
+ * 측정 요약: 실제로 기록된 값만 센다. 얼굴을 못 찾은 표본은 감정 비율에서 빼고, 심박이 없으면 심박 값을 만들지 않는다.
+ * 스트레스 판정이나 기준선 비교는 하지 않는다(판정은 algorithm/baseline 이 저장된 기록으로 한다).
+ */
+export function summarizeSession(session: DemoSession): SessionSummary {
+  const { samples, durationSec } = session
+  const seconds: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
+  let detected = 0
+  let bpmSum = 0
+  let bpmCount = 0
+  let maxBpm: number | null = null
+  for (const s of samples) {
+    if (s.emotion) {
+      seconds[s.emotion] += 1
+      detected += 1
+    }
+    if (s.bpm !== null) {
+      bpmSum += s.bpm
+      bpmCount += 1
+      if (maxBpm === null || s.bpm > maxBpm) maxBpm = s.bpm
+    }
+  }
+  const share = (e: Emotion) => (detected > 0 ? seconds[e] / detected : 0)
+  const shares: Record<Emotion, number> = { happy: share('happy'), calm: share('calm'), sad: share('sad'), angry: share('angry') }
+  const dominant =
+    detected > 0 ? (Object.keys(seconds) as Emotion[]).reduce((a, b) => (seconds[b] > seconds[a] ? b : a)) : null
+
+  return {
+    avgBpm: bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null,
+    maxBpm,
+    shares,
+    dominant,
+    detectedRatio: samples.length > 0 ? detected / samples.length : 0,
+    peakWindow: findPeakWindow(samples, durationSec),
+  }
 }
 
-/** 통화 요약: 평균·최고 심박, 감정 비율, 우세 감정, 가장 힘들었던 구간, 평소 대비 수준. */
-export function summarizeSession(session: DemoSession): CallSummary {
-  const { samples, durationSec } = session
-  const n = samples.length
-  let sum = 0
-  let maxBpm = 0
-  const seconds: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
-  for (const s of samples) {
-    sum += s.bpm
-    if (s.bpm > maxBpm) maxBpm = s.bpm
-    seconds[s.emotion] += 1
-  }
-  const shares: Record<Emotion, number> = {
-    happy: seconds.happy / n,
-    calm: seconds.calm / n,
-    sad: seconds.sad / n,
-    angry: seconds.angry / n,
-  }
-  const dominant = (Object.keys(shares) as Emotion[]).reduce((a, b) => (shares[b] > shares[a] ? b : a))
-
-  // 부담 점수: 심박 6 : 감정 4
-  const strain = samples.map((s) => 0.6 * bpmStrain(s.bpm) + 0.4 * STRAIN[s.emotion])
-  const meanStrain = strain.reduce((a, b) => a + b, 0) / n
-
-  // 가장 힘들었던 구간: 통화의 15%(최소 10초) 창을 밀며 평균 부담이 가장 큰 곳. 20초 미만 통화는 나누지 않는다.
+/** 측정의 15%(최소 10초) 창을 밀며 평균 심박이 가장 높은 곳. 심박이 빠진 표본은 건너뛴다. */
+function findPeakWindow(samples: TimelinePoint[], durationSec: number): SessionSummary['peakWindow'] {
   const win = Math.max(10, Math.round(durationSec * 0.15))
-  let hardest: CallSummary['hardest'] = null
-  if (durationSec >= MIN_HARDEST_CALL_SEC && n > win) {
-    let best = -1
-    let bestStart = 0
-    let acc = 0
-    for (let i = 0; i < n; i += 1) {
-      acc += strain[i]
-      if (i >= win) acc -= strain[i - win]
-      if (i >= win - 1 && acc > best) {
-        best = acc
-        bestStart = i - win + 1
+  if (durationSec < MIN_PEAK_SESSION_SEC || samples.length <= win) return null
+  // 심박이 절반 넘게 비어 있으면 구간을 고르지 않는다.
+  if (samples.filter((s) => s.bpm !== null).length < samples.length / 2) return null
+  let best = -Infinity
+  let bestStart = -1
+  for (let i = 0; i + win <= samples.length; i += 1) {
+    let sum = 0
+    let n = 0
+    for (let k = i; k < i + win; k += 1) {
+      const bpm = samples[k].bpm
+      if (bpm !== null) {
+        sum += bpm
+        n += 1
       }
     }
-    const slice = samples.slice(bestStart, bestStart + win)
-    hardest = {
-      start: slice[0].t,
-      end: slice[slice.length - 1].t,
-      peakBpm: slice.reduce((m, s) => Math.max(m, s.bpm), 0),
+    if (n > 0 && sum / n > best) {
+      best = sum / n
+      bestStart = i
     }
   }
-
-  const ratio = meanStrain / SAMPLE_BASELINE_STRAIN
-  const level: CallLevel = ratio < 0.8 ? 'low' : ratio < 1.2 ? 'typical' : ratio < 1.6 ? 'high' : 'veryHigh'
-  return { avgBpm: Math.round(sum / n), maxBpm, shares, dominant, hardest, level }
+  if (bestStart < 0) return null
+  const slice = samples.slice(bestStart, bestStart + win)
+  return {
+    start: slice[0].t,
+    end: slice[slice.length - 1].t,
+    peakBpm: slice.reduce((m, s) => (s.bpm !== null && s.bpm > m ? s.bpm : m), 0),
+  }
 }
 
-/** 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다. */
-export function smoothBpm(values: number[]): number[] {
+/**
+ * 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다.
+ * 심박이 빠진 자리는 이웃 값으로 메우지 않고 null 로 둔다(선이 끊긴다).
+ */
+export function smoothBpm(values: (number | null)[]): (number | null)[] {
   const half = values.length > 60 ? 4 : 1
-  return values.map((_, i) => {
+  return values.map((value, i) => {
+    if (value === null) return null
     let sum = 0
     let n = 0
     for (let k = Math.max(0, i - half); k <= Math.min(values.length - 1, i + half); k += 1) {
-      sum += values[k]
-      n += 1
+      const v = values[k]
+      if (v !== null) {
+        sum += v
+        n += 1
+      }
     }
     return sum / n
   })
 }
 
-/** 가장 힘든 구간과 그 구간에서 가장 오래 머문 감정(구간의 색). */
-export function hardestWithEmotion(
+/** 강조 구간과 그 구간에서 가장 오래 머문 감정(구간의 색). 얼굴을 못 찾은 구간이면 감정은 null */
+export function peakWithEmotion(
   session: DemoSession,
-  summary: CallSummary,
-): { start: number; end: number; emotion: Emotion } | null {
-  if (!summary.hardest) return null
-  const { start, end } = summary.hardest
+  summary: SessionSummary,
+): { start: number; end: number; emotion: Emotion | null } | null {
+  if (!summary.peakWindow) return null
+  const { start, end } = summary.peakWindow
   const count: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
-  for (const s of session.samples) if (s.t >= start && s.t <= end) count[s.emotion] += 1
-  const emotion = (Object.keys(count) as Emotion[]).reduce((a, b) => (count[b] > count[a] ? b : a))
+  let any = false
+  for (const s of session.samples) {
+    if (s.t >= start && s.t <= end && s.emotion) {
+      count[s.emotion] += 1
+      any = true
+    }
+  }
+  const emotion = any ? (Object.keys(count) as Emotion[]).reduce((a, b) => (count[b] > count[a] ? b : a)) : null
   return { start, end, emotion }
-}
-
-/** 판정 문장(표본). 실제 문구 선택은 feedback/lib/checkinCopy 가 맡는다. */
-export const LEVEL_COPY: Record<CallLevel, string> = {
-  low: '평소보다 가벼운 통화였습니다',
-  typical: '평소와 비슷한 통화였습니다',
-  high: '평소보다 무거운 통화였습니다',
-  veryHigh: '꽤 힘든 통화였습니다',
-}
-
-export const LEVEL_SHORT: Record<CallLevel, string> = {
-  low: '평소보다 가벼움',
-  typical: '평소와 비슷함',
-  high: '평소보다 무거움',
-  veryHigh: '평소보다 훨씬 무거움',
 }
