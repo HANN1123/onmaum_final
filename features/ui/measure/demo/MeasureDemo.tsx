@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Skeleton, SkeletonBox, SkulletProvider } from 'skullet/react'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { useWebcam } from '@/features/ui/landing/hero-demo/useWebcam'
+import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/useDesktopMeasurementPublisher'
 import { LEGAL } from './demoCopy'
 import FaceLayer from './FaceLayer'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
@@ -49,7 +50,13 @@ const SKULLET_THEME = {
 
 export default function MeasureDemo() {
   const router = useRouter()
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  // 데스크톱 위젯 발행이 프레임 수를 읽을 video 요소. ref 를 렌더 중에 읽지 않도록 상태로도 둔다
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
+  const attachVideo = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el
+    setVideoEl(el)
+  }, [])
   const [active, setActive] = useState(true)
   const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
@@ -66,6 +73,9 @@ export default function MeasureDemo() {
   const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null)
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
+  // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
+  // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
+  useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
 
   /** 측정 종료: 기록을 넘기고 결과 화면으로 간다. */
   const endMeasure = () => {
@@ -124,7 +134,7 @@ export default function MeasureDemo() {
         <div className={styles.body}>
           <div className={styles.left}>
             <div className={styles.frame}>
-              <video ref={videoRef} muted playsInline autoPlay />
+              <video ref={attachVideo} muted playsInline autoPlay />
               <FaceLayer box={active ? face.box : null} videoRef={videoRef} />
               <span className={styles.frameTag}>
                 <Morph>{`카메라 · ${faceState}`}</Morph>
