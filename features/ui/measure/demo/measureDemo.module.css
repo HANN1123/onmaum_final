@@ -1074,6 +1074,15 @@
   animation: swapIn 0.28s var(--ease-out);
 }
 
+/* 카메라 칸 위에 덮는 준비 중 뼈대 상자. 준비되면 서서히 걷힌다 */
+.frameSkeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
 /* 통화 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
 .switch {
   display: inline-flex;
