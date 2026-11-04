@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gateReading, ME_WARMUP, pulseLevel, STALE_MS, type GateInput } from '@/features/rppg/engine/rppgGate'
+import { gateReading, ME_WARMUP, pulseLevel, SETTLE_MS, STALE_MS, type GateInput } from '@/features/rppg/engine/rppgGate'
 
 const NOW = 100_000
 const base: GateInput = {
@@ -9,6 +9,7 @@ const base: GateInput = {
   lastFrameT: NOW - 100,
   now: NOW,
   estimate: { bpm: 72, snrDb: 3 },
+  firstEstimateAt: NOW - SETTLE_MS,
   minSnrDb: 0,
 }
 
@@ -33,6 +34,12 @@ describe('rPPG 품질 게이트', () => {
 
   it('연속성·밀도 기준을 못 넘어 추정이 없으면 모으는 중이다', () => {
     expect(gateReading({ ...base, estimate: null })).toMatchObject({ status: 'warming', bpm: null })
+  })
+
+  it('첫 추정 뒤 안정화 시간(12초) 동안은 보이지 않는다', () => {
+    expect(gateReading({ ...base, firstEstimateAt: NOW - SETTLE_MS + 1 })).toMatchObject({ status: 'warming', bpm: null })
+    expect(gateReading({ ...base, firstEstimateAt: null })).toMatchObject({ status: 'warming', bpm: null })
+    expect(gateReading({ ...base, firstEstimateAt: NOW - SETTLE_MS })).toMatchObject({ status: 'live', bpm: 72 })
   })
 
   it('SNR 이 기준 미만이면 신호 약함으로 숨긴다', () => {

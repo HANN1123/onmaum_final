@@ -53,6 +53,7 @@ export function useMeRppg(
     let kalman: Kalman1D[] | null = null
     let lastSendT: number | null = null
     let face = false
+    let firstEstimateAt: number | null = null
     const clock = createFrameClock()
     const buffer: { t: number; v: number }[] = []
     bufferRef.current = buffer
@@ -77,6 +78,7 @@ export function useMeRppg(
       inFlight = 0
       outputs = 0
       kalman = null
+      firstEstimateAt = null
       buffer.length = 0
       const msg: MeWorkerIn = { type: 'reset' }
       worker?.postMessage(msg)
@@ -156,13 +158,17 @@ export function useMeRppg(
     const estimateTimer = setInterval(() => {
       const last = buffer[buffer.length - 1]
       // 신선도는 응답 도착이 아니라 원본 프레임 시각으로 판단한다. 프레임 시각과 같은 시계(performance.now)를 쓴다
+      const nowMs = performance.now()
+      const estimate = last ? heartRateFromBvp(buffer) : null
+      if (estimate && firstEstimateAt === null) firstEstimateAt = nowMs
       const next = gateReading({
         engine: engineError ? 'error' : workerReady && blaze ? 'ready' : 'loading',
         face,
         outputs,
         lastFrameT: last ? last.t : null,
-        now: performance.now(),
-        estimate: last ? heartRateFromBvp(buffer) : null,
+        now: nowMs,
+        estimate,
+        firstEstimateAt,
         minSnrDb,
       })
       liveRef.current = next.status === 'live'
