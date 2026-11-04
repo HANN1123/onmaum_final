@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     // Electron 산출물·패키징 출력
     "dist-electron/**",
     "release/**",
+    // 로컬 평가 번들과 Chrome 프로필은 앱 소스 검사에서 제외한다.
+    ".eval/**",
   ]),
 ]);
 
