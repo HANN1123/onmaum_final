@@ -50,6 +50,12 @@ describe('rPPG 품질 게이트', () => {
     })
     expect(gateReading({ ...base, minSnrDb: 5 })).toMatchObject({ status: 'lowSignal', bpm: null })
   })
+
+  it('얼굴이 맥박 대역에서 크게 흔들리면 SNR 이 높아도 움직임으로 숨긴다', () => {
+    expect(gateReading({ ...base, motion: 0.04 })).toMatchObject({ status: 'motion', bpm: null })
+    expect(gateReading({ ...base, motion: 0.005 }).status).toBe('live')
+    expect(gateReading({ ...base, motion: null }).status).toBe('live')
+  })
 })
 
 describe('pulseLevel', () => {

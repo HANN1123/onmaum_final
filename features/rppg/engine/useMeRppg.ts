@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { FaceDetector } from '@mediapipe/tasks-vision'
-import { createFrameClock, heartRateFromBvp, MAX_SAMPLE_GAP_MS } from '../lib/rppg'
+import { createFrameClock, MAX_SAMPLE_GAP_MS } from '../lib/rppg'
+import { createHrTracker, type BoxSample } from '../lib/hrEstimator'
 import { clampCrop, createKalman1D, expandFaceBox, rgbaToModelInput, type Kalman1D } from '../lib/meRppg'
 import type { MeWorkerIn, MeWorkerOut } from '../lib/meRppg.worker'
 import type { CameraRotation } from '@/shared/storage/cameraRotation'
@@ -38,6 +39,8 @@ interface Options {
 /**
  * 측정 화면용 ME-rPPG 엔진. 실험실(RppgLab)의 ME-rPPG 경로를 그대로 옮겼다.
  *   BlazeFace(매 프레임) 얼굴 박스 → 칼만 → 높이 1.2배·위로 20% → 36×36 → 워커에서 ONNX 추론 → 맥박 파형 → BPM
+ * BPM 은 hrEstimator(대역 통과·얼굴 흔들림 주파수 제거·직전 값 추적)로 낸다(2026-11-04, MCD-rPPG 60개 영상에서
+ * 평균 오차 2.73 → 2.26 BPM). 흔들림이 크면 게이트가 '움직임 감지'로 숫자를 숨긴다.
  * 같은 video 요소에서 감정 분석(face-api)이 따로 돌아도 된다. 영상·프레임·파형은 저장하거나 밖으로 보내지 않는다.
  * enabled 가 false 이면 아무것도 하지 않고 OFF 를 돌려준다.
  * getPulse 는 게이트를 통과한 동안에만 실제 파형을 0~1 로 돌려주고, 그 밖에는 0(평평한 선)이다.
@@ -93,6 +96,9 @@ export function useMeRppg(
       hits.push({ t, hit })
       while (hits.length > 0 && hits[0].t < t - FACE_RATE_WINDOW_MS) hits.shift()
     }
+    /** 추정 창의 얼굴 흔들림을 재려고 칼만 상자 중심·너비를 남긴다(좌표만, 영상은 남기지 않는다) */
+    const boxes: BoxSample[] = []
+    const tracker = createHrTracker()
     liveRef.current = false
 
     let appliedRotation = rotationRef.current
@@ -138,6 +144,8 @@ export function useMeRppg(
       kalman = null
       firstEstimateAt = null
       buffer.length = 0
+      boxes.length = 0
+      tracker.reset()
       const msg: MeWorkerIn = { type: 'reset' }
       worker?.postMessage(msg)
     }
@@ -215,6 +223,8 @@ export function useMeRppg(
         width: kw.update(det.width),
         height: kh.update(det.height),
       })
+      boxes.push({ t, cx: box.originX + box.width / 2, cy: box.originY + box.height / 2, w: box.width })
+      while (boxes.length > 0 && boxes[0].t < t - BUFFER_MS) boxes.shift()
       const c = clampCrop(box, sw, sh)
       if (!c) return
       // 전체 프레임을 다시 그리지 않고 영상에서 얼굴 부분만 바로 36×36 으로 줄인다
@@ -248,7 +258,7 @@ export function useMeRppg(
       const last = buffer[buffer.length - 1]
       // 신선도는 응답 도착이 아니라 원본 프레임 시각으로 판단한다. 프레임 시각과 같은 시계(performance.now)를 쓴다
       const nowMs = performance.now()
-      const estimate = last ? heartRateFromBvp(buffer) : null
+      const estimate = last ? tracker.estimate([buffer], boxes) : null
       if (estimate && firstEstimateAt === null) firstEstimateAt = nowMs
       const next = gateReading({
         engine: engineError ? 'error' : workerReady && blaze ? 'ready' : 'loading',
@@ -259,6 +269,7 @@ export function useMeRppg(
         estimate,
         firstEstimateAt,
         minSnrDb,
+        motion: estimate?.motion ?? null,
       })
       liveRef.current = next.status === 'live'
       setReading((prev) =>
