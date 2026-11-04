@@ -12,7 +12,7 @@ import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/use
 import { LEGAL } from './demoCopy'
 import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type CameraRotation } from '@/shared/storage/cameraRotation'
 import FaceLayer from './FaceLayer'
-import { rotatedVideoStyle } from './rotationLayout'
+import { rotatedSize, rotatedVideoStyle } from './rotationLayout'
 import { useWatch } from './useWatch'
 import { WATCH_HINT } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
@@ -79,8 +79,16 @@ export default function MeasureDemo() {
   const [frameSize, setFrameSize] = useState({ cw: 0, ch: 0, vw: 0, vh: 0 })
   useEffect(() => {
     if (!frameEl || !videoEl) return
-    const update = () =>
-      setFrameSize({ cw: frameEl.clientWidth, ch: frameEl.clientHeight, vw: videoEl.videoWidth, vh: videoEl.videoHeight })
+    const update = () => {
+      // clientWidth/Height의 정수 반올림으로 영상 가장자리에 틈이나 추가 잘림이 생기지 않도록 소수 픽셀을 유지한다.
+      const rect = frameEl.getBoundingClientRect()
+      setFrameSize({
+        cw: rect.width - frameEl.clientLeft * 2,
+        ch: rect.height - frameEl.clientTop * 2,
+        vw: videoEl.videoWidth,
+        vh: videoEl.videoHeight,
+      })
+    }
     const observer = new ResizeObserver(update)
     observer.observe(frameEl)
     videoEl.addEventListener('loadedmetadata', update)
@@ -93,6 +101,7 @@ export default function MeasureDemo() {
     }
   }, [frameEl, videoEl])
   const videoStyle = rotatedVideoStyle(frameSize.cw, frameSize.ch, frameSize.vw, frameSize.vh, rotation) ?? undefined
+  const displaySize = rotatedSize(frameSize.vw || 1280, frameSize.vh || 720, rotation)
   const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
@@ -143,7 +152,7 @@ export default function MeasureDemo() {
           : `기록 3일 미만 · ${levelShort(stored.today.level, stored.baseline)}`
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
+    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell} ${styles.measureShell}`} data-theme={theme}>
       <SkulletProvider mode={theme} theme={SKULLET_THEME} reveal="smart">
         <nav className={styles.nav}>
           <Link href={HERO_HREF} className={`${styles.logo} ${styles.focusable}`}>
@@ -168,9 +177,11 @@ export default function MeasureDemo() {
           </button>
         </nav>
 
-        <div className={`${styles.body} ${styles.measureBody}`}>
+        <div className={`${styles.body} ${styles.measureBody}`} tabIndex={0} role="region" aria-label="측정 정보">
           <div className={styles.left}>
             <div ref={setFrameEl} className={styles.frame}>
+              {/* 절대 위치 영상 대신 원본의 내재 크기로 칸을 잡는다. 회전 시에도 기존 video의 자동 높이·cover 배치를 유지한다. */}
+              <svg className={styles.frameSizer} width={displaySize.w} height={displaySize.h} aria-hidden="true" />
               <video ref={attachVideo} muted playsInline autoPlay style={videoStyle} />
               <FaceLayer box={active ? face.box : null} videoRef={videoRef} rotation={rotation} />
               <button
@@ -213,7 +224,7 @@ export default function MeasureDemo() {
                   <span className={styles.unit}>BPM</span>
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
+                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} />
                 </span>
               </div>
             </Skeleton>

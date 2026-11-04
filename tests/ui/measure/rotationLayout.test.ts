@@ -19,6 +19,21 @@ describe('카메라 회전 좌표 규칙', () => {
     expect(l.offsetY).toBeCloseTo((450 - l.dispH) / 2)
   })
 
+  it.each([0, 90, 180, 270] as const)('%d° 원본 비율의 칸에서는 영상 전체가 보인다', (rotation) => {
+    for (const [vw, vh] of [[1280, 720], [640, 480]]) {
+      const size = rotatedSize(vw, vh, rotation)
+      const cw = 468
+      const ch = cw * size.h / size.w
+      const layout = coverLayout(cw, ch, vw, vh, rotation)!
+      expect(layout.dispW).toBeCloseTo(cw)
+      expect(layout.dispH).toBeCloseTo(ch)
+      expect(layout.offsetX).toBeCloseTo(0)
+      expect(layout.offsetY).toBeCloseTo(0)
+      const style = rotatedVideoStyle(cw, ch, vw, vh, rotation)!
+      expect(Number(style.width) / Number(style.height)).toBeCloseTo(vw / vh)
+    }
+  })
+
   it('크기를 모르면 계산하지 않는다', () => {
     expect(coverLayout(0, 450, 1280, 720, 0)).toBeNull()
     expect(rotatedVideoStyle(800, 450, 0, 0, 90)).toBeNull()
