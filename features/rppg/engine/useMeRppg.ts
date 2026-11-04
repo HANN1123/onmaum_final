@@ -129,8 +129,14 @@ export function useMeRppg(
     const cropCtx = crop.getContext('2d', { willReadFrequently: true })
 
     const fail = (message: string) => {
+      if (stopped || engineError) return
       console.error(message)
       engineError = true
+      face = false
+      faceRef.current = { status: 'inactive' }
+      faceHitsRef.current = []
+      liveRef.current = false
+      setReading({ status: 'error', bpm: null, snrDb: null, ageMs: null })
       worker?.terminate()
       worker = null
       workerReady = false
@@ -150,8 +156,13 @@ export function useMeRppg(
       worker?.postMessage(msg)
     }
 
-    worker = new Worker(new URL('../lib/meRppg.worker.ts', import.meta.url), { type: 'module' })
-    worker.onmessage = (e: MessageEvent<MeWorkerOut>) => {
+    try {
+      worker = new Worker(new URL('../lib/meRppg.worker.ts', import.meta.url), { type: 'module' })
+    } catch (err) {
+      fail(`ME-rPPG 워커 초기화 실패: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    if (worker) worker.onmessage = (e: MessageEvent<MeWorkerOut>) => {
+      if (stopped || engineError) return
       const m = e.data
       if (m.type === 'ready') workerReady = true
       else if (m.type === 'error') fail(`ME-rPPG: ${m.message}`)
@@ -163,14 +174,15 @@ export function useMeRppg(
         while (buffer.length > 0 && buffer[0].t < m.t - BUFFER_MS) buffer.shift()
       }
     }
-    worker.onerror = (e) => fail(`ME-rPPG worker 오류: ${e.message}`)
+    if (worker) worker.onerror = (e) => fail(`ME-rPPG worker 오류: ${e.message}`)
     getBlazeFace()
       .then((d) => {
-        if (!stopped) blaze = d
+        if (!stopped && !engineError) blaze = d
       })
       .catch((err: unknown) => fail(`BlazeFace 로드 실패: ${err instanceof Error ? err.message : String(err)}`))
 
     const sendFrame = (now: number, t: number) => {
+      if (stopped || engineError) return
       if (!worker || !blaze || !workerReady || !cropCtx) return
       if (video.readyState < 2 || video.videoWidth === 0) return
       // 방향이 바뀌면 이전 방향의 모델 상태·칼만·파형·표시값을 즉시 버린다. 늦은 이전 응답은 epoch 로 걸러진다
@@ -237,16 +249,17 @@ export function useMeRppg(
     }
 
     const onFrame = (now: DOMHighResTimeStamp, meta: VideoFrameCallbackMetadata) => {
-      if (stopped) return
+      if (stopped || engineError) return
       const t = clock.next(now, meta.captureTime)
       if (t !== null) {
         try {
           sendFrame(now, t)
         } catch (err) {
+          // 한 프레임의 일시적 예외로 엔진 전체를 멈추지 않는다(모델·워커·검출기 실패만 fail 로 처리)
           console.error('rPPG 프레임 처리 실패:', err)
         }
       }
-      frameHandle = video.requestVideoFrameCallback(onFrame)
+      if (!engineError) frameHandle = video.requestVideoFrameCallback(onFrame)
     }
     if (typeof video.requestVideoFrameCallback === 'function') {
       frameHandle = video.requestVideoFrameCallback(onFrame)
