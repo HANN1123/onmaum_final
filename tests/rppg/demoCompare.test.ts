@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   demoRecordsToCsv,
   demoState,
+  settledDemoState,
   parseDemoRecords,
   recentMedian,
   recordDemo,
@@ -14,10 +15,31 @@ import {
   type DemoRecord,
 } from '@/features/rppg/lib/demoCompare'
 import type { TrackedHeartRate } from '@/features/rppg/lib/hrEstimator'
+import { SETTLE_MS } from '@/features/rppg/engine/rppgGate'
 
 const est = (over: Partial<TrackedHeartRate> = {}): TrackedHeartRate => ({ bpm: 80, snrDb: 3, motion: 0.003, models: 1, ...over })
 
 describe('시연 표시 상태', () => {
+  it('첫 추정 전과 첫 추정 뒤 12초 미만에는 움직임·신호 품질보다 보류 상태를 우선한다', () => {
+    expect(settledDemoState(est(), 100_000, null)).toBe('waiting')
+    expect(settledDemoState(est({ motion: 1 }), 1000 + SETTLE_MS - 1, 1000)).toBe('waiting')
+    expect(settledDemoState(est(), 1000 + SETTLE_MS, 1000)).toBe('ok')
+    expect(settledDemoState(est({ snrDb: -2 }), 1000 + SETTLE_MS, 1000)).toBe('weak')
+  })
+
+  it('시작·초기화 뒤 보류한 값은 30초 집계에서 빠진다', () => {
+    const run = startDemoRun(0)
+    let firstEstimateAt: number | null = null
+    for (let i = 0; i < DEMO_SLOTS; i++) {
+      if (i === 20) firstEstimateAt = null
+      if (firstEstimateAt === null) firstEstimateAt = i * 1000
+      const state = settledDemoState(est(), i * 1000, firstEstimateAt)
+      recordDemo(run, i * 1000, 80, state === 'ok' ? 80 : null)
+    }
+    const summary = summarizeDemo(run.slots)
+    expect(summary.paired).toBe(8)
+    expect(summary.coverage).toBeCloseTo(8 / DEMO_SLOTS)
+  })
   it('움직임이 기준을 넘으면 숫자를 숨긴다', () => {
     expect(demoState(est({ motion: DEMO_MOTION_LIMIT + 0.01 }))).toBe('motion')
   })
@@ -126,5 +148,26 @@ describe('시연 기록 저장·CSV', () => {
   it('저장한 기록을 다시 읽고, 형식이 다른 항목은 버린다', () => {
     expect(parseDemoRecords(JSON.stringify([rec, { foo: 1 }]))).toHaveLength(1)
     expect(parseDemoRecords('not json')).toEqual([])
+  })
+  it.each(Object.keys(rec))('%s 필드가 누락되면 해당 항목을 버린다', (key) => {
+    const broken = { ...rec } as Record<string, unknown>
+    delete broken[key]
+    expect(parseDemoRecords(JSON.stringify([broken, rec]))).toEqual([rec])
+  })
+  it.each(['startS', 'lagS', 'seconds', 'paired', 'coverage', 'watchMean', 'rppgMean', 'meanAbsDiff', 'matchRate'])('%s 숫자가 문자열이면 버린다', (key) => {
+    expect(parseDemoRecords(JSON.stringify([{ ...rec, [key]: '1' }]))).toEqual([])
+  })
+  it.each([{}, [], '잘못된 값', { seconds: 30, paired: 1 }, { seconds: 30, paired: '1', meanAbsDiff: 1, matchRate: 1 }, { seconds: 30, paired: 31, meanAbsDiff: 1, matchRate: 2 }])('잘못된 lag 구조를 버린다: %j', (lag) => {
+    expect(parseDemoRecords(JSON.stringify([{ ...rec, lag }]))).toEqual([])
+  })
+  it('nullable 필드의 null과 lag의 null은 허용한다', () => {
+    const empty = { ...summarizeDemo([null]), startedAt: rec.startedAt, startS: 0, lagS: WATCH_LAG_S }
+    expect(parseDemoRecords(JSON.stringify([empty]))).toEqual([empty])
+  })
+  it('유한하지 않은 수·음수·범위를 벗어난 비율·잘못된 날짜는 버린다', () => {
+    for (const over of [{ startS: -1 }, { seconds: 1.5 }, { paired: 2 }, { coverage: 1.1 }, { matchRate: -1 }, { startedAt: '날짜 아님' }]) {
+      expect(parseDemoRecords(JSON.stringify([{ ...rec, ...over }]))).toEqual([])
+    }
+    expect(parseDemoRecords(JSON.stringify([rec]).replace('12.34', '1e400'))).toEqual([])
   })
 })

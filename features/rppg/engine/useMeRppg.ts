@@ -16,6 +16,8 @@ const ME_MAX_IN_FLIGHT = 5
 const BUFFER_MS = 12_000
 /** 추정·게이트 판정 주기 */
 const ESTIMATE_MS = 1_000
+/** 일시적 프레임 예외를 허용하는 연속 횟수 */
+const MAX_FRAME_FAILURES = 30
 
 /**
  * 엔진이 마지막 프레임에서 찾은 얼굴(BlazeFace 원본 상자, 칼만·확장 전). 감정 분석이 같은 상자를 쓴다.
@@ -58,13 +60,16 @@ export function useMeRppg(
   getFaceRate: () => number | null
 } {
   const [reading, setReading] = useState<RppgReading>(OFF_READING)
+  const [restartCount, setRestartCount] = useState(0)
+  const engineErrorRef = useRef(false)
   const bufferRef = useRef<{ t: number; v: number }[]>([])
   const liveRef = useRef(false)
   const faceRef = useRef<EngineFace>({ status: 'inactive' })
   const faceHitsRef = useRef<{ t: number; hit: boolean }[]>([])
-  // 회전은 엔진(worker·모델)을 다시 만들지 않고 프레임 처리에서 바꾼다. 바뀐 순간 상태를 모두 버린다
+  // 정상 엔진의 회전은 프레임 처리에서 초기화하고, 오류 상태에서의 회전은 엔진을 다시 만든다
   const rotationRef = useRef<CameraRotation>(rotation)
   useEffect(() => {
+    if (rotationRef.current !== rotation && engineErrorRef.current) setRestartCount((count) => count + 1)
     rotationRef.current = rotation
   }, [rotation])
 
@@ -79,6 +84,8 @@ export function useMeRppg(
     let blaze: FaceDetector | null = null
     let workerReady = false
     let engineError = false
+    engineErrorRef.current = false
+    let consecutiveFailures = 0
     let inFlight = 0
     let outputs = 0
     let epoch = 0
@@ -132,6 +139,7 @@ export function useMeRppg(
       if (stopped || engineError) return
       console.error(message)
       engineError = true
+      engineErrorRef.current = true
       face = false
       faceRef.current = { status: 'inactive' }
       faceHitsRef.current = []
@@ -150,6 +158,7 @@ export function useMeRppg(
       kalman = null
       firstEstimateAt = null
       buffer.length = 0
+      hits.length = 0
       boxes.length = 0
       tracker.reset()
       const msg: MeWorkerIn = { type: 'reset' }
@@ -254,8 +263,11 @@ export function useMeRppg(
       if (t !== null) {
         try {
           sendFrame(now, t)
+          consecutiveFailures = 0
         } catch (err) {
-          // 한 프레임의 일시적 예외로 엔진 전체를 멈추지 않는다(모델·워커·검출기 실패만 fail 로 처리)
+          // 연속 실패하면 감정 분석이 SSD 대체 경로를 쓰도록 얼굴 공유를 해제한다
+          consecutiveFailures++
+          if (consecutiveFailures >= MAX_FRAME_FAILURES) fail(`rPPG 프레임 처리 연속 ${consecutiveFailures}회 실패`)
           console.error('rPPG 프레임 처리 실패:', err)
         }
       }
@@ -303,13 +315,15 @@ export function useMeRppg(
       faceHitsRef.current = []
       setReading(OFF_READING)
     }
-  }, [videoRef, enabled, minSnrDb])
+  }, [videoRef, enabled, minSnrDb, restartCount])
 
   const getPulse = useCallback(() => (liveRef.current ? pulseLevel(bufferRef.current) : 0), [])
 
   const getFace = useCallback(() => faceRef.current, [])
   const getFaceRate = useCallback(() => {
     const list = faceHitsRef.current
+    const cutoff = performance.now() - FACE_RATE_WINDOW_MS
+    while (list.length > 0 && list[0].t < cutoff) list.shift()
     if (list.length === 0) return null
     return list.filter((h) => h.hit).length / list.length
   }, [])

@@ -60,7 +60,7 @@ import {
   demoRecordsToCsv,
   parseDemoRecords,
   WATCH_LAG_S,
-  demoState,
+  settledDemoState,
   recentMedian,
   recordDemo,
   startDemoRun,
@@ -330,6 +330,7 @@ export function RppgLab() {
     const boxBuf: BoxSample[] = []
     const tracker = createHrTracker()
     const demoPoints: DemoPoint[] = []
+    let firstEstimateAt: number | null = null
 
     /** 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다 */
     const failMe = (message: string) => {
@@ -350,6 +351,9 @@ export function RppgLab() {
       boxBuf.length = 0
       tracker.reset()
       demoPoints.length = 0
+      firstEstimateAt = null
+      liveRef.current = { ...liveRef.current, demo: { ...liveRef.current.demo, state: 'waiting', bpm: null } }
+      setLive(liveRef.current)
       const msg: MeWorkerIn = { type: 'reset' }
       worker?.postMessage(msg)
     }
@@ -563,7 +567,8 @@ export function RppgLab() {
         const meLast = meBuffer[meBuffer.length - 1]
         const fx = worker && fresh(meBuffer) ? tracker.estimate([meBuffer], boxBuf) : null
         // 시연: 움직임·약한 신호가 아닐 때만 값을 모아 최근 5초 중앙값을 보여 준다
-        const dState = demoState(fx)
+        if (fx && firstEstimateAt === null) firstEstimateAt = nowWall
+        const dState = settledDemoState(fx, nowWall, firstEstimateAt)
         if (fx && dState === 'ok') demoPoints.push({ t: nowWall, bpm: fx.bpm })
         while (demoPoints.length > 0 && demoPoints[0].t < nowWall - 60_000) demoPoints.shift()
         const dBpm = dState === 'ok' ? recentMedian(demoPoints, nowWall) : null

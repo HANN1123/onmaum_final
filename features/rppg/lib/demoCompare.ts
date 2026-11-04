@@ -2,6 +2,7 @@
 // 움직임·약한 신호일 때는 숫자를 보여 주지 않는다(틀린 숫자를 보여 주는 것보다 낫다).
 
 import { MOTION_LIMIT, type TrackedHeartRate } from './hrEstimator'
+import { SETTLE_MS } from '../engine/rppgGate'
 
 /** 얼굴 상자 흔들림이 이 비율(얼굴 너비 대비)을 넘으면 움직임으로 본다. 엔진 게이트와 같은 값 */
 export const DEMO_MOTION_LIMIT = MOTION_LIMIT
@@ -21,6 +22,12 @@ export function demoState(est: TrackedHeartRate | null, minSnrDb: number = DEMO_
   if (est.motion !== null && est.motion > DEMO_MOTION_LIMIT) return 'motion'
   if (!(est.snrDb >= minSnrDb)) return 'weak'
   return 'ok'
+}
+
+/** 시작·초기화 뒤 첫 추정부터 엔진과 같은 시간 동안 표시와 집계를 보류한다 */
+export function settledDemoState(est: TrackedHeartRate | null, now: number, firstEstimateAt: number | null): DemoState {
+  if (firstEstimateAt === null || now - firstEstimateAt < SETTLE_MS) return 'waiting'
+  return demoState(est)
 }
 
 export const DEMO_STATE_TEXT: Record<DemoState, string> = {
@@ -179,9 +186,19 @@ export function parseDemoRecords(raw: string): DemoRecord[] {
   try {
     const arr: unknown = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr.filter(
-      (r): r is DemoRecord =>
-        typeof r === 'object' && r !== null && typeof (r as DemoRecord).startedAt === 'string' && typeof (r as DemoRecord).seconds === 'number',
+    const object = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+    const nonnegative = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+    const count = (v: unknown): v is number => nonnegative(v) && Number.isInteger(v)
+    const ratio = (v: unknown) => nonnegative(v) && v <= 1
+    const nullable = (v: unknown, valid: (v: unknown) => boolean) => v === null || valid(v)
+    const comparison = (v: Record<string, unknown>) =>
+      count(v.seconds) && count(v.paired) && v.paired <= v.seconds &&
+      nullable(v.meanAbsDiff, nonnegative) && nullable(v.matchRate, ratio)
+    return arr.filter((r): r is DemoRecord =>
+      object(r) && typeof r.startedAt === 'string' && Number.isFinite(Date.parse(r.startedAt)) &&
+      nonnegative(r.startS) && nonnegative(r.lagS) && comparison(r) && ratio(r.coverage) &&
+      nullable(r.watchMean, nonnegative) && nullable(r.rppgMean, nonnegative) &&
+      (r.lag === null || (object(r.lag) && comparison(r.lag))),
     )
   } catch {
     return []
