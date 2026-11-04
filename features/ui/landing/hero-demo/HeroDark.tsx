@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { isOnboarded } from '@/shared/storage/onboarding'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
 import { readDemoName, saveDemoName } from './demoName'
@@ -23,6 +24,8 @@ import { useWebcam } from './useWebcam'
 
 /** 측정 시작이 여는 화면. 데모가 실제 /measure 로 옮겨지면 되돌린다. */
 const MEASURE_HREF = '/demo/measure'
+/** 처음 설문(개인화). "측정 시작"은 설문을 아직 안 했으면 여기로 먼저 간다. */
+const SURVEY_HREF = '/demo/survey'
 
 const NAV_LINKS = [
   { href: MEASURE_HREF, label: '측정' },
@@ -109,9 +112,16 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
     saveDemoName(input.value)
   }
 
+  // 측정 시작(본문 버튼·상단 버튼·모바일 메뉴 공통): 처음이면 개인화 설문을 거쳐 측정으로,
+  // 설문을 이미 마쳤으면 바로 측정으로 간다. 설문을 건너뛰는 길은 "설문 없이 바로 측정"뿐이다.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    router.push(MEASURE_HREF)
+    router.push(isOnboarded() ? MEASURE_HREF : SURVEY_HREF)
+  }
+  const onStartLink = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isOnboarded()) return
+    event.preventDefault()
+    router.push(SURVEY_HREF)
   }
 
   const useFallback = webcam === 'denied'
@@ -153,7 +163,7 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
             <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
-            <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
+            <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`} onClick={onStartLink}>
               측정 시작
             </Link>
             <button
@@ -200,7 +210,10 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
             href={MEASURE_HREF}
             className={`${styles.menuItem} ${styles.menuCta} ${styles.focusable}`}
             style={{ '--i': NAV_LINKS.length } as React.CSSProperties}
-            onClick={closeMenu}
+            onClick={(event) => {
+              closeMenu()
+              onStartLink(event)
+            }}
           >
             측정 시작
           </Link>
@@ -265,7 +278,13 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
                   이 기기에만 저장
                 </span>
               </div>
-              {/* 설문 화면이 생기면 "설문 없이 바로 측정"(btnGhost) 버튼을 여기 되살린다. 지금은 두 버튼이 같은 곳으로 가서 뺐다. */}
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost} ${styles.focusable}`}
+                onClick={() => router.push(MEASURE_HREF)}
+              >
+                설문 없이 바로 측정
+              </button>
               <button type="submit" className={`${styles.btn} ${styles.btnSolid} ${styles.focusable}`}>
                 측정 시작
               </button>
