@@ -52,6 +52,7 @@ import type { MeWorkerIn, MeWorkerOut } from '@/features/rppg/lib/meRppg.worker'
 import { useHeartRateDevice } from '@/features/rppg/hooks/useHeartRateDevice'
 import { getBlazeFace } from '@/features/rppg/engine/blazeFace'
 import { createHrTracker, type BoxSample, type TrackedHeartRate } from '@/features/rppg/lib/hrEstimator'
+import { createMotionSmoother } from '@/features/rppg/lib/motionSmoothing'
 import {
   DEMO_MATCH_BPM,
   DEMO_MEASURE_MS,
@@ -328,6 +329,7 @@ export function RppgLab() {
     const meOutWalls: number[] = []
     const meSentWalls: number[] = []
     const boxBuf: BoxSample[] = []
+    const motionSmoother = createMotionSmoother()
     const tracker = createHrTracker()
     const demoPoints: DemoPoint[] = []
     let firstEstimateAt: number | null = null
@@ -347,6 +349,7 @@ export function RppgLab() {
       meInFlight = 0
       meOutputs = 0
       meKalman = null
+      motionSmoother.reset()
       meBuffer.length = 0
       boxBuf.length = 0
       tracker.reset()
@@ -506,9 +509,11 @@ export function RppgLab() {
           height: kh.update(det.height),
         })
         meBox = box
-        boxBuf.push({ t, cx: box.originX + box.width / 2, cy: box.originY + box.height / 2, w: box.width })
+        const motionBox = motionSmoother.update(det, t)
+        boxBuf.push(motionBox)
         while (boxBuf.length > 0 && boxBuf[0].t < t - BUFFER_MS) boxBuf.shift()
-        if (waveRef.current) logBox(waveRef.current, t, box.originX + box.width / 2, box.originY + box.height / 2, box.width)
+        // 오프라인 재추정도 화면과 같은 움직임 좌표를 쓴다. 모델 입력용 crop 상자는 위에서 별도로 유지한다.
+        if (waveRef.current) logBox(waveRef.current, t, motionBox.cx, motionBox.cy, motionBox.w)
         const c = clampCrop(box, w, h)
         if (!c) return
         cropCtx.drawImage(canvas, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
@@ -765,6 +770,7 @@ export function RppgLab() {
           onExport={() => downloadText(demoRecordsToCsv(demoResults), 'rppg-lab-demo')}
           onClear={() => setDemoResults([])}
           onStart={() => {
+            if (liveRef.current.demo.state !== 'ok' || liveRef.current.demo.bpm === null) return
             const start = performance.now()
             demoRunRef.current = startDemoRun(start)
             demoMetaRef.current = { startedAt: new Date().toISOString(), startS: (start - startRef.current) / 1000 }
@@ -1052,7 +1058,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
 }
 
 /** 시연 패널: 워치와 rPPG 숫자를 크게 나란히 보여 주고, 가만히 30초 측정 결과를 쌓는다 */
-function DemoPanel({
+export function DemoPanel({
   live,
   running,
   watchConnected,
@@ -1077,6 +1083,14 @@ function DemoPanel({
   onExport: () => void
   onClear: () => void
 }) {
+  const disabledReason = !running ? '측정을 시작하세요'
+    : !watchConnected ? '워치를 연결하세요'
+    : blocked ? '자동 평가 중'
+    : live.state === 'waiting' ? '안정화 중'
+    : live.state === 'motion' ? '움직임 감지'
+    : live.state === 'weak' ? '신호 약함'
+    : live.bpm === null ? '신호 모으는 중'
+    : null
   const diff = live.bpm !== null && live.watch !== null ? live.bpm - live.watch : null
   const last = results.at(-1)
   const measureS = DEMO_MEASURE_MS / 1000
@@ -1130,13 +1144,15 @@ function DemoPanel({
         ) : (
           <button
             type="button"
-            disabled={!running || !watchConnected || blocked}
+            disabled={disabledReason !== null}
+            aria-describedby={disabledReason ? 'demo-start-reason' : undefined}
             onClick={onStart}
             className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
           >
             30초 측정
           </button>
         )}
+        {!run && disabledReason && <span id="demo-start-reason" className="text-xs text-ink-500">{disabledReason}</span>}
         {last && !run && <span className="text-sm text-ink-600">{lastText(last)}</span>}
       </div>
       {results.length > 0 && (

@@ -26,9 +26,11 @@ export default function FaceLayer({ box, videoRef, label = '얼굴 추적 중', 
     const video = videoRef.current
     if (!container || !video) return
     const update = () => {
+      // 테두리·패딩 없이 카메라 content-box를 덮는 레이어이므로 소수 크기까지 영상과 같게 읽는다.
+      const rect = container.getBoundingClientRect()
       setSize({
-        cw: container.clientWidth,
-        ch: container.clientHeight,
+        cw: rect.width,
+        ch: rect.height,
         vw: video.videoWidth,
         vh: video.videoHeight,
       })
@@ -36,10 +38,12 @@ export default function FaceLayer({ box, videoRef, label = '얼굴 추적 중', 
     const observer = new ResizeObserver(update)
     observer.observe(container)
     video.addEventListener('loadedmetadata', update)
+    video.addEventListener('resize', update)
     update()
     return () => {
       observer.disconnect()
       video.removeEventListener('loadedmetadata', update)
+      video.removeEventListener('resize', update)
     }
   }, [container, videoRef])
 

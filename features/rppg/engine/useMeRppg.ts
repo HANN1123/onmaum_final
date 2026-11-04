@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { FaceDetector } from '@mediapipe/tasks-vision'
 import { createFrameClock, MAX_SAMPLE_GAP_MS } from '../lib/rppg'
 import { createHrTracker, type BoxSample } from '../lib/hrEstimator'
+import { createMotionSmoother } from '../lib/motionSmoothing'
 import { clampCrop, createKalman1D, expandFaceBox, rgbaToModelInput, type Kalman1D } from '../lib/meRppg'
 import type { MeWorkerIn, MeWorkerOut } from '../lib/meRppg.worker'
 import type { CameraRotation } from '@/shared/storage/cameraRotation'
@@ -68,8 +69,9 @@ export function useMeRppg(
     const clock = createFrameClock()
     const buffer: { t: number; v: number }[] = []
     bufferRef.current = buffer
-    /** 추정 창의 얼굴 흔들림을 재려고 칼만 상자 중심·너비를 남긴다(좌표만, 영상은 남기지 않는다) */
+    /** 추정 창의 얼굴 흔들림을 재려고 시간 기반으로 평활한 중심·너비를 남긴다(영상은 남기지 않는다) */
     const boxes: BoxSample[] = []
+    const motionSmoother = createMotionSmoother()
     const tracker = createHrTracker()
     liveRef.current = false
 
@@ -114,6 +116,7 @@ export function useMeRppg(
       inFlight = 0
       outputs = 0
       kalman = null
+      motionSmoother.reset()
       firstEstimateAt = null
       buffer.length = 0
       boxes.length = 0
@@ -179,7 +182,7 @@ export function useMeRppg(
         width: kw.update(det.width),
         height: kh.update(det.height),
       })
-      boxes.push({ t, cx: box.originX + box.width / 2, cy: box.originY + box.height / 2, w: box.width })
+      boxes.push(motionSmoother.update(det, t))
       while (boxes.length > 0 && boxes[0].t < t - BUFFER_MS) boxes.shift()
       const c = clampCrop(box, sw, sh)
       if (!c) return
