@@ -131,7 +131,7 @@ export default function MeasureDemo() {
           </button>
         </nav>
 
-        <div className={styles.body}>
+        <div className={`${styles.body} ${styles.measureBody}`}>
           <div className={styles.left}>
             <div className={styles.frame}>
               <video ref={attachVideo} muted playsInline autoPlay />
@@ -167,7 +167,7 @@ export default function MeasureDemo() {
                   <span className={styles.unit}>BPM</span>
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} />
+                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
                 </span>
               </div>
             </Skeleton>
@@ -208,7 +208,8 @@ export default function MeasureDemo() {
                 ]}
               />
             </Skeleton>
-            <div style={{ marginTop: 'auto' }}>
+            {/* 세로 배치에서는 위쪽 메뉴의 측정 종료와 같아서 숨긴다(measureEndBottom) */}
+            <div className={styles.measureEndBottom} style={{ marginTop: 'auto' }}>
               <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endMeasure}>
                 측정 종료
               </button>
