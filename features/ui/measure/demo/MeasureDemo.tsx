@@ -97,10 +97,11 @@ export default function MeasureDemo() {
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
   const webcam = useWebcam(videoRef, true)
-  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation })
+  // rPPG 엔진이 매 프레임 BlazeFace 로 찾은 얼굴 상자를 감정 분석도 같이 쓴다(엔진이 돌지 않을 때만 SSD)
+  const { bpm, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
+  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
-  const { bpm, getPulse, reading: rppg } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
   const elapsed = useElapsed(active)
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
   const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
@@ -124,7 +125,10 @@ export default function MeasureDemo() {
 
   // 심박 신호: rPPG 엔진의 상태와 SNR(품질 게이트 기준)
   const quality = webcam !== 'ready' ? '대기' : signalText(rppg)
-  const faceState = webcam !== 'ready' ? '카메라 대기' : face.box ? '얼굴 추적 중' : '얼굴 찾는 중'
+  // 최근 10초 얼굴 검출률(엔진이 처리한 프레임 기준). 인식이 잘 되는지 숫자로 확인할 수 있게 함께 보인다
+  const faceRate = getFaceRate()
+  const faceRateText = faceRate === null ? '' : ` · 검출 ${Math.round(faceRate * 100)}%`
+  const faceState = webcam !== 'ready' ? '카메라 대기' : `${face.box ? '얼굴 추적 중' : '얼굴 찾는 중'}${faceRateText}`
   const emotion = face.emotionLabel ?? '—'
   const elapsedText = formatElapsed(elapsed)
   const todayText =

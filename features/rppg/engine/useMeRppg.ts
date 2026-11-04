@@ -16,6 +16,18 @@ const BUFFER_MS = 12_000
 /** 추정·게이트 판정 주기 */
 const ESTIMATE_MS = 1_000
 
+/**
+ * 엔진이 마지막 프레임에서 찾은 얼굴(BlazeFace 원본 상자, 칼만·확장 전). 감정 분석이 같은 상자를 쓴다.
+ * 좌표는 분석 입력(돌린 비반전 영상) 픽셀 기준이다. sw·sh 는 그 입력의 크기.
+ */
+export type EngineFace =
+  | { status: 'inactive' }
+  | { status: 'none'; at: number }
+  | { status: 'face'; at: number; x: number; y: number; w: number; h: number; score: number; sw: number; sh: number; rotation: CameraRotation }
+
+/** 최근 10초 동안 처리한 프레임 중 얼굴을 찾은 비율을 셀 때의 창 */
+const FACE_RATE_WINDOW_MS = 10_000
+
 interface Options {
   /** SNR 기준(dB). 기본은 잠정값 0dB */
   minSnrDb?: number
@@ -34,10 +46,19 @@ export function useMeRppg(
   videoRef: RefObject<HTMLVideoElement | null>,
   enabled: boolean,
   { minSnrDb = DEFAULT_MIN_SNR_DB, rotation = 0 }: Options = {},
-): { reading: RppgReading; getPulse: () => number } {
+): {
+  reading: RppgReading
+  getPulse: () => number
+  /** 마지막 프레임의 얼굴. 엔진이 돌지 않으면 inactive */
+  getFace: () => EngineFace
+  /** 최근 10초 얼굴 검출률(0~1). 처리한 프레임이 없으면 null */
+  getFaceRate: () => number | null
+} {
   const [reading, setReading] = useState<RppgReading>(OFF_READING)
   const bufferRef = useRef<{ t: number; v: number }[]>([])
   const liveRef = useRef(false)
+  const faceRef = useRef<EngineFace>({ status: 'inactive' })
+  const faceHitsRef = useRef<{ t: number; hit: boolean }[]>([])
   // 회전은 엔진(worker·모델)을 다시 만들지 않고 프레임 처리에서 바꾼다. 바뀐 순간 상태를 모두 버린다
   const rotationRef = useRef<CameraRotation>(rotation)
   useEffect(() => {
@@ -65,6 +86,13 @@ export function useMeRppg(
     const clock = createFrameClock()
     const buffer: { t: number; v: number }[] = []
     bufferRef.current = buffer
+    faceRef.current = { status: 'none', at: performance.now() }
+    faceHitsRef.current = []
+    const hits = faceHitsRef.current
+    const markFace = (t: number, hit: boolean) => {
+      hits.push({ t, hit })
+      while (hits.length > 0 && hits[0].t < t - FACE_RATE_WINDOW_MS) hits.shift()
+    }
     liveRef.current = false
 
     let appliedRotation = rotationRef.current
@@ -147,18 +175,34 @@ export function useMeRppg(
         liveRef.current = false
         setReading({ status: 'warming', bpm: null, snrDb: null, ageMs: null })
       }
-      if (inFlight >= ME_MAX_IN_FLIGHT) return
+      // 얼굴 검출은 worker 가 밀려 있어도 매 프레임 한다(감정 분석·표시가 이 상자를 쓴다). 전송만 건너뛴다
       // 0°는 영상을 그대로 쓴다(추가 비용 없음). BlazeFace 시간축은 원본 영상의 프레임 시각(now)을 그대로 쓴다
       if (r !== 0 && !drawRotated(r)) return
       const source = r === 0 ? video : rotatedCanvas
       const sw = r === 0 ? video.videoWidth : rotatedCanvas.width
       const sh = r === 0 ? video.videoHeight : rotatedCanvas.height
-      const det = blaze.detectForVideo(source, now).detections[0]?.boundingBox
+      const found = blaze.detectForVideo(source, now).detections[0]
+      const det = found?.boundingBox
+      markFace(now, Boolean(det))
       if (!det) {
         face = false
+        faceRef.current = { status: 'none', at: performance.now() }
         return
       }
       face = true
+      faceRef.current = {
+        status: 'face',
+        at: performance.now(),
+        x: det.originX,
+        y: det.originY,
+        w: det.width,
+        h: det.height,
+        score: found?.categories[0]?.score ?? 0,
+        sw,
+        sh,
+        rotation: r,
+      }
+      if (inFlight >= ME_MAX_IN_FLIGHT) return
       // 끊겼다 돌아오면 파형만 비우지 않고 모델 상태까지 새로 시작한다. 기준은 신호처리의 공백과 같다
       if (lastSendT !== null && t - lastSendT > MAX_SAMPLE_GAP_MS) reset()
       if (!kalman) {
@@ -231,11 +275,20 @@ export function useMeRppg(
       worker?.terminate()
       liveRef.current = false
       buffer.length = 0
+      faceRef.current = { status: 'inactive' }
+      faceHitsRef.current = []
       setReading(OFF_READING)
     }
   }, [videoRef, enabled, minSnrDb])
 
   const getPulse = useCallback(() => (liveRef.current ? pulseLevel(bufferRef.current) : 0), [])
 
-  return { reading, getPulse }
+  const getFace = useCallback(() => faceRef.current, [])
+  const getFaceRate = useCallback(() => {
+    const list = faceHitsRef.current
+    if (list.length === 0) return null
+    return list.filter((h) => h.hit).length / list.length
+  }, [])
+
+  return { reading, getPulse, getFace, getFaceRate }
 }

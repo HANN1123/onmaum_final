@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { CameraRotation } from '@/shared/storage/cameraRotation'
-import { useMeRppg } from '@/features/rppg/engine/useMeRppg'
+import { useMeRppg, type EngineFace } from '@/features/rppg/engine/useMeRppg'
 import { RPPG_STATUS_TEXT, type RppgReading } from '@/features/rppg/engine/rppgGate'
 
 /**
@@ -15,6 +15,10 @@ export interface HeartRateSource {
   getPulse: () => number
   /** 엔진 상태와 SNR. 화면에 사유를 보여줄 때 쓴다 */
   reading: RppgReading
+  /** 엔진이 마지막 프레임에서 찾은 얼굴(감정 분석이 같은 상자를 쓴다) */
+  getFace: () => EngineFace
+  /** 최근 10초 얼굴 검출률(0~1) */
+  getFaceRate: () => number | null
 }
 
 /** 맥박이 없을 때의 파형. 오브는 두근거리지 않고 파형은 평평하다. */
@@ -26,8 +30,8 @@ export function useHeartRateSource(
   enabled: boolean,
   rotation: CameraRotation = 0,
 ): HeartRateSource {
-  const { reading, getPulse } = useMeRppg(videoRef, enabled, { rotation })
-  return { bpm: reading.bpm, getPulse, reading }
+  const { reading, getPulse, getFace, getFaceRate } = useMeRppg(videoRef, enabled, { rotation })
+  return { bpm: reading.bpm, getPulse, reading, getFace, getFaceRate }
 }
 
 /** bpm 을 화면 글자로. 값이 없으면 "--" */
