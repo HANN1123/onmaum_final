@@ -17,15 +17,16 @@ const offset = (raw) => {
 }
 
 /** 학습 배우의 가운데 60%에서 raw가 있는 정답 프레임만 사용한다. 설정은 보류 평가 전에 고정한다. */
-export function fitCalibration(videos, kind, targets = TARGET) {
+export function fitCalibration(videos, kind, targets = TARGET, calmWeight = 1) {
   if (!['logistic', 'bias'].includes(kind)) throw new Error('지원하지 않는 보정 후보입니다')
   const samples = videos.flatMap((video) => {
     const target = LABELS.indexOf(targets[video.source])
     if (target < 0) return []
     return video.frames.filter((f) => f.raw && f.t >= f.duration * 0.2 && f.t < f.duration * 0.8)
-      .map((f) => ({ x: RAW_LABELS.map((key) => f.raw[key]), offset: offset(f.raw), y: target }))
+      .map((f) => ({ x: RAW_LABELS.map((key) => f.raw[key]), offset: offset(f.raw), y: target, weight: target === 1 ? calmWeight : 1 }))
   })
   if (!samples.length) throw new Error('보정 학습에 쓸 정답 프레임이 없습니다')
+  const totalWeight = samples.reduce((sum, sample) => sum + sample.weight, 0)
   const weights = LABELS.map(() => RAW_LABELS.map(() => 0))
   const bias = LABELS.map(() => 0)
   const logits = (sample) => bias.map((b, c) => b + (kind === 'bias' ? sample.offset[c] : weights[c].reduce((s, w, j) => s + w * sample.x[j], 0)))
@@ -36,20 +37,20 @@ export function fitCalibration(videos, kind, targets = TARGET) {
     for (const sample of samples) {
       const probabilities = softmax(logits(sample))
       for (let c = 0; c < LABELS.length; c++) {
-        const error = probabilities[c] - Number(c === sample.y)
+        const error = (probabilities[c] - Number(c === sample.y)) * sample.weight
         db[c] += error
         if (kind === 'logistic') for (let j = 0; j < RAW_LABELS.length; j++) dw[c][j] += error * sample.x[j]
       }
     }
     for (let c = 0; c < LABELS.length; c++) {
-      bias[c] -= TRAINING.learningRate * db[c] / samples.length
+      bias[c] -= TRAINING.learningRate * db[c] / totalWeight
       if (kind === 'logistic') for (let j = 0; j < RAW_LABELS.length; j++) {
-        weights[c][j] -= TRAINING.learningRate * (dw[c][j] / samples.length + TRAINING.l2 * weights[c][j])
+        weights[c][j] -= TRAINING.learningRate * (dw[c][j] / totalWeight + TRAINING.l2 * weights[c][j])
       }
     }
   }
-  const loss = -samples.reduce((sum, sample) => sum + Math.log(Math.max(TRAINING.epsilon, softmax(logits(sample))[sample.y])), 0) / samples.length
-  return { kind, weights, bias, samples: samples.length, loss, trainingActors: [...new Set(videos.map((v) => v.actor))].sort(), settings: TRAINING }
+  const loss = -samples.reduce((sum, sample) => sum + sample.weight * Math.log(Math.max(TRAINING.epsilon, softmax(logits(sample))[sample.y])), 0) / totalWeight
+  return { kind, weights, bias, samples: samples.length, calmWeight, loss, trainingActors: [...new Set(videos.map((v) => v.actor))].sort(), settings: TRAINING }
 }
 
 export function calibrationCandidate(model) {
