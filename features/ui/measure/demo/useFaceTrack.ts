@@ -23,6 +23,8 @@ export interface FaceTrack {
   modelsReady: boolean
   box: FaceBox | null
   emotion: Emotion | null
+  /** EMA 로 다듬은 감정 비율. 얼굴이 없으면 null (데스크톱 위젯에 보낸다) */
+  emotions: EmotionResult | null
   emotionLabel: string | null
 }
 
@@ -43,6 +45,7 @@ export function useFaceTrack(
   const [modelsReady, setModelsReady] = useState(false)
   const [box, setBox] = useState<FaceBox | null>(null)
   const [emotion, setEmotion] = useState<Emotion | null>(null)
+  const [emotions, setEmotions] = useState<EmotionResult | null>(null)
 
   useEffect(() => {
     if (!enabled) return
@@ -82,6 +85,7 @@ export function useFaceTrack(
             ema = null
             setBox(null)
             setEmotion(null)
+            setEmotions(null)
           }
           return
         }
@@ -93,6 +97,7 @@ export function useFaceTrack(
         ema = smoothEmotion(ema, normalizeExpressions(result.expressions))
         setBox(lastBox)
         setEmotion(getDominantEmotion(ema))
+        setEmotions(ema)
       } catch (err) {
         console.error('얼굴 검출 실패:', err)
       } finally {
@@ -106,5 +111,5 @@ export function useFaceTrack(
     }
   }, [enabled, modelsReady, videoRef, intervalMs, mirrored])
 
-  return { modelsReady, box, emotion, emotionLabel: emotion ? EMOTION_LABELS[emotion] : null }
+  return { modelsReady, box, emotion, emotions, emotionLabel: emotion ? EMOTION_LABELS[emotion] : null }
 }
