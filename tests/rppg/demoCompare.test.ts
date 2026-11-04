@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { demoState, recentMedian, recordDemo, startDemoRun, summarizeDemo, DEMO_MOTION_LIMIT, DEMO_SLOTS } from '@/features/rppg/lib/demoCompare'
+import {
+  demoRecordsToCsv,
+  demoState,
+  parseDemoRecords,
+  recentMedian,
+  recordDemo,
+  startDemoRun,
+  summarizeDemo,
+  DEMO_MOTION_LIMIT,
+  DEMO_SLOTS,
+  DEMO_TOTAL_MS,
+  WATCH_LAG_S,
+  type DemoRecord,
+} from '@/features/rppg/lib/demoCompare'
 import type { TrackedHeartRate } from '@/features/rppg/lib/hrEstimator'
 
 const est = (over: Partial<TrackedHeartRate> = {}): TrackedHeartRate => ({ bpm: 80, snrDb: 3, motion: 0.003, models: 2, ...over })
@@ -57,7 +70,9 @@ describe('recordDemo', () => {
     expect(recordDemo(run, 500, 80, 81)).toBe(false)
     // 첫 칸 다음 콜백이 20초 뒤에 왔다: 1~19번 칸은 비어 있다
     expect(recordDemo(run, 20_500, 80, 82)).toBe(false)
-    expect(recordDemo(run, 30_100, 80, 83)).toBe(true)
+    // 30초가 지나도 워치 지연 보정값을 더 받는다
+    expect(recordDemo(run, 30_100, 80, 83)).toBe(false)
+    expect(recordDemo(run, DEMO_TOTAL_MS + 100, 80, 83)).toBe(true)
     const r = summarizeDemo(run.slots)
     expect(r.seconds).toBe(DEMO_SLOTS)
     expect(r.paired).toBe(2)
@@ -69,5 +84,47 @@ describe('recordDemo', () => {
     recordDemo(run, 1100, 80, 81)
     recordDemo(run, 1900, 80, 99)
     expect(run.slots[0]?.rppg).toBe(81)
+  })
+})
+
+describe('워치 지연 보정', () => {
+  it('rPPG 칸 i 를 WATCH_LAG_S 초 뒤 워치 칸과 비교한다', () => {
+    const run = startDemoRun(0)
+    // 심박이 80 → 90 으로 바뀌는데 rPPG 는 바로, 워치는 WATCH_LAG_S 초 늦게 따라간다
+    for (let i = 0; i * 1000 <= DEMO_TOTAL_MS; i++) {
+      const rppg = i < 10 ? 80 : 90
+      const watch = i < 10 + WATCH_LAG_S ? 80 : 90
+      recordDemo(run, i * 1000 + 100, watch, i < DEMO_SLOTS ? rppg : null)
+    }
+    const r = summarizeDemo(run.slots, run.lagWatch)
+    expect(r.meanAbsDiff).toBeCloseTo((WATCH_LAG_S * 10) / DEMO_SLOTS)
+    expect(r.lag?.meanAbsDiff).toBe(0)
+    expect(r.lag?.paired).toBe(DEMO_SLOTS)
+  })
+
+  it('보정용 워치 값이 없으면 lag 는 null', () => {
+    expect(summarizeDemo([{ t: 0, watch: 80, rppg: 80 }]).lag).toBeNull()
+  })
+})
+
+describe('시연 기록 저장·CSV', () => {
+  const rec: DemoRecord = {
+    ...summarizeDemo([{ t: 0, watch: 80, rppg: 82 }], [80, 80, 80, 80, 80, 80, 81]),
+    startedAt: '2026-11-04T13:00:00.000Z',
+    startS: 12.34,
+    lagS: WATCH_LAG_S,
+  }
+  it('회차별 한 줄로 내보내고 열 수가 맞는다', () => {
+    const [head, line] = demoRecordsToCsv([rec]).split('\n')
+    const cols = head.split(',')
+    const cells = line.split(',')
+    expect(cols).toHaveLength(cells.length)
+    expect(cells[cols.indexOf('mean_abs_diff')]).toBe('2.00')
+    expect(cells[cols.indexOf('lag_mean_abs_diff')]).toBe('1.00')
+    expect(cells[cols.indexOf('start_s')]).toBe('12.3')
+  })
+  it('저장한 기록을 다시 읽고, 형식이 다른 항목은 버린다', () => {
+    expect(parseDemoRecords(JSON.stringify([rec, { foo: 1 }]))).toHaveLength(1)
+    expect(parseDemoRecords('not json')).toEqual([])
   })
 })

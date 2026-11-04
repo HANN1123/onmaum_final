@@ -58,8 +58,11 @@ import { createHrTracker, type BoxSample, type TrackedHeartRate } from '@/featur
 import {
   DEMO_MATCH_BPM,
   DEMO_MEASURE_MS,
-  DEMO_SLOTS,
   DEMO_STATE_TEXT,
+  DEMO_TOTAL_MS,
+  demoRecordsToCsv,
+  parseDemoRecords,
+  WATCH_LAG_S,
   demoState,
   recentMedian,
   recordDemo,
@@ -67,7 +70,7 @@ import {
   summarizeDemo,
   type DemoRun,
   type DemoPoint,
-  type DemoResult,
+  type DemoRecord,
   type DemoState,
 } from '@/features/rppg/lib/demoCompare'
 import { createWaveLog, logBox, logBvp, logMarker, waveLogToJson, type WaveLog } from '@/features/rppg/lib/waveLog'
@@ -80,6 +83,8 @@ const WATCH_FRESH_MS = 5_000
 const MIN_SKIN_RATIO = 0.3
 const ROI_EMA = 0.5
 const ROWS_KEY = 'onmaum_rppg_lab_rows'
+/** 시연 30초 측정 결과(회차별 요약). 새로고침해도 남긴다 */
+const DEMO_KEY = 'onmaum_rppg_lab_demo'
 /** ME-rPPG: 처음 출력 30개는 버림 (데모와 동일 워밍업) */
 const ME_WARMUP = 30
 /** 워커에 쌓인 프레임이 이만큼이면 새 프레임은 건너뜀 (데모와 동일) */
@@ -277,7 +282,30 @@ export function RppgLab() {
   /** 시연: 30초 측정 진행(시작 시각과 1초 칸) · 끝난 결과 */
   const demoRunRef = useRef<DemoRun | null>(null)
   const [demoRun, setDemoRun] = useState<{ start: number; seconds: number } | null>(null)
-  const [demoResults, setDemoResults] = useState<DemoResult[]>([])
+  const [demoResults, setDemoResults] = useState<DemoRecord[]>([])
+  const [demoLoaded, setDemoLoaded] = useState(false)
+  /** 진행 중인 시연 측정의 시작 정보(결과에 붙인다) */
+  const demoMetaRef = useRef<{ startedAt: string; startS: number } | null>(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DEMO_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setDemoResults(parseDemoRecords(saved))
+    } catch {
+      // 저장소 접근 불가 — 메모리에서만 유지
+    }
+    setDemoLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!demoLoaded) return
+    try {
+      localStorage.setItem(DEMO_KEY, JSON.stringify(demoResults))
+    } catch {
+      // 무시
+    }
+  }, [demoResults, demoLoaded])
 
   useEffect(() => {
     detectMsRef.current = detectMs
@@ -630,11 +658,14 @@ export function RppgLab() {
         const run = demoRunRef.current
         if (run) {
           if (recordDemo(run, nowWall, dWatch, dBpm)) {
-            const result = summarizeDemo(run.slots)
+            const meta = demoMetaRef.current ?? { startedAt: new Date().toISOString(), startS: 0 }
+            const record: DemoRecord = { ...summarizeDemo(run.slots, run.lagWatch), ...meta, lagS: WATCH_LAG_S }
             demoRunRef.current = null
+            demoMetaRef.current = null
+            if (waveRef.current) logMarker(waveRef.current, nowWall, 'demo:end')
             setDemoRun(null)
-            setDemoResults((rs) => [...rs, result])
-          } else setDemoRun({ start: run.start, seconds: Math.min(DEMO_SLOTS, Math.floor((nowWall - run.start) / 1000)) })
+            setDemoResults((rs) => [...rs, record])
+          } else setDemoRun({ start: run.start, seconds: Math.min(DEMO_TOTAL_MS / 1000, Math.floor((nowWall - run.start) / 1000)) })
         }
         const next: Live = {
           forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
@@ -822,13 +853,19 @@ export function RppgLab() {
           blocked={evaluation !== null}
           run={demoRun}
           results={demoResults}
+          onExport={() => downloadText(demoRecordsToCsv(demoResults), 'rppg-lab-demo')}
+          onClear={() => setDemoResults([])}
           onStart={() => {
             const start = performance.now()
             demoRunRef.current = startDemoRun(start)
+            demoMetaRef.current = { startedAt: new Date().toISOString(), startS: (start - startRef.current) / 1000 }
+            if (waveRef.current) logMarker(waveRef.current, start, `demo:start:${demoResults.length + 1}`)
             setDemoRun({ start, seconds: 0 })
           }}
           onCancel={() => {
+            if (waveRef.current) logMarker(waveRef.current, performance.now(), 'demo:cancel')
             demoRunRef.current = null
+            demoMetaRef.current = null
             setDemoRun(null)
           }}
         />
@@ -1129,19 +1166,35 @@ function DemoPanel({
   results,
   onStart,
   onCancel,
+  onExport,
+  onClear,
 }: {
   live: Live['demo']
   running: boolean
   watchConnected: boolean
   /** 자동 평가 중이면 시연 측정을 시작하지 않는다 */
   blocked: boolean
+  /** seconds = 시작 뒤 지난 초(워치 지연 보정용 추가 시간 포함) */
   run: { start: number; seconds: number } | null
-  results: DemoResult[]
+  results: DemoRecord[]
   onStart: () => void
   onCancel: () => void
+  onExport: () => void
+  onClear: () => void
 }) {
   const diff = live.bpm !== null && live.watch !== null ? live.bpm - live.watch : null
   const last = results.at(-1)
+  const measureS = DEMO_MEASURE_MS / 1000
+  const avg = (pick: (r: DemoRecord) => number | null | undefined) => {
+    const xs = results.map(pick).filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v))
+    return xs.length ? (xs.reduce((s, v) => s + v, 0) / xs.length).toFixed(1) : '—'
+  }
+  const lastText = (r: DemoRecord) => {
+    const cover = `rPPG 표시 ${Math.round(r.coverage * 100)}%`
+    if (r.meanAbsDiff === null) return `비교할 값이 없었어요 · ${cover}`
+    const lag = r.lag?.meanAbsDiff != null ? ` (워치 지연 보정 ${r.lag.meanAbsDiff.toFixed(1)})` : ''
+    return `평균 차이 ${r.meanAbsDiff.toFixed(1)} BPM${lag} · ${DEMO_MATCH_BPM} BPM 이내 ${Math.round((r.matchRate ?? 0) * 100)}% · ${cover} · 워치 ${r.watchMean?.toFixed(0)} / rPPG ${r.rppgMean?.toFixed(0)}`
+  }
   return (
     <div className="space-y-3 rounded-xl border border-ink-200 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1166,11 +1219,14 @@ function DemoPanel({
           </p>
         </div>
       </div>
+      <p className="text-xs text-ink-400">워치는 심박을 몇 초 평균해 보내서 약 {WATCH_LAG_S}초 늦게 바뀌어요.</p>
       <div className="flex flex-wrap items-center gap-3">
         {run ? (
           <>
             <span className="text-sm text-ink-600">
-              가만히 계세요 · {Math.max(0, Math.ceil((DEMO_MEASURE_MS / 1000) - run.seconds))}초 남음
+              {run.seconds < measureS
+                ? `가만히 계세요 · ${measureS - run.seconds}초 남음`
+                : `워치 지연 보정값 받는 중 · ${Math.max(0, DEMO_TOTAL_MS / 1000 - run.seconds)}초`}
             </span>
             <button type="button" onClick={onCancel} className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm">
               취소
@@ -1186,23 +1242,26 @@ function DemoPanel({
             30초 측정
           </button>
         )}
-        {last && !run && (
-          <span className="text-sm text-ink-600">
-            {last.meanAbsDiff === null
-              ? `비교할 값이 없었어요 (rPPG 표시 ${Math.round(last.coverage * 100)}%)`
-              : `평균 차이 ${last.meanAbsDiff.toFixed(1)} BPM · ${DEMO_MATCH_BPM} BPM 이내 ${Math.round((last.matchRate ?? 0) * 100)}% · 워치 ${last.watchMean?.toFixed(0)} / rPPG ${last.rppgMean?.toFixed(0)}`}
-          </span>
-        )}
+        {last && !run && <span className="text-sm text-ink-600">{lastText(last)}</span>}
       </div>
-      {results.length > 1 && (
-        <p className="text-xs text-ink-400">
-          지금까지 {results.length}회 · 평균 차이{' '}
-          {(() => {
-            const ok = results.filter((r) => r.meanAbsDiff !== null)
-            return ok.length ? (ok.reduce((s, r) => s + (r.meanAbsDiff ?? 0), 0) / ok.length).toFixed(1) : '—'
-          })()}{' '}
-          BPM
-        </p>
+      {results.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
+          <span>
+            지금까지 {results.length}회 · 평균 차이 {avg((r) => r.meanAbsDiff)} BPM (지연 보정 {avg((r) => r.lag?.meanAbsDiff)}) ·
+            rPPG 표시 {avg((r) => r.coverage * 100)}%
+          </span>
+          <button type="button" onClick={onExport} className="rounded border border-ink-300 px-2 py-1">
+            시연 결과 CSV
+          </button>
+          <button
+            type="button"
+            disabled={run !== null}
+            onClick={onClear}
+            className="rounded border border-ink-300 px-2 py-1 disabled:opacity-40"
+          >
+            시연 기록 지우기
+          </button>
+        </div>
       )}
     </div>
   )
