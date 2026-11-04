@@ -1,4 +1,5 @@
 import type { RefObject } from 'react'
+import type { CameraRotation } from '@/shared/storage/cameraRotation'
 import { useMeRppg } from '@/features/rppg/engine/useMeRppg'
 import { RPPG_STATUS_TEXT, type RppgReading } from '@/features/rppg/engine/rppgGate'
 
@@ -20,8 +21,12 @@ export interface HeartRateSource {
 export const NO_PULSE = (): number => 0
 
 /** 측정 화면의 심박 원천. enabled 가 false 이면 엔진을 돌리지 않는다. */
-export function useHeartRateSource(videoRef: RefObject<HTMLVideoElement | null>, enabled: boolean): HeartRateSource {
-  const { reading, getPulse } = useMeRppg(videoRef, enabled)
+export function useHeartRateSource(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  enabled: boolean,
+  rotation: CameraRotation = 0,
+): HeartRateSource {
+  const { reading, getPulse } = useMeRppg(videoRef, enabled, { rotation })
   return { bpm: reading.bpm, getPulse, reading }
 }
 

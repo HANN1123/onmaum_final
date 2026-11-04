@@ -9,6 +9,9 @@ import {
 } from '@/features/algorithm/emotion/emotionAnalysis'
 import { smoothEmotion } from '@/features/algorithm/emotion/emotionSmoothing'
 import { loadFaceApiModels } from '@/features/camera/lib/faceDetection'
+import { drawRotatedFrame } from '@/features/camera/lib/rotateFrame'
+import type { CameraRotation } from '@/shared/storage/cameraRotation'
+import { mirrorBox } from './rotationLayout'
 import { nextPresence, NO_PRESENCE, smoothBox } from './trackSmoothing'
 
 export interface FaceBox {
@@ -40,7 +43,7 @@ const DETECTOR_OPTIONS = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 
 export function useFaceTrack(
   videoRef: RefObject<HTMLVideoElement | null>,
   enabled: boolean,
-  { intervalMs = 250, mirrored = true } = {},
+  { intervalMs = 250, mirrored = true, rotation = 0 as CameraRotation } = {},
 ): FaceTrack {
   const [modelsReady, setModelsReady] = useState(false)
   const [box, setBox] = useState<FaceBox | null>(null)
@@ -67,6 +70,12 @@ export function useFaceTrack(
     let presence = NO_PRESENCE
     let lastBox: FaceBox | null = null
     let ema: EmotionResult | null = null
+    // 회전이 바뀌면 이 효과가 다시 시작된다. 이전 방향의 상자·감정은 즉시 지우고 다듬기를 처음부터 한다
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBox(null)
+    setEmotion(null)
+    setEmotions(null)
+    const rotated = rotation === 0 ? null : document.createElement('canvas')
 
     const timer = setInterval(async () => {
       const video = videoRef.current
@@ -75,7 +84,10 @@ export function useFaceTrack(
       try {
         // 원래 앱(faceDetection.analyzeEmotion)과 같이 랜드마크로 얼굴을 반듯하게 정렬한 뒤 표정을 읽는다.
         // 랜드마크를 건너뛰면 검출 상자를 그대로 잘라 읽어, 고개를 돌렸을 때 감정이 원래 앱과 달라질 수 있다.
-        const result = await faceapi.detectSingleFace(video, DETECTOR_OPTIONS).withFaceLandmarks().withFaceExpressions()
+        // 회전 중이면 돌린(비반전) 프레임에서 검출한다. 프레임은 메모리에서만 쓰고 저장하지 않는다
+        if (rotated && !drawRotatedFrame(video, rotation, rotated)) return
+        const input = rotated ?? video
+        const result = await faceapi.detectSingleFace(input, DETECTOR_OPTIONS).withFaceLandmarks().withFaceExpressions()
         if (cancelled) return
         presence = nextPresence(presence, Boolean(result))
         if (!result) {
@@ -90,10 +102,10 @@ export function useFaceTrack(
           return
         }
         const { x, y, width, height } = result.detection.box
-        const vw = video.videoWidth || 1
-        const vh = video.videoHeight || 1
-        const rx = x / vw
-        lastBox = smoothBox(lastBox, { x: mirrored ? 1 - rx - width / vw : rx, y: y / vh, w: width / vw, h: height / vh })
+        const iw = (rotated ? rotated.width : video.videoWidth) || 1
+        const ih = (rotated ? rotated.height : video.videoHeight) || 1
+        const raw = { x: x / iw, y: y / ih, w: width / iw, h: height / ih }
+        lastBox = smoothBox(lastBox, mirrored ? mirrorBox(raw) : raw)
         ema = smoothEmotion(ema, normalizeExpressions(result.expressions))
         setBox(lastBox)
         setEmotion(getDominantEmotion(ema))
@@ -109,7 +121,7 @@ export function useFaceTrack(
       cancelled = true
       clearInterval(timer)
     }
-  }, [enabled, modelsReady, videoRef, intervalMs, mirrored])
+  }, [enabled, modelsReady, videoRef, intervalMs, mirrored, rotation])
 
   return { modelsReady, box, emotion, emotions, emotionLabel: emotion ? EMOTION_LABELS[emotion] : null }
 }

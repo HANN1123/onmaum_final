@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Skeleton, SkeletonBox, SkulletProvider } from 'skullet/react'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
@@ -10,7 +10,9 @@ import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { useWebcam } from '@/features/ui/landing/hero-demo/useWebcam'
 import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/useDesktopMeasurementPublisher'
 import { LEGAL } from './demoCopy'
+import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type CameraRotation } from '@/shared/storage/cameraRotation'
 import FaceLayer from './FaceLayer'
+import { rotatedVideoStyle } from './rotationLayout'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
 import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
@@ -58,17 +60,48 @@ export default function MeasureDemo() {
     setVideoEl(el)
   }, [])
   const [active, setActive] = useState(true)
+  // 카메라 회전(시계 방향). 웹캠을 세워 쓰거나 뒤집어 달았을 때 화면과 분석 입력을 함께 돌린다. 이 기기에만 저장한다
+  const [rotation, setRotation] = useState<CameraRotation>(0)
+  useEffect(() => {
+    // localStorage 는 클라이언트에서만 — 첫 렌더는 0으로 서버와 맞추고, 그 뒤 저장된 값을 읽는다
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRotation(loadCameraRotation())
+  }, [])
+  const rotateCamera = () => {
+    const next = nextCameraRotation(rotation)
+    setRotation(next)
+    saveCameraRotation(next)
+  }
+  // 카메라 칸 크기와 영상 원본 크기로 돌린 영상의 칸 채움 스타일을 계산한다
+  const [frameEl, setFrameEl] = useState<HTMLDivElement | null>(null)
+  const [frameSize, setFrameSize] = useState({ cw: 0, ch: 0, vw: 0, vh: 0 })
+  useEffect(() => {
+    if (!frameEl || !videoEl) return
+    const update = () =>
+      setFrameSize({ cw: frameEl.clientWidth, ch: frameEl.clientHeight, vw: videoEl.videoWidth, vh: videoEl.videoHeight })
+    const observer = new ResizeObserver(update)
+    observer.observe(frameEl)
+    videoEl.addEventListener('loadedmetadata', update)
+    videoEl.addEventListener('resize', update)
+    update()
+    return () => {
+      observer.disconnect()
+      videoEl.removeEventListener('loadedmetadata', update)
+      videoEl.removeEventListener('resize', update)
+    }
+  }, [frameEl, videoEl])
+  const videoStyle = rotatedVideoStyle(frameSize.cw, frameSize.ch, frameSize.vw, frameSize.vh, rotation) ?? undefined
   const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
   const webcam = useWebcam(videoRef, true)
-  const face = useFaceTrack(videoRef, webcam === 'ready')
+  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
-  const { bpm, getPulse, reading: rppg } = useHeartRateSource(videoRef, webcam === 'ready' && active)
+  const { bpm, getPulse, reading: rppg } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
   const elapsed = useElapsed(active)
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
-  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode)
+  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
   // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
   const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null)
   const lastSession = useStoredSession()
@@ -133,9 +166,18 @@ export default function MeasureDemo() {
 
         <div className={`${styles.body} ${styles.measureBody}`}>
           <div className={styles.left}>
-            <div className={styles.frame}>
-              <video ref={attachVideo} muted playsInline autoPlay />
-              <FaceLayer box={active ? face.box : null} videoRef={videoRef} />
+            <div ref={setFrameEl} className={styles.frame}>
+              <video ref={attachVideo} muted playsInline autoPlay style={videoStyle} />
+              <FaceLayer box={active ? face.box : null} videoRef={videoRef} rotation={rotation} />
+              <button
+                type="button"
+                className={`${styles.rotateBtn} ${styles.focusable}`}
+                onClick={rotateCamera}
+                aria-label={`카메라 화면 회전, 지금 ${rotation}도`}
+                title="웹캠이 옆으로 누웠거나 뒤집혔을 때 눌러 바로 세웁니다"
+              >
+                ↻ {rotation}°
+              </button>
               <span className={styles.frameTag}>
                 <Morph>{`카메라 · ${faceState}`}</Morph>
               </span>
