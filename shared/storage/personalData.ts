@@ -7,6 +7,8 @@ export const EXPORT_SCHEMA_VERSION = 2
 
 const KEY_PREFIX = 'onmaum_'
 const ONBOARDED_KEY = 'onmaum_onboarded'
+/** rPPG 실험실 기준 센서 기록. 실험 자료라 일반 내보내기에서는 빼고, 전체 삭제에는 포함한다 */
+const RPPG_LAB_ROWS_KEY = 'onmaum_rppg_lab_rows'
 /** 지워도 기록이 아닌 사용자 선택이라 기본 삭제에서 남기는 키 */
 const PREFERENCE_KEYS = [SETTINGS_KEY, PROFILE_KEY, ONBOARDED_KEY]
 
@@ -86,6 +88,7 @@ function onmaumKeys(): string[] {
 function readLocalData(): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const k of onmaumKeys()) {
+    if (k === RPPG_LAB_ROWS_KEY) continue
     const raw = localStorage.getItem(k)
     if (raw === null) continue
     try {
