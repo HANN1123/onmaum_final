@@ -325,7 +325,8 @@ export function roiRects(pts: { x: number; y: number }[]): {
 // ── 실험 페이지용: 워치(정답) vs 앱 추정 오차 집계 ───────────────────────
 
 export type Condition = 'quiet' | 'talk' | 'move'
-export type RoiSet = 'forehead' | 'all' | 'me'
+/** fx = 튜닝 추정(hrEstimator.ts). ME-rPPG 버퍼 하나를 쓴다 */
+export type RoiSet = 'forehead' | 'all' | 'me' | 'fx'
 
 export type RefSource = 'ble' | 'manual'
 
@@ -377,6 +378,8 @@ export interface PairRow {
   all: HeartRate | null
   /** ME-rPPG(딥러닝) 추정 — 없으면 미측정 */
   me?: HeartRate | null
+  /** 튜닝 추정(대역 통과·움직임 마스크·추적) — 없으면 미측정 */
+  fx?: HeartRate | null
 }
 
 export type LabRow = PairRow & {
@@ -397,6 +400,8 @@ export type LabRow = PairRow & {
   originMs?: number
   meOutFps?: number
   meDropped?: number
+  /** 튜닝 추정 창에서 얼굴 상자가 가장 크게 흔들린 진폭(얼굴 너비 대비 비율) */
+  fxMotion?: number | null
 }
 
 function parseEstimate(v: unknown): HeartRate | null {
@@ -445,6 +450,7 @@ export function parseLabRows(raw: string): LabRow[] {
         ...(num(r.originMs) !== null ? { originMs: num(r.originMs) as number } : {}),
         ...(num(r.meOutFps) !== null ? { meOutFps: num(r.meOutFps) as number } : {}),
         ...(num(r.meDropped) !== null ? { meDropped: num(r.meDropped) as number } : {}),
+        ...(num(r.fxMotion) !== null ? { fxMotion: num(r.fxMotion) } : {}),
         t: r.t,
         fps: r.fps,
         condition: r.condition as Condition,
@@ -452,6 +458,7 @@ export function parseLabRows(raw: string): LabRow[] {
         forehead: parseEstimate(r.forehead),
         all: parseEstimate(r.all),
         me: parseEstimate(r.me),
+        ...(r.fx !== undefined ? { fx: parseEstimate(r.fx) } : {}),
       },
     ]
   })
@@ -537,7 +544,12 @@ export function summarizePairs(
   return Object.fromEntries(
     conds.map((c) => [
       c,
-      { forehead: summarize(c, 'forehead'), all: summarize(c, 'all'), me: summarize(c, 'me') },
+      {
+        forehead: summarize(c, 'forehead'),
+        all: summarize(c, 'all'),
+        me: summarize(c, 'me'),
+        fx: summarize(c, 'fx'),
+      },
     ]),
   ) as Record<Condition, Record<RoiSet, ErrorSummary>>
 }
