@@ -62,10 +62,54 @@ export function rgbaToModelInput(rgba: Uint8ClampedArray): Float32Array {
   return out
 }
 
-/** 모델 상태 갱신에 쓰는 프레임 간격(초). 첫 프레임 1/30, 하한 1/90 (데모와 동일) */
-export function frameDt(prevMs: number | null, tMs: number): number {
+/**
+ * 모델 상태 갱신에 쓰는 프레임 간격(초). 첫 프레임 1/30, 하한 1/90 (데모와 동일).
+ * maxDt 를 주면 그 이상은 잘라 넣는다(FacePhys 는 0.3초 이상에서 상태가 NaN 으로 무너진다).
+ */
+export function frameDt(prevMs: number | null, tMs: number, maxDt: number = Infinity): number {
   if (prevMs === null) return 1 / 30
-  return Math.max((tMs - prevMs) / 1000, 1 / 90)
+  return Math.min(Math.max((tMs - prevMs) / 1000, 1 / 90), maxDt)
+}
+
+/**
+ * 같은 36×36 프레임 + dt + 상태 규약을 쓰는 상태공간 rPPG 모델.
+ * 입력 순서만 다르다. ME-rPPG 는 [영상, 상태…, dt], FacePhys 는 [영상, dt, 상태…].
+ * 둘 다 출력 [0]=BVP, [i]=상태 입력(영상·dt 를 뺀 순서)의 i-1번째 다음 값이다.
+ */
+export type StateModelId = 'me' | 'facephys'
+
+export interface StateModelSpec {
+  id: StateModelId
+  label: string
+  base: string
+  /** inputNames 에서 dt 의 위치 */
+  dtIndex: (inputCount: number) => number
+  dtShape: number[]
+  /** dt 상한(초). 없으면 자르지 않는다 */
+  maxDt?: number
+}
+
+/**
+ * FacePhys dt 상한. 오프라인 재현에서 dt ≥ 0.3초를 한 번만 넣어도 이후 출력이 모두 NaN 이 됐다(0.25초는 정상).
+ * 공식 웹 데모는 프레임 간격을 평활해 넣어서 큰 dt 가 들어가지 않는다. 여유를 두고 0.2초로 자른다
+ */
+export const FACEPHYS_MAX_DT = 0.2
+
+export const STATE_MODELS: Record<StateModelId, StateModelSpec> = {
+  me: { id: 'me', label: 'ME-rPPG', base: '/models/me-rppg/', dtIndex: (n) => n - 1, dtShape: [] },
+  facephys: {
+    id: 'facephys',
+    label: 'FacePhys',
+    base: '/models/facephys/',
+    dtIndex: () => 1,
+    dtShape: [1],
+    maxDt: FACEPHYS_MAX_DT,
+  },
+}
+
+/** 영상(0번)과 dt 를 뺀 상태 입력 이름. 출력 i(≥1)는 이 배열의 i-1번째 상태가 된다 */
+export function stateInputNames(inputNames: readonly string[], dtIndex: number): string[] {
+  return inputNames.filter((_, i) => i !== 0 && i !== dtIndex)
 }
 
 export interface StateSpec {

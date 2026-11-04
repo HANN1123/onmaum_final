@@ -1,9 +1,10 @@
 'use client'
 
 // rPPG 실험 페이지 (메뉴 미노출).
-// 추정기 3종을 같은 영상에서 나란히 비교한다:
+// 추정기 4종을 같은 영상에서 나란히 비교한다:
 //  - POS 이마 / POS 이마+볼: face-api 랜드마크(현행 부하 그대로: SSD+랜드마크+표정) ROI 피부 평균 RGB → POS
-//  - ME-rPPG: BlazeFace(매 프레임) 얼굴 박스 → 36×36 → 워커에서 ONNX 추론 → 맥박 파형 → BPM
+//  - ME-rPPG / FacePhys: BlazeFace(매 프레임) 얼굴 박스 → 36×36 → 모델별 워커에서 ONNX 추론 → 맥박 파형 → BPM.
+//    두 모델은 같은 프레임의 같은 크롭을 받는다. 차이는 모델과 각자의 처리 속도(건너뛴 프레임)뿐이다
 // 옆 사람이 스마트워치(또는 손가락 앱) BPM을 입력하면 앱 추정과 짝지어 조건별 오차를 낸다.
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
@@ -34,8 +35,10 @@ import {
   createKalman1D,
   expandFaceBox,
   rgbaToModelInput,
+  STATE_MODELS,
   type FaceBox,
   type Kalman1D,
+  type StateModelId,
 } from '@/features/rppg/lib/meRppg'
 import {
   abortedRows,
@@ -71,9 +74,61 @@ const CONDITIONS: { key: Condition; label: string; target: number | null }[] = [
   { key: 'move', label: '움직이며', target: null },
 ]
 
-const ROI_LABELS: Record<RoiSet, string> = { forehead: 'POS 이마', all: 'POS 이마+볼', me: 'ME-rPPG' }
+const ROI_LABELS: Record<RoiSet, string> = {
+  forehead: 'POS 이마',
+  all: 'POS 이마+볼',
+  me: 'ME-rPPG',
+  fp: 'FacePhys',
+}
 
 type MeStatus = 'loading' | 'ready' | 'error'
+
+/** 모델 워커 하나의 실행 상태. ME-rPPG 와 FacePhys 가 같은 구조를 따로 가진다 */
+interface ModelRunner {
+  id: StateModelId
+  worker: Worker | null
+  ready: boolean
+  inFlight: number
+  outputs: number
+  epoch: number
+  dropped: number
+  buffer: { t: number; v: number }[]
+  latencies: number[]
+  outWalls: number[]
+  sentWalls: number[]
+}
+
+interface ModelLive {
+  hr: HeartRate | null
+  latency: number
+  /** 마지막 영상 프레임 기준 결과가 얼마나 지났는가 (ms) */
+  ageMs: number | null
+  sentFps: number
+  outFps: number
+  dropped: number
+}
+
+const EMPTY_MODEL_LIVE: ModelLive = { hr: null, latency: 0, ageMs: null, sentFps: 0, outFps: 0, dropped: 0 }
+
+function trimWalls(walls: number[], now: number) {
+  while (walls.length > 0 && walls[0] < now - 2000) walls.shift()
+}
+
+function modelLive(r: ModelRunner, nowWall: number): ModelLive {
+  trimWalls(r.outWalls, nowWall)
+  trimWalls(r.sentWalls, nowWall)
+  const last = r.buffer[r.buffer.length - 1]
+  // 신선도는 응답 도착이 아니라 원본 프레임의 시각으로 판단한다
+  const fresh = last !== undefined && nowWall - last.t < STALE_MS
+  return {
+    hr: fresh ? heartRateFromBvp(r.buffer) : null,
+    latency: r.latencies.length ? r.latencies.reduce((s, v) => s + v, 0) / r.latencies.length : 0,
+    ageMs: last ? nowWall - last.t : null,
+    sentFps: r.sentWalls.length / 2,
+    outFps: r.outWalls.length / 2,
+    dropped: r.dropped,
+  }
+}
 
 interface Rois {
   forehead: Rect
@@ -85,12 +140,8 @@ interface Live {
   forehead: HeartRate | null
   all: HeartRate | null
   me: HeartRate | null
-  meLatency: number
-  /** 마지막 영상 프레임 기준 ME 결과가 얼마나 지났는가 (ms) */
-  meAgeMs: number | null
-  meSentFps: number
-  meOutFps: number
-  meDropped: number
+  fp: HeartRate | null
+  models: Record<StateModelId, ModelLive>
   fps: number
   skin: number
   face: boolean
@@ -100,11 +151,8 @@ const EMPTY_LIVE: Live = {
   forehead: null,
   all: null,
   me: null,
-  meLatency: 0,
-  meAgeMs: null,
-  meSentFps: 0,
-  meOutFps: 0,
-  meDropped: 0,
+  fp: null,
+  models: { me: EMPTY_MODEL_LIVE, facephys: EMPTY_MODEL_LIVE },
   fps: 0,
   skin: 0,
   face: false,
@@ -170,7 +218,11 @@ export function RppgLab() {
   const [error, setError] = useState<string | null>(null)
   const [detectMs, setDetectMs] = useState(500)
   const [meEnabled, setMeEnabled] = useState(true)
-  const [meStatus, setMeStatus] = useState<MeStatus>('loading')
+  const [fpEnabled, setFpEnabled] = useState(true)
+  const [modelStatus, setModelStatus] = useState<Record<StateModelId, MeStatus>>({
+    me: 'loading',
+    facephys: 'loading',
+  })
   const [condition, setCondition] = useState<Condition>('quiet')
   const [conditionStart, setConditionStart] = useState(0)
   const [clock, setClock] = useState(0)
@@ -187,7 +239,7 @@ export function RppgLab() {
   const evaluationRef = useRef<Evaluation | null>(null)
   const runIdRef = useRef('')
   const evaluationCountRef = useRef(0)
-  /** 조건이 바뀌면 이전 조건의 ME 내부 상태가 결과에 남지 않게 다음 프레임에서 초기화한다 */
+  /** 조건이 바뀌면 이전 조건의 모델 내부 상태가 결과에 남지 않게 다음 프레임에서 초기화한다 */
   const meResetRequestRef = useRef(false)
   const liveRef = useRef<Live>(EMPTY_LIVE)
   const detectMsRef = useRef(detectMs)
@@ -253,74 +305,94 @@ export function RppgLab() {
     const buffers: { forehead: RgbSample[]; all: RgbSample[] } = { forehead: [], all: [] }
     const frameWalls: number[] = []
 
-    // ── ME-rPPG ──
-    let worker: Worker | null = null
+    // ── 상태공간 모델(ME-rPPG, FacePhys): 같은 BlazeFace 상자·칼만·크롭을 함께 쓴다 ──
     let blaze: FaceDetector | null = null
-    let meReady = false
-    let meInFlight = 0
-    let meOutputs = 0
     let meBox: FaceBox | null = null
     let meKalman: Kalman1D[] | null = null
     let meLastSendT: number | null = null
-    let meEpoch = 0
-    let meDropped = 0
-    const meBuffer: { t: number; v: number }[] = []
-    const meLatencies: number[] = []
-    const meOutWalls: number[] = []
-    const meSentWalls: number[] = []
+    const runners: ModelRunner[] = []
+    const setStatus = (id: StateModelId, s: MeStatus) => setModelStatus((prev) => ({ ...prev, [id]: s }))
 
-    /** 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다 */
-    const failMe = (message: string) => {
-      worker?.terminate()
-      worker = null
-      meReady = false
-      setMeStatus('error')
+    /** 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 그 모델은 이번 실행에서 끄고 다시 시작하게 한다 */
+    const failModel = (r: ModelRunner, message: string) => {
+      r.worker?.terminate()
+      r.worker = null
+      r.ready = false
+      setStatus(r.id, 'error')
       setError(message)
     }
 
     /** 끊긴 뒤에는 모델 상태·칼만·파형을 모두 버리고 새로 시작한다. 이전 프레임의 늦은 응답은 epoch로 거른다 */
-    const resetMe = () => {
-      meEpoch++
-      meInFlight = 0
-      meOutputs = 0
+    const resetModels = () => {
       meKalman = null
-      meBuffer.length = 0
-      const msg: MeWorkerIn = { type: 'reset' }
-      worker?.postMessage(msg)
+      for (const r of runners) {
+        r.epoch++
+        r.inFlight = 0
+        r.outputs = 0
+        r.buffer.length = 0
+        const msg: MeWorkerIn = { type: 'reset' }
+        r.worker?.postMessage(msg)
+      }
     }
 
-    if (meEnabled) {
-      worker = new Worker(new URL('../lib/meRppg.worker.ts', import.meta.url), { type: 'module' })
-      worker.onmessage = (e: MessageEvent<MeWorkerOut>) => {
+    const startRunner = (id: StateModelId) => {
+      const label = STATE_MODELS[id].label
+      const r: ModelRunner = {
+        id,
+        // 워커 이름으로 모델을 고른다(meRppg.worker.ts)
+        worker: new Worker(new URL('../lib/meRppg.worker.ts', import.meta.url), { type: 'module', name: id }),
+        ready: false,
+        inFlight: 0,
+        outputs: 0,
+        epoch: 0,
+        dropped: 0,
+        buffer: [],
+        latencies: [],
+        outWalls: [],
+        sentWalls: [],
+      }
+      runners.push(r)
+      r.worker!.onmessage = (e: MessageEvent<MeWorkerOut>) => {
         const m = e.data
         if (m.type === 'ready') {
-          meReady = true
-          if (blaze) setMeStatus('ready')
+          r.ready = true
+          if (blaze) setStatus(id, 'ready')
         } else if (m.type === 'error') {
-          failMe(m.message)
+          failModel(r, m.message)
         } else {
-          if (m.epoch !== meEpoch) return
-          meInFlight--
-          meOutputs++
-          meLatencies.push(m.latency)
-          if (meLatencies.length > 60) meLatencies.shift()
+          if (m.epoch !== r.epoch) return
+          r.inFlight--
+          r.outputs++
+          r.latencies.push(m.latency)
+          if (r.latencies.length > 60) r.latencies.shift()
           const wall = performance.now()
-          meOutWalls.push(wall)
-          while (meOutWalls.length > 0 && meOutWalls[0] < wall - 2000) meOutWalls.shift()
-          if (meOutputs <= ME_WARMUP) return
-          meBuffer.push({ t: m.t, v: m.value })
-          while (meBuffer.length > 0 && meBuffer[0].t < m.t - BUFFER_MS) meBuffer.shift()
+          r.outWalls.push(wall)
+          trimWalls(r.outWalls, wall)
+          // NaN 이 나오면 워커가 상태를 초기화했으므로 워밍업부터 다시 센다
+          if (!Number.isFinite(m.value)) {
+            r.outputs = 0
+            r.buffer.length = 0
+            return
+          }
+          if (r.outputs <= ME_WARMUP) return
+          r.buffer.push({ t: m.t, v: m.value })
+          while (r.buffer.length > 0 && r.buffer[0].t < m.t - BUFFER_MS) r.buffer.shift()
         }
       }
-      worker.onerror = (e) => failMe(`ME-rPPG worker 오류: ${e.message}`)
+      r.worker!.onerror = (e) => failModel(r, `${label} worker 오류: ${e.message}`)
+    }
+
+    if (meEnabled) startRunner('me')
+    if (fpEnabled) startRunner('facephys')
+    if (runners.length > 0) {
       getBlazeFace()
         .then((d) => {
           if (stopped) return
           blaze = d
-          if (meReady) setMeStatus('ready')
+          for (const r of runners) if (r.ready) setStatus(r.id, 'ready')
         })
         .catch((err: unknown) => {
-          setMeStatus('error')
+          for (const r of runners) setStatus(r.id, 'error')
           setError(`BlazeFace 로드 실패: ${err instanceof Error ? err.message : String(err)}`)
         })
     }
@@ -406,13 +478,17 @@ export function RppgLab() {
         }
       }
 
-      // ME-rPPG: BlazeFace 박스 → 칼만 → 높이 1.2배·위로 20% → 36×36 → 워커
+      // 상태공간 모델: BlazeFace 박스 → 칼만 → 높이 1.2배·위로 20% → 36×36 → 받을 수 있는 워커마다 같은 크롭
       const sendMeFrame = (now: number, t: number) => {
-        if (!worker || !blaze || !meReady) return
-        if (meInFlight >= ME_MAX_IN_FLIGHT) {
-          meDropped++
-          return
-        }
+        const ready = runners.filter((r) => r.worker && r.ready)
+        if (!blaze || ready.length === 0) return
+        // 밀린 워커는 이 프레임을 건너뛴다. 다른 워커는 그대로 받는다
+        const accepting = ready.filter((r) => {
+          if (r.inFlight < ME_MAX_IN_FLIGHT) return true
+          r.dropped++
+          return false
+        })
+        if (accepting.length === 0) return
         const det = blaze.detectForVideo(video, now).detections[0]?.boundingBox
         if (!det) {
           meBox = null
@@ -421,7 +497,7 @@ export function RppgLab() {
         // 끊겼다 돌아오면 파형만 비우지 않고 모델 상태까지 새로 시작한다. 기준은 신호처리의 공백과 같다
         if (meResetRequestRef.current || (meLastSendT !== null && t - meLastSendT > MAX_SAMPLE_GAP_MS)) {
           meResetRequestRef.current = false
-          resetMe()
+          resetModels()
         }
         if (!meKalman) {
           meKalman = [det.originX, det.originY, det.width, det.height].map((v) => createKalman1D(1e-2, 5e-1, v, 1))
@@ -439,11 +515,15 @@ export function RppgLab() {
         cropCtx.drawImage(canvas, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
         const input = rgbaToModelInput(cropCtx.getImageData(0, 0, 36, 36).data)
         meLastSendT = t
-        meInFlight++
-        meSentWalls.push(now)
-        while (meSentWalls.length > 0 && meSentWalls[0] < now - 2000) meSentWalls.shift()
-        const msg: MeWorkerIn = { type: 'frame', input, t, epoch: meEpoch }
-        worker.postMessage(msg, [input.buffer])
+        accepting.forEach((r, i) => {
+          // 버퍼를 워커로 넘기므로 마지막 워커만 원본을 받고 나머지는 복사본을 받는다
+          const data = i === accepting.length - 1 ? input : input.slice()
+          r.inFlight++
+          r.sentWalls.push(now)
+          trimWalls(r.sentWalls, now)
+          const msg: MeWorkerIn = { type: 'frame', input: data, t, epoch: r.epoch }
+          r.worker!.postMessage(msg, [data.buffer])
+        })
       }
 
       // 매 프레임: 원본을 한 번 그려서 POS ROI 샘플링 + ME-rPPG 입력에 같이 씀
@@ -486,19 +566,15 @@ export function RppgLab() {
         const nowWall = performance.now()
         // 신선도는 응답 도착이 아니라 원본 프레임의 시각으로 판단한다
         const fresh = (buf: { t: number }[]) => buf.length > 0 && nowWall - buf[buf.length - 1].t < STALE_MS
-        while (frameWalls.length > 0 && frameWalls[0] < nowWall - 2000) frameWalls.shift()
-        while (meOutWalls.length > 0 && meOutWalls[0] < nowWall - 2000) meOutWalls.shift()
-        while (meSentWalls.length > 0 && meSentWalls[0] < nowWall - 2000) meSentWalls.shift()
-        const meLast = meBuffer[meBuffer.length - 1]
+        trimWalls(frameWalls, nowWall)
+        const models: Record<StateModelId, ModelLive> = { me: EMPTY_MODEL_LIVE, facephys: EMPTY_MODEL_LIVE }
+        for (const r of runners) models[r.id] = modelLive(r, nowWall)
         const next: Live = {
           forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
           all: fresh(buffers.all) ? estimateHeartRate(windowed(buffers.all)) : null,
-          me: fresh(meBuffer) ? heartRateFromBvp(meBuffer) : null,
-          meLatency: meLatencies.length ? meLatencies.reduce((s, v) => s + v, 0) / meLatencies.length : 0,
-          meAgeMs: meLast ? nowWall - meLast.t : null,
-          meSentFps: meSentWalls.length / 2,
-          meOutFps: meOutWalls.length / 2,
-          meDropped,
+          me: models.me.hr,
+          fp: models.facephys.hr,
+          models,
           fps: frameWalls.length / 2,
           skin,
           face,
@@ -516,11 +592,17 @@ export function RppgLab() {
             slot,
             now: nowWall,
             startedAt: startRef.current,
-            estimates: { forehead: next.forehead, all: next.all, me: next.me },
+            estimates: {
+              forehead: next.forehead,
+              all: next.all,
+              me: next.me,
+              ...(fpEnabled ? { fp: next.fp } : {}),
+            },
             reference: referenceBpm(getSamples(), current.evalStart + slot * SLOT_MS),
             fps: next.fps,
-            meOutFps: next.meOutFps,
-            meDropped: next.meDropped,
+            meOutFps: next.models.me.outFps,
+            meDropped: next.models.me.dropped,
+            ...(fpEnabled ? { fpOutFps: next.models.facephys.outFps, fpDropped: next.models.facephys.dropped } : {}),
           }),
         )
         setRows((rs) => [...rs, ...slotRows])
@@ -550,12 +632,12 @@ export function RppgLab() {
       stream?.getTracks().forEach((t) => t.stop())
       video.srcObject = null
       overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height)
-      worker?.terminate()
+      for (const r of runners) r.worker?.terminate()
       liveRef.current = EMPTY_LIVE
       setLive(EMPTY_LIVE)
-      setMeStatus('loading')
+      setModelStatus({ me: 'loading', facephys: 'loading' })
     }
-  }, [running, meEnabled, getSamples])
+  }, [running, meEnabled, fpEnabled, getSamples])
 
   // 이벤트 timeStamp는 performance.now()와 같은 기준 시각
   const handleCondition = (c: Condition, at: number) => {
@@ -582,6 +664,7 @@ export function RppgLab() {
         forehead: l.forehead,
         all: l.all,
         me: l.me,
+        ...(fpEnabled ? { fp: l.fp } : {}),
         fps: l.fps,
       },
     ])
@@ -616,12 +699,14 @@ export function RppgLab() {
   const summary = summarizePairs(runRows, activeGate, autoRun ? SLOT_COUNT : 1)
   const visibleConditions = CONDITIONS.filter((c) => runRows.length === 0 || summary[c.key].me.n > 0)
   const elapsed = conditionStart > 0 ? Math.max(0, Math.floor((clock - conditionStart) / 1000)) : 0
-  const meStatusLabel: Record<MeStatus, string> = {
-    loading: '로딩 중',
-    ready: `추론 ${fmt(live.meLatency)}ms`,
-    error: '오류',
+  const modelStatusText = (id: StateModelId, enabled: boolean) => {
+    if (!running || !enabled) return '꺼짐'
+    const s = modelStatus[id]
+    return s === 'ready' ? `추론 ${fmt(live.models[id].latency)}ms` : s === 'loading' ? '로딩 중' : '오류'
   }
-  const meStatusText = running && meEnabled ? meStatusLabel[meStatus] : '꺼짐'
+  const modelProcessSub = (m: ModelLive) =>
+    `전송 ${fmt(m.sentFps, 0)} fps · 결과 나이 ${m.ageMs === null ? '—' : Math.round(m.ageMs)}ms · 건너뜀 ${m.dropped}`
+  const tableRois: RoiSet[] = fpEnabled || runRows.some((r) => r.fp) ? ['forehead', 'all', 'me', 'fp'] : ['forehead', 'all', 'me']
 
   return (
     <main className="min-h-screen px-6 py-8">
@@ -644,7 +729,7 @@ export function RppgLab() {
           <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover" />
         </div>
         <p className="-mt-3 text-xs text-ink-400">
-          초록·노랑 사각형 = POS 이마·볼 영역 / 회색 점선 = ME-rPPG 얼굴 박스
+          초록·노랑 사각형 = POS 이마·볼 영역 / 회색 점선 = ME-rPPG·FacePhys 공통 얼굴 박스
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -674,6 +759,10 @@ export function RppgLab() {
             <input type="checkbox" checked={meEnabled} onChange={(e) => setMeEnabled(e.target.checked)} />
             ME-rPPG 같이 돌리기
           </label>
+          <label className="flex items-center gap-2 text-sm text-ink-600">
+            <input type="checkbox" checked={fpEnabled} onChange={(e) => setFpEnabled(e.target.checked)} />
+            FacePhys 같이 돌리기
+          </label>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -682,12 +771,22 @@ export function RppgLab() {
           <Stat
             label="ME-rPPG"
             value={fmt(live.me?.bpm, 0)}
-            sub={`SNR ${fmt(live.me?.snrDb)} dB · ${meStatusText}`}
+            sub={`SNR ${fmt(live.me?.snrDb)} dB · ${modelStatusText('me', meEnabled)}`}
           />
           <Stat
             label="ME 처리"
-            value={`${fmt(live.meOutFps, 0)} fps`}
-            sub={`전송 ${fmt(live.meSentFps, 0)} fps · 결과 나이 ${live.meAgeMs === null ? '—' : Math.round(live.meAgeMs)}ms · 건너뜀 ${live.meDropped}`}
+            value={`${fmt(live.models.me.outFps, 0)} fps`}
+            sub={modelProcessSub(live.models.me)}
+          />
+          <Stat
+            label="FacePhys"
+            value={fmt(live.fp?.bpm, 0)}
+            sub={`SNR ${fmt(live.fp?.snrDb)} dB · ${modelStatusText('facephys', fpEnabled)}`}
+          />
+          <Stat
+            label="FacePhys 처리"
+            value={`${fmt(live.models.facephys.outFps, 0)} fps`}
+            sub={modelProcessSub(live.models.facephys)}
           />
           <Stat label="처리 fps" value={fmt(live.fps, 0)} sub="목표 ≈ 30" />
           <Stat
@@ -835,7 +934,7 @@ export function RppgLab() {
             </thead>
             <tbody>
               {visibleConditions.flatMap((c) =>
-                (['forehead', 'all', 'me'] as const).map((roi) => {
+                tableRois.map((roi) => {
                   const s = summary[c.key][roi]
                   return (
                     <tr key={`${c.key}-${roi}`} className="border-b border-ink-100">

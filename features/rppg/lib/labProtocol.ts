@@ -31,7 +31,7 @@ export function dueSlots(evaluation: Evaluation, now: number): number[] {
   return due
 }
 
-const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me']
+const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me', 'fp']
 
 export interface SlotInput {
   evaluation: Evaluation
@@ -40,11 +40,14 @@ export interface SlotInput {
   now: number
   /** 측정 시작 기준 시각 */
   startedAt: number
-  estimates: Record<RoiSet, HeartRate | null>
+  /** FacePhys 는 켰을 때만 넣는다. 키가 없으면 그 추정기는 이 슬롯의 비교·이유에서 빠진다 */
+  estimates: Record<Exclude<RoiSet, 'fp'>, HeartRate | null> & { fp?: HeartRate | null }
   reference: ReferenceValue | null
   fps: number
   meOutFps: number
   meDropped: number
+  fpOutFps?: number
+  fpDropped?: number
 }
 
 /** 창이 평가 구간 안에 있고 슬롯 시각·기준값 구간에 맞는 추정만 비교한다. 아니면 그 이유를 돌려준다 */
@@ -61,17 +64,18 @@ export function slotRow(input: SlotInput): LabRow {
   const slotAt = evaluation.evalStart + slot * SLOT_MS
   const late = now - slotAt > MAX_SLOT_LATE_MS
 
-  const rejects = ESTIMATORS.map((k) => [k, rejectReason(input.estimates[k], slotAt, evaluation.evalStart)] as const)
+  const active = ESTIMATORS.filter((k) => k in input.estimates)
+  const rejects = active.map((k) => [k, rejectReason(input.estimates[k] ?? null, slotAt, evaluation.evalStart)] as const)
   const aligned = Object.fromEntries(
-    rejects.map(([k, why]) => [k, late || why ? null : input.estimates[k]]),
-  ) as Record<RoiSet, HeartRate | null>
+    rejects.map(([k, why]) => [k, late || why ? null : (input.estimates[k] ?? null)]),
+  ) as SlotInput['estimates']
   const usableRef = late ? null : reference
 
   const reasons: string[] = []
   if (late) reasons.push('timer_late')
   else {
     if (!usableRef) reasons.push('no_reference')
-    if (ESTIMATORS.every((k) => !aligned[k])) reasons.push('no_rppg')
+    if (active.every((k) => !aligned[k])) reasons.push('no_rppg')
     for (const [k, why] of rejects) if (why) reasons.push(`${k}:${why}`)
   }
 
@@ -91,6 +95,8 @@ export function slotRow(input: SlotInput): LabRow {
     fps: input.fps,
     meOutFps: input.meOutFps,
     meDropped: input.meDropped,
+    ...(input.fpOutFps !== undefined ? { fpOutFps: input.fpOutFps } : {}),
+    ...(input.fpDropped !== undefined ? { fpDropped: input.fpDropped } : {}),
     ...aligned,
   }
 }
@@ -116,6 +122,7 @@ export function abortedRows(evaluation: Evaluation, startedAt: number): LabRow[]
       forehead: null,
       all: null,
       me: null,
+      fp: null,
     })
   }
   return rows
@@ -151,6 +158,8 @@ export function rowsToCsv(rows: LabRow[]): string {
     'all_bpm,all_snr_db,all_win_start_s,all_win_end_s,all_age_s',
     'me_bpm,me_snr_db,me_win_start_s,me_win_end_s,me_age_s',
     'me_out_fps,me_dropped,fps',
+    // FacePhys 열은 기존 열 순서를 바꾸지 않게 맨 뒤에 붙인다
+    'fp_bpm,fp_snr_db,fp_win_start_s,fp_win_end_s,fp_age_s,fp_out_fps,fp_dropped',
   ].join(',')
   const lines = rows.map((r) =>
     [
@@ -171,6 +180,9 @@ export function rowsToCsv(rows: LabRow[]): string {
       csvNumber(r.meOutFps, 1),
       r.meDropped ?? '',
       r.fps.toFixed(0),
+      ...estimateColumns(r, 'fp'),
+      csvNumber(r.fpOutFps, 1),
+      r.fpDropped ?? '',
     ].join(','),
   )
   return [head, ...lines].join('\n')

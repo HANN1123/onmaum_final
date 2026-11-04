@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   createKalman1D,
   expandFaceBox,
@@ -6,6 +8,8 @@ import {
   rgbaToModelInput,
   frameDt,
   parseStateBin,
+  stateInputNames,
+  STATE_MODELS,
 } from '@/features/rppg/lib/meRppg'
 
 describe('createKalman1D', () => {
@@ -66,6 +70,10 @@ describe('frameDt', () => {
   it('1/90초보다 짧으면 1/90초로 올린다', () => {
     expect(frameDt(1000, 1005)).toBeCloseTo(1 / 90)
   })
+  it('상한을 주면 긴 공백도 상한으로 자르고, 주지 않으면 그대로 둔다 (ME-rPPG 동작 유지)', () => {
+    expect(frameDt(1000, 1381, STATE_MODELS.facephys.maxDt)).toBeCloseTo(0.2)
+    expect(frameDt(1000, 1381, STATE_MODELS.me.maxDt)).toBeCloseTo(0.381)
+  })
 })
 
 describe('parseStateBin', () => {
@@ -86,5 +94,29 @@ describe('parseStateBin', () => {
 
   it('모양 합계와 바이너리 크기가 다르면 오류 (손상·버전 불일치 조기 발견)', () => {
     expect(() => parseStateBin([{ name: 'a', shape: [4] }], new Float32Array(3).buffer)).toThrow()
+  })
+})
+
+describe('상태공간 모델 규약 (ME-rPPG · FacePhys)', () => {
+  it('ME-rPPG 는 dt 가 맨 끝, FacePhys 는 dt 가 두 번째이고 나머지가 상태 입력이다', () => {
+    const me = ['video', 's0', 's1', 'dt']
+    expect(stateInputNames(me, STATE_MODELS.me.dtIndex(me.length))).toEqual(['s0', 's1'])
+    const fp = ['input', 'dt', 'state_in_0', 'state_in_1']
+    expect(stateInputNames(fp, STATE_MODELS.facephys.dtIndex(fp.length))).toEqual(['state_in_0', 'state_in_1'])
+  })
+
+  it.each(['me-rppg', 'facephys'])('%s 초기 상태 파일은 모양 목록과 크기가 맞는다', (dir) => {
+    const base = join(process.cwd(), 'public', 'models', dir)
+    const specs = JSON.parse(readFileSync(join(base, 'state-shapes.json'), 'utf8'))
+    const bin = readFileSync(join(base, 'state.bin'))
+    const buf = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
+    expect(parseStateBin(specs, buf).length).toBe(specs.length)
+  })
+
+  it('FacePhys 초기 상태 이름은 state_in_0 부터 순서대로다 (출력 i → state_in_{i-1} 대응의 전제)', () => {
+    const specs = JSON.parse(
+      readFileSync(join(process.cwd(), 'public', 'models', 'facephys', 'state-shapes.json'), 'utf8'),
+    ) as { name: string }[]
+    expect(specs.map((s) => s.name)).toEqual(specs.map((_, i) => `state_in_${i}`))
   })
 })

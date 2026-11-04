@@ -240,3 +240,44 @@ describe('기록 보관', () => {
     expect(cells[head.indexOf('gate_db')]).toBe('2')
   })
 })
+
+describe('FacePhys 비교 열', () => {
+  it('FacePhys 를 켜면 같은 규칙으로 정렬해 행에 남기고, 끄면 이유에 섞지 않는다', () => {
+    const base = input()
+    const on = slotRow(input({ estimates: { ...base.estimates, fp: { ...base.estimates.me!, bpm: 74 } }, fpOutFps: 20, fpDropped: 3 }))
+    expect(on.fp?.bpm).toBe(74)
+    expect(on).toMatchObject({ fpOutFps: 20, fpDropped: 3 })
+
+    const off = slotRow(input({ reference: null }))
+    expect(off.fp).toBeUndefined()
+    expect(off.reason).toBe('no_reference')
+
+    const missing = slotRow(input({ estimates: { ...base.estimates, fp: null } }))
+    expect(missing.reason).toBe('fp:none')
+  })
+
+  it('FacePhys 열은 CSV 맨 뒤에 붙고 저장·복원을 거쳐도 유지된다', () => {
+    const base = input()
+    const row = slotRow(input({ estimates: { ...base.estimates, fp: { ...base.estimates.me!, bpm: 74 } }, fpOutFps: 20, fpDropped: 3 }))
+    const [restored] = parseLabRows(JSON.stringify([row]))
+    expect(restored.fp?.bpm).toBe(74)
+    const [head, line] = rowsToCsv([restored]).split('\n')
+    const cols = head.split(',')
+    const cells = line.split(',')
+    expect(cols.indexOf('fps')).toBeLessThan(cols.indexOf('fp_bpm'))
+    expect(cells[cols.indexOf('fp_bpm')]).toBe('74.0')
+    expect(cells[cols.indexOf('fp_out_fps')]).toBe('20.0')
+    expect(cells[cols.indexOf('fp_dropped')]).toBe('3')
+    expect(cols).toHaveLength(cells.length)
+  })
+
+  it('조건별 요약에 FacePhys 오차가 따로 나온다', () => {
+    const base = input()
+    const rows = Array.from({ length: SLOT_COUNT }, () =>
+      slotRow(input({ estimates: { ...base.estimates, fp: { ...base.estimates.me!, bpm: 75 } } })),
+    )
+    const s = summarizePairs(rows, 2, SLOT_COUNT).quiet
+    expect(s.me.mae).toBeCloseTo(2)
+    expect(s.fp.mae).toBeCloseTo(3)
+  })
+})
