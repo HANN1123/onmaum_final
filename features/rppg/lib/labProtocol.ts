@@ -31,7 +31,7 @@ export function dueSlots(evaluation: Evaluation, now: number): number[] {
   return due
 }
 
-const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me']
+const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me', 'fx']
 
 export interface SlotInput {
   evaluation: Evaluation
@@ -40,11 +40,14 @@ export interface SlotInput {
   now: number
   /** 측정 시작 기준 시각 */
   startedAt: number
-  estimates: Record<RoiSet, HeartRate | null>
+  /** 튜닝 추정(fx)은 켰을 때만 넣는다. 키가 없으면 그 추정기는 이 슬롯의 비교·이유에서 빠진다 */
+  estimates: Record<Exclude<RoiSet, 'fx'>, HeartRate | null> & { fx?: HeartRate | null }
   reference: ReferenceValue | null
   fps: number
   meOutFps: number
   meDropped: number
+  /** 튜닝 추정의 움직임 진폭(얼굴 너비 대비) */
+  fxMotion?: number | null
 }
 
 /** 창이 평가 구간 안에 있고 슬롯 시각·기준값 구간에 맞는 추정만 비교한다. 아니면 그 이유를 돌려준다 */
@@ -61,17 +64,18 @@ export function slotRow(input: SlotInput): LabRow {
   const slotAt = evaluation.evalStart + slot * SLOT_MS
   const late = now - slotAt > MAX_SLOT_LATE_MS
 
-  const rejects = ESTIMATORS.map((k) => [k, rejectReason(input.estimates[k], slotAt, evaluation.evalStart)] as const)
+  const active = ESTIMATORS.filter((k) => k in input.estimates)
+  const rejects = active.map((k) => [k, rejectReason(input.estimates[k] ?? null, slotAt, evaluation.evalStart)] as const)
   const aligned = Object.fromEntries(
-    rejects.map(([k, why]) => [k, late || why ? null : input.estimates[k]]),
-  ) as Record<RoiSet, HeartRate | null>
+    rejects.map(([k, why]) => [k, late || why ? null : (input.estimates[k] ?? null)]),
+  ) as SlotInput['estimates']
   const usableRef = late ? null : reference
 
   const reasons: string[] = []
   if (late) reasons.push('timer_late')
   else {
     if (!usableRef) reasons.push('no_reference')
-    if (ESTIMATORS.every((k) => !aligned[k])) reasons.push('no_rppg')
+    if (active.every((k) => !aligned[k])) reasons.push('no_rppg')
     for (const [k, why] of rejects) if (why) reasons.push(`${k}:${why}`)
   }
 
@@ -91,6 +95,7 @@ export function slotRow(input: SlotInput): LabRow {
     fps: input.fps,
     meOutFps: input.meOutFps,
     meDropped: input.meDropped,
+    ...(input.fxMotion !== undefined ? { fxMotion: late ? null : input.fxMotion } : {}),
     ...aligned,
   }
 }
@@ -116,6 +121,7 @@ export function abortedRows(evaluation: Evaluation, startedAt: number): LabRow[]
       forehead: null,
       all: null,
       me: null,
+      fx: null,
     })
   }
   return rows
@@ -151,6 +157,8 @@ export function rowsToCsv(rows: LabRow[]): string {
     'all_bpm,all_snr_db,all_win_start_s,all_win_end_s,all_age_s',
     'me_bpm,me_snr_db,me_win_start_s,me_win_end_s,me_age_s',
     'me_out_fps,me_dropped,fps',
+    // 튜닝 추정 열도 맨 뒤에 붙인다
+    'fx_bpm,fx_snr_db,fx_win_start_s,fx_win_end_s,fx_age_s,fx_motion',
   ].join(',')
   const lines = rows.map((r) =>
     [
@@ -171,6 +179,8 @@ export function rowsToCsv(rows: LabRow[]): string {
       csvNumber(r.meOutFps, 1),
       r.meDropped ?? '',
       r.fps.toFixed(0),
+      ...estimateColumns(r, 'fx'),
+      csvNumber(r.fxMotion, 4),
     ].join(','),
   )
   return [head, ...lines].join('\n')
