@@ -104,8 +104,42 @@ describe('createHrTracker', () => {
   it('직전 추정이 3초보다 오래되면 추적하지 않는다', () => {
     const tr = createHrTracker()
     tr.estimate([pulse(12, 70)])
-    const two = pulse(12, 70, (t) => 1.3 * Math.sin((2 * Math.PI * 100 * t) / 60_000), 20_000)
+    // 이스케이프(3dB)에 못 미치는 조금 센 경쟁 피크: 만료됐으면 더 센 100, 추적 중이면 70
+    const two = (t0: number) => pulse(12, 70, (t) => 1.05 * Math.sin((2 * Math.PI * 100 * t) / 60_000), t0)
+    expect(tr.estimate([two(20_000)])!.bpm).toBeCloseTo(100, 0)
+    const fresh = createHrTracker()
+    fresh.estimate([pulse(12, 70)])
+    expect(fresh.estimate([two(2_000)])!.bpm).toBeCloseTo(70, 0)
+  })
+
+  it('reset() 하면 직전 값을 잊는다', () => {
+    const tr = createHrTracker()
+    tr.estimate([pulse(12, 70)])
+    tr.reset()
+    const two = pulse(12, 70, (t) => 1.05 * Math.sin((2 * Math.PI * 100 * t) / 60_000), 2_000)
     expect(tr.estimate([two])!.bpm).toBeCloseTo(100, 0)
+  })
+
+  it('모델마다 이어진 구간이 달라도 공통 구간만 분석하고 그 구간을 돌려준다', () => {
+    const a = pulse(12, 80)
+    // b 는 4초에 1초 공백이 있어 5초~12초만 이어진다
+    const b = pulse(12, 80).filter((p) => p.t < 4_000 || p.t >= 5_000)
+    const est = createHrTracker().estimate([a, b])!
+    expect(est.models).toBe(2)
+    expect(est.windowStart).toBeGreaterThanOrEqual(5_000)
+    expect(est.windowEnd! - est.windowStart!).toBeGreaterThanOrEqual(6_000)
+  })
+
+  it('공백 때문에 6초가 안 되는 모델은 빼고, 남은 모델로 추정한다', () => {
+    const a = pulse(12, 80)
+    const b = pulse(12, 80).filter((p) => p.t < 7_000 || p.t >= 8_000)
+    expect(createHrTracker().estimate([a, b])!.models).toBe(1)
+    expect(createHrTracker().estimate([b])).toBeNull()
+  })
+
+  it('입력이 10fps 보다 드물면 쓰지 않는다', () => {
+    const sparse = pulse(12, 80).filter((_, i) => i % 4 === 0)
+    expect(createHrTracker().estimate([sparse])).toBeNull()
   })
 
   it('6초보다 짧거나 끊긴 버퍼는 쓰지 않는다', () => {

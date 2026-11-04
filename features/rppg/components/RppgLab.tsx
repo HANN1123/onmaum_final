@@ -58,11 +58,14 @@ import { createHrTracker, type BoxSample, type TrackedHeartRate } from '@/featur
 import {
   DEMO_MATCH_BPM,
   DEMO_MEASURE_MS,
+  DEMO_SLOTS,
   DEMO_STATE_TEXT,
   demoState,
   recentMedian,
+  recordDemo,
+  startDemoRun,
   summarizeDemo,
-  type DemoPair,
+  type DemoRun,
   type DemoPoint,
   type DemoResult,
   type DemoState,
@@ -272,7 +275,7 @@ export function RppgLab() {
   const waveRef = useRef<WaveLog | null>(null)
   const [hasWave, setHasWave] = useState(false)
   /** 시연: 30초 측정 진행(시작 시각과 1초 칸) · 끝난 결과 */
-  const demoRunRef = useRef<{ start: number; pairs: DemoPair[] } | null>(null)
+  const demoRunRef = useRef<DemoRun | null>(null)
   const [demoRun, setDemoRun] = useState<{ start: number; seconds: number } | null>(null)
   const [demoResults, setDemoResults] = useState<DemoResult[]>([])
 
@@ -622,16 +625,16 @@ export function RppgLab() {
         while (demoPoints.length > 0 && demoPoints[0].t < nowWall - 60_000) demoPoints.shift()
         const dBpm = dState === 'ok' ? recentMedian(demoPoints, nowWall) : null
         const lastWatch = getSamples().at(-1)
-        const dWatch = lastWatch && nowWall - lastWatch.t < WATCH_FRESH_MS ? lastWatch.bpm : null
+        // 접촉 불량 값은 기준으로 쓰지 않는다(referenceBpm 과 같은 규칙)
+        const dWatch = lastWatch && lastWatch.contact !== 'poor' && nowWall - lastWatch.t < WATCH_FRESH_MS ? lastWatch.bpm : null
         const run = demoRunRef.current
-        if (run && nowWall >= run.start) {
-          run.pairs.push({ t: nowWall, watch: dWatch, rppg: dBpm })
-          if (nowWall - run.start >= DEMO_MEASURE_MS) {
-            const result = summarizeDemo(run.pairs)
+        if (run) {
+          if (recordDemo(run, nowWall, dWatch, dBpm)) {
+            const result = summarizeDemo(run.slots)
             demoRunRef.current = null
             setDemoRun(null)
             setDemoResults((rs) => [...rs, result])
-          } else setDemoRun({ start: run.start, seconds: run.pairs.length })
+          } else setDemoRun({ start: run.start, seconds: Math.min(DEMO_SLOTS, Math.floor((nowWall - run.start) / 1000)) })
         }
         const next: Live = {
           forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
@@ -816,11 +819,12 @@ export function RppgLab() {
           live={live.demo}
           running={running}
           watchConnected={heartRate.status === 'connected'}
+          blocked={evaluation !== null}
           run={demoRun}
           results={demoResults}
           onStart={() => {
             const start = performance.now()
-            demoRunRef.current = { start, pairs: [] }
+            demoRunRef.current = startDemoRun(start)
             setDemoRun({ start, seconds: 0 })
           }}
           onCancel={() => {
@@ -938,7 +942,7 @@ export function RppgLab() {
               <button
                 key={c.key}
                 type="button"
-                disabled={evaluation !== null}
+                disabled={evaluation !== null || demoRun !== null}
                 onClick={(e) => handleCondition(c.key, e.timeStamp)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium ${
                   condition === c.key ? 'bg-risk-good text-white' : 'bg-ink-100 text-ink-600'
@@ -954,7 +958,7 @@ export function RppgLab() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={!running || heartRate.status !== 'connected' || evaluation !== null}
+              disabled={!running || heartRate.status !== 'connected' || evaluation !== null || demoRun !== null}
               onClick={startEvaluation}
               className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
@@ -1120,6 +1124,7 @@ function DemoPanel({
   live,
   running,
   watchConnected,
+  blocked,
   run,
   results,
   onStart,
@@ -1128,6 +1133,8 @@ function DemoPanel({
   live: Live['demo']
   running: boolean
   watchConnected: boolean
+  /** 자동 평가 중이면 시연 측정을 시작하지 않는다 */
+  blocked: boolean
   run: { start: number; seconds: number } | null
   results: DemoResult[]
   onStart: () => void
@@ -1172,7 +1179,7 @@ function DemoPanel({
         ) : (
           <button
             type="button"
-            disabled={!running || !watchConnected}
+            disabled={!running || !watchConnected || blocked}
             onClick={onStart}
             className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
           >

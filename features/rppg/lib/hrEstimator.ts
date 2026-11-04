@@ -101,16 +101,22 @@ export function bandpass(x: number[], fs: number = FS, lo = HR_MIN_HZ, hi = HR_M
   return runBiquad(runBiquad(forward.reverse(), hp), lp).reverse()
 }
 
-/** 끝 시각 기준 최근 windowMs 의 연속 구간을 30Hz 로 맞춘다. 6초·10fps 미만이면 null */
-function uniformWindow(points: readonly BvpPoint[], endT: number, windowMs: number): { x: number[]; start: number; end: number } | null {
+/** 끝 시각 기준 최근 windowMs 안에서 공백 없이 이어진 구간. 6초·10fps 미만이면 null */
+function usableTail(points: readonly BvpPoint[], endT: number, windowMs: number): BvpPoint[] | null {
   const inWin = points.filter((p) => p.t <= endT && p.t >= endT - windowMs)
   const tail = contiguousTail(inWin, MAX_SAMPLE_GAP_MS)
   if (tail.length < 2) return null
   const span = tail[tail.length - 1].t - tail[0].t
   if (span < MIN_SECONDS * 1000 || (tail.length - 1) / (span / 1000) < MIN_INPUT_FPS) return null
-  const x = resampleUniform(tail.map((p) => ({ t: p.t, r: p.v, g: 0, b: 0 })), FS).map((c) => c[0])
-  if (!x.every(Number.isFinite)) return null
-  return { x, start: tail[0].t, end: tail[tail.length - 1].t }
+  return tail
+}
+
+/** [start, end] 구간을 30Hz 로 맞춘다. 값이 유한하지 않으면 null */
+function uniformSlice(points: readonly BvpPoint[], start: number, end: number): number[] | null {
+  const seg = points.filter((p) => p.t >= start && p.t <= end)
+  if (seg.length < 2) return null
+  const x = resampleUniform(seg.map((p) => ({ t: p.t, r: p.v, g: 0, b: 0 })), FS).map((c) => c[0])
+  return x.every(Number.isFinite) ? x : null
 }
 
 function normalized(s: Spectrum): number[] {
@@ -162,17 +168,21 @@ export function createHrTracker({ windowMs = TRACK_WINDOW_MS }: { windowMs?: num
       const live = buffers.filter((b) => b.length >= 2)
       if (live.length === 0) return null
       const endT = Math.min(...live.map((b) => b[b.length - 1].t))
-      const wins = live.map((b) => uniformWindow(b, endT, windowMs)).filter((w) => w !== null)
-      if (wins.length === 0) return null
-      const specs = wins.map((w) => powerSpectrum(bandpass(w.x), FS))
+      // 모든 모델이 같은 구간을 보게 공통 시작·끝을 먼저 정하고 그 구간으로 자른다.
+      // 쓸 수 있는 모델(6초 이상 이어짐)의 시작 중 가장 늦은 시각이 공통 시작이다(각자 끝-6초 이전이라 공통 구간도 6초 이상)
+      const tails = live.map((b) => usableTail(b, endT, windowMs)).filter((t) => t !== null)
+      if (tails.length === 0) return null
+      const start = Math.max(...tails.map((t) => t[0].t))
+      const end = Math.min(...tails.map((t) => t[t.length - 1].t))
+      const xs = tails.map((t) => uniformSlice(t, start, end)).filter((x) => x !== null)
+      if (xs.length === 0) return null
+      const specs = xs.map((x) => powerSpectrum(bandpass(x), FS))
       const freqs = specs[0].freqs
       let power = freqs.map(() => 0)
       for (const s of specs) {
         const p = normalized(s)
         power = power.map((v, i) => v + p[i])
       }
-      const start = Math.max(...wins.map((w) => w.start))
-      const end = Math.min(...wins.map((w) => w.end))
       let motion: number | null = null
       if (boxes && boxes.length > 1) {
         const amp = motionAmplitude(boxes.filter((b) => b.t >= start && b.t <= end))
@@ -188,7 +198,7 @@ export function createHrTracker({ windowMs = TRACK_WINDOW_MS }: { windowMs?: num
       const pick = usePrior && free.snrDb > tracked.snrDb + ESCAPE_DB ? free : tracked
       if (!Number.isFinite(pick.bpm) || !Number.isFinite(pick.snrDb)) return null
       prev = { bpm: pick.bpm, t: end }
-      return { bpm: pick.bpm, snrDb: pick.snrDb, windowStart: start, windowEnd: end, motion, models: wins.length }
+      return { bpm: pick.bpm, snrDb: pick.snrDb, windowStart: start, windowEnd: end, motion, models: xs.length }
     },
     reset() {
       prev = null

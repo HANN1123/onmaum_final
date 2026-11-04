@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { demoState, recentMedian, summarizeDemo, DEMO_MOTION_LIMIT } from '@/features/rppg/lib/demoCompare'
+import { demoState, recentMedian, recordDemo, startDemoRun, summarizeDemo, DEMO_MOTION_LIMIT, DEMO_SLOTS } from '@/features/rppg/lib/demoCompare'
 import type { TrackedHeartRate } from '@/features/rppg/lib/hrEstimator'
 
 const est = (over: Partial<TrackedHeartRate> = {}): TrackedHeartRate => ({ bpm: 80, snrDb: 3, motion: 0.003, models: 2, ...over })
@@ -48,5 +48,26 @@ describe('summarizeDemo', () => {
   })
   it('짝이 없으면 차이는 null', () => {
     expect(summarizeDemo([{ t: 1, watch: 80, rppg: null }]).meanAbsDiff).toBeNull()
+  })
+})
+
+describe('recordDemo', () => {
+  it('경과 시간으로 칸을 채우고, 타이머가 밀려 빠진 칸은 분모에 남긴다', () => {
+    const run = startDemoRun(0)
+    expect(recordDemo(run, 500, 80, 81)).toBe(false)
+    // 첫 칸 다음 콜백이 20초 뒤에 왔다: 1~19번 칸은 비어 있다
+    expect(recordDemo(run, 20_500, 80, 82)).toBe(false)
+    expect(recordDemo(run, 30_100, 80, 83)).toBe(true)
+    const r = summarizeDemo(run.slots)
+    expect(r.seconds).toBe(DEMO_SLOTS)
+    expect(r.paired).toBe(2)
+    expect(r.coverage).toBeCloseTo(2 / DEMO_SLOTS)
+  })
+
+  it('같은 칸에 두 번 들어오면 처음 값만 쓴다', () => {
+    const run = startDemoRun(1000)
+    recordDemo(run, 1100, 80, 81)
+    recordDemo(run, 1900, 80, 99)
+    expect(run.slots[0]?.rppg).toBe(81)
   })
 })

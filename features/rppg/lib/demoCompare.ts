@@ -49,6 +49,30 @@ export interface DemoPair {
   rppg: number | null
 }
 
+/** 30초 측정 진행. 1초 칸을 경과 시간으로 채운다(타이머가 밀려 빠진 칸은 null 로 남아 분모에 들어간다) */
+export interface DemoRun {
+  start: number
+  slots: (DemoPair | null)[]
+}
+
+export const DEMO_SLOTS = DEMO_MEASURE_MS / 1000
+
+export function startDemoRun(start: number): DemoRun {
+  return { start, slots: Array.from({ length: DEMO_SLOTS }, () => null) }
+}
+
+/**
+ * 지금 값을 경과 시간에 맞는 칸에 넣는다. 칸 끝을 넘긴 늦은 값은 그 칸에 넣지 않는다(지난 칸을 최신 값으로 채우지 않음).
+ * 30초가 지났으면 true 를 돌려준다.
+ */
+export function recordDemo(run: DemoRun, now: number, watch: number | null, rppg: number | null): boolean {
+  const elapsed = now - run.start
+  if (elapsed < 0) return false
+  const i = Math.floor(elapsed / 1000)
+  if (i < DEMO_SLOTS && run.slots[i] === null) run.slots[i] = { t: now, watch, rppg }
+  return elapsed >= DEMO_MEASURE_MS
+}
+
 export interface DemoResult {
   /** 1초마다 남긴 칸 수 */
   seconds: number
@@ -64,7 +88,9 @@ export interface DemoResult {
   coverage: number
 }
 
-export function summarizeDemo(pairs: readonly DemoPair[]): DemoResult {
+/** 빈 칸(null)은 rPPG·워치 모두 없는 칸으로 센다 */
+export function summarizeDemo(slots: readonly (DemoPair | null)[]): DemoResult {
+  const pairs = slots.map((p, i) => p ?? { t: i, watch: null, rppg: null })
   const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null)
   const both = pairs.filter((p): p is DemoPair & { watch: number; rppg: number } => p.watch !== null && p.rppg !== null)
   const diffs = both.map((p) => Math.abs(p.rppg - p.watch))
