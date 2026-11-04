@@ -1180,7 +1180,8 @@
   overscroll-behavior: contain;
 }
 .measureBody .right {
-  gap: clamp(8px, 1.6vh, 28px);
+  --right-gap: clamp(8px, 1.6vh, 28px);
+  gap: var(--right-gap);
 }
 .measureBody .left {
   gap: clamp(8px, 1.4vh, 20px);
@@ -1210,7 +1211,7 @@
   }
   /* 세로 배치: 카메라·파형 칸이 화면 높이의 일부만 쓰게 해서 아래 정보가 같은 화면에 들어오게 한다 */
   .measureBody > .left {
-    height: clamp(160px, 28vh, 480px);
+    height: clamp(160px, 26vh, 480px);
   }
   .measureBody .waveBox {
     height: clamp(40px, 6vh, 96px);
@@ -1233,6 +1234,9 @@
   }
   .measureBody .row {
     padding: clamp(3px, 0.6vh, 14px) 0;
+  }
+  .measureBody .right {
+    --right-gap: 6px;
   }
   .measureBody .right,
   .measureBody .left {
@@ -1383,4 +1387,26 @@
 }
 .rotateBtn:hover {
   background: rgba(var(--bg-rgb), 0.9);
+}
+
+/* 워치(기준 심박) 행: 상태 행 바로 아래에 붙여 같은 묶음처럼 보이게 한다 */
+.measureBody .watchRows {
+  margin-top: calc(-1 * var(--right-gap, 0px));
+  border-bottom: 1px solid var(--line);
+}
+.watchValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-align: right;
+}
+.watchValue > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 바로 위 상태 행 묶음의 아래 선과 겹치지 않게 워치 행의 위 선은 그리지 않는다 */
+.measureBody .watchRows .row {
+  border-top: 0;
 }

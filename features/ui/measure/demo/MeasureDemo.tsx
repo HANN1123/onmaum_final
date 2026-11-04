@@ -13,6 +13,8 @@ import { LEGAL } from './demoCopy'
 import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type CameraRotation } from '@/shared/storage/cameraRotation'
 import FaceLayer from './FaceLayer'
 import { rotatedVideoStyle } from './rotationLayout'
+import { useWatch } from './useWatch'
+import { WATCH_HINT } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
 import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
@@ -106,6 +108,8 @@ export default function MeasureDemo() {
   const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null)
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
+  // 워치 연동(기준 심박): 카메라·모델 준비와 상관없이 연결할 수 있다
+  const watch = useWatch(bpm)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
@@ -250,6 +254,25 @@ export default function MeasureDemo() {
                 ]}
               />
             </Skeleton>
+            {/* 워치 행은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 연결할 수 있게 한다 */}
+            <div className={`${styles.rows} ${styles.watchRows}`}>
+              <div className={styles.row}>
+                <span className={styles.k}>워치</span>
+                <span className={styles.watchValue}>
+                  <span role="status">{watch.text}</span>
+                  {watch.action && (
+                    <button
+                      type="button"
+                      className={`${styles.preset} ${styles.focusable}`}
+                      onClick={watch.action === 'connect' ? watch.connect : watch.disconnect}
+                      title={watch.action === 'connect' ? WATCH_HINT : undefined}
+                    >
+                      {watch.action === 'connect' ? '연결' : '끊기'}
+                    </button>
+                  )}
+                </span>
+              </div>
+            </div>
             {/* 세로 배치에서는 위쪽 메뉴의 측정 종료와 같아서 숨긴다(measureEndBottom) */}
             <div className={styles.measureEndBottom} style={{ marginTop: 'auto' }}>
               <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endMeasure}>
