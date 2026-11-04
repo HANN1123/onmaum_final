@@ -1,4 +1,5 @@
 export const LABELS = ['happy', 'calm', 'sad', 'angry']
+/** @type {Record<number, string | undefined>} 기본 정답 매핑이며 undefined는 정답 평가에서 제외한다. */
 export const TARGET = { 1: 'calm', 2: 'calm', 3: 'happy', 4: 'sad', 5: 'angry', 7: 'angry' }
 const dominant = (values) => LABELS.reduce((best, key) => values[key] > values[best] ? key : best)
 const ratio = (a, b) => b ? a / b : null
@@ -21,7 +22,7 @@ export function replay(video, candidate = null) {
       if (candidate.surpriseTo) scores[candidate.surpriseTo] += r.surprised
       for (const key of LABELS) scores[key] *= candidate.weights[key]
       const sum = Object.values(scores).reduce((a, b) => a + b, 0)
-      const normalized = sum > 0 ? Object.fromEntries(LABELS.map((key) => [key, scores[key] / sum])) : { happy: 0, calm: 1, sad: 0, angry: 0 }
+      const normalized = candidate.calibrate ? candidate.calibrate(r) : sum > 0 ? Object.fromEntries(LABELS.map((key) => [key, scores[key] / sum])) : { happy: 0, calm: 1, sad: 0, angry: 0 }
       ema = ema ? Object.fromEntries(LABELS.map((key) => [key, ema[key] + candidate.alpha * (normalized[key] - ema[key])])) : normalized
       window.push(dominant(ema))
       window = window.slice(-candidate.window)
@@ -32,13 +33,13 @@ export function replay(video, candidate = null) {
 }
 
 /** @param {Candidate | null} candidate 평가 후보 */
-export function metrics(videos, candidate = null, central = true) {
+export function metrics(videos, candidate = null, central = true, targets = TARGET) {
   const confusion = matrix()
   const source = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map((s) => [s, { frames: 0, correct: 0, predictions: Object.fromEntries([...LABELS, 'missing'].map((key) => [key, 0])) }]))
   let frames = 0, detected = 0, expressions = 0, scored = 0, correct = 0, conditionalCorrect = 0, predicted = 0, videoCorrect = 0, videoCount = 0
   for (const video of videos) {
     const votes = Object.fromEntries(LABELS.map((key) => [key, 0]))
-    const target = TARGET[video.source]
+    const target = targets[video.source]
     let eligible = 0
     for (const frame of replay(video, candidate)) {
       if (central && !(frame.t >= frame.duration * 0.2 && frame.t < frame.duration * 0.8)) continue
@@ -70,15 +71,15 @@ export function metrics(videos, candidate = null, central = true) {
   return { frames, detected, expressions, faceDetectionRate: ratio(detected, frames), expressionRate: ratio(expressions, frames),
     scored, correct, predicted, frameAccuracy: ratio(correct, scored), conditionalAccuracy: ratio(conditionalCorrect, predicted),
     videoCount, videoCorrect, videoAccuracy: ratio(videoCorrect, videoCount), byEmotion, confusion, source,
-    neutralRecall: ratio(source[1].correct, source[1].frames), calmRecall: ratio(source[2].correct, source[2].frames) }
+    neutralRecall: targets[1] ? ratio(source[1].correct, source[1].frames) : null, calmRecall: targets[2] ? ratio(source[2].correct, source[2].frames) : null }
 }
 
 /** @param {Candidate | null} candidate 평가 후보 */
-export function summarize(videos, candidate = null) {
+export function summarize(videos, candidate = null, targets = TARGET) {
   const group = (field) => Object.fromEntries([...new Set(videos.map((v) => v[field]))].sort().map((value) => [value, {
-    central: metrics(videos.filter((v) => v[field] === value), candidate), all: metrics(videos.filter((v) => v[field] === value), candidate, false),
+    central: metrics(videos.filter((v) => v[field] === value), candidate, true, targets), all: metrics(videos.filter((v) => v[field] === value), candidate, false, targets),
   }]))
-  return { central: metrics(videos, candidate), all: metrics(videos, candidate, false), byActor: group('actor'), byIntensity: group('intensity') }
+  return { central: metrics(videos, candidate, true, targets), all: metrics(videos, candidate, false, targets), byActor: group('actor'), byIntensity: group('intensity') }
 }
 
 export function candidates() {

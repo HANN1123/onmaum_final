@@ -30,7 +30,7 @@ const unique = new Map()
 if (dataRoot && !smoke) {
   for (const file of (await collect(dataRoot)).sort()) {
     const match = path.basename(file).match(/^(0[12])-01-(0[1-8])-(0[12])-(0[12])-(0[12])-(\d{2})\.mp4$/i)
-    if (!match || !(await stat(file)).size) continue
+    if (!match || Number(match[6]) < 1 || Number(match[6]) > 8 || !(await stat(file)).size) continue
     const key = path.basename(file).slice(3)
     unique.set(key, { file, id: path.basename(file), source: Number(match[2]), intensity: Number(match[3]), actor: match[6] })
   }
@@ -166,6 +166,7 @@ try {
     console.log(`합성 영상 검증 통과: ${result.frames.length}프레임, 얼굴 없음`)
   } else {
     const records = []
+    const cacheStats = { reused: 0, inferred: 0 }
     await mkdir(path.join(output, cacheDirectory), { recursive: true })
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     const framesPath = path.join(output, `frames-${stamp}.jsonl`)
@@ -178,15 +179,16 @@ try {
         if (!fresh && cached.fingerprint === fingerprint) result = cached.result
       } catch { /* 캐시가 없으면 원본 영상을 추론한다. */ }
       if (!result) {
+        cacheStats.inferred++
         result = await evaluate(`window.evaluateVideo('/video/${index}')`)
         await writeFile(cachePath, JSON.stringify({ fingerprint, result }))
-      }
+      } else cacheStats.reused++
       const record = { ...video, ...result }
       records.push(record)
       await appendFile(framesPath, result.frames.map((frame) => JSON.stringify({ video: video.id, actor: video.actor, source: video.source, intensity: video.intensity, ...frame })).join('\n') + '\n')
       console.log(`${index + 1}/${videos.length}: ${video.id}, ${result.frames.length}프레임`)
     }
-    const report = { framesPath, inventory, chromeVersion, baseline: summarize(records), validation: crossValidate(records) }
+    const report = { framesPath, inventory, chromeVersion, cacheStats, baseline: summarize(records), validation: crossValidate(records) }
     await writeFile(path.join(output, `summary-${stamp}.json`), JSON.stringify(report, null, 2))
     console.log(JSON.stringify(report, null, 2))
   }

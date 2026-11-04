@@ -1,0 +1,36 @@
+import { readFile, writeFile } from 'node:fs/promises'
+import { LABELS } from './metrics.mjs'
+
+const input = process.argv[2]
+const r = JSON.parse(await readFile(input, 'utf8'))
+const pct = (x) => x == null ? '산출 불가' : `${(100 * x).toFixed(2)}%`
+const table = (headers, rows) => `| ${headers.join(' | ')} |\n| ${headers.map(() => '---').join(' | ')} |\n${rows.map((row) => `| ${row.join(' | ')} |`).join('\n')}\n`
+const parts = ['central', 'all']
+const partName = (part) => part === 'central' ? '가운데 60%' : '전체'
+const overview = (summaries) => table(['방법', '구간', '전체 프레임', '정답 프레임', '프레임 정확도', '조건부 정확도', '영상 다수결', '얼굴 검출률', '표정 산출률', 'neutral 재현율', 'calm 재현율'], Object.entries(summaries).flatMap(([name, summary]) => parts.map((part) => {
+  const m = summary[part]
+  return [name, partName(part), m.frames, m.scored, pct(m.frameAccuracy), pct(m.conditionalAccuracy), `${m.videoCorrect}/${m.videoCount} (${pct(m.videoAccuracy)})`, pct(m.faceDetectionRate), pct(m.expressionRate), pct(m.neutralRecall), pct(m.calmRecall)]
+})))
+const breakdown = (groups) => table(['분류', '구간', '정답 프레임', '정확도', '영상 다수결', 'neutral', 'calm', '얼굴 검출률'], Object.entries(groups).flatMap(([key, summary]) => parts.map((part) => {
+  const m = summary[part]
+  return [key, partName(part), m.scored, pct(m.frameAccuracy), pct(m.videoAccuracy), pct(m.neutralRecall), pct(m.calmRecall), pct(m.faceDetectionRate)]
+})))
+const details = (summary) => `감정별 지표:\n\n${table(['감정', '구간', '정답 프레임', '재현율', '정밀도'], LABELS.flatMap((label) => parts.map((part) => {
+  const m = summary[part].byEmotion[label]
+  return [label, partName(part), m.support, pct(m.recall), pct(m.precision)]
+})))}\n${parts.map((part) => `혼동 행렬 (${partName(part)}):\n\n${table(['정답 / 예측', ...LABELS, '미판정'], LABELS.map((label) => [label, ...[...LABELS, 'missing'].map((p) => summary[part].confusion[label][p])]))}`).join('\n')}\n배우별:\n\n${breakdown(summary.byActor)}\n강도별 (1=보통, 2=강함):\n\n${breakdown(summary.byIntensity)}`
+const folds = (validation) => table(['보류 배우', '학습 배우', '학습 표본', '기존 정확도', '보정 정확도', '기존 neutral', '보정 neutral', '기존 calm', '보정 calm'], validation.folds.map((f) => [f.actor, f.model.trainingActors.join(', '), f.model.samples, pct(f.baseline.frameAccuracy), pct(f.tuned.frameAccuracy), pct(f.baseline.neutralRecall), pct(f.tuned.neutralRecall), pct(f.baseline.calmRecall), pct(f.tuned.calmRecall)]))
+const names = { logistic: '다항 로지스틱 회귀', bias: '클래스별 바이어스' }
+const actors = [...new Set(r.inventory.videos.map((v) => v.actor))].sort()
+let report = `## 2차 평가: 배우 확대 확인과 학습 보정 시험\n\n1차 기록은 위에 보존했다. 이번 결과는 별도 실행 \`${input}\` 및 원본 추론 목록 \`${r.input}\`에 근거한다. 배우 ${actors.join('·')} (${actors.length}명), ${r.inventory.videos.length}개 영상이다. 시작 때는 배우 01·03·04만 풀려 있었으며 인계 전 새로 풀린 배우를 추가 실행한 최종 목록이다. 폴더가 없는 배우의 ZIP은 사용하지 않았다.\n\n변경 범위는 분석 스크립트·지표 테스트·본 보고서다. 공용 설정·공개 시그니처·EmotionResult·카메라·rPPG·UI·모델 자산·런타임 알고리즘은 변경하지 않았다. 의존성 추가, 데이터 삭제, 영상 추가, 커밋·push·브랜치 전환도 수행하지 않았다.\n\n### 2차 기본 성능과 1차 비교\n\n기본 정답 매핑, 4fps 표본, EMA α=0.4, 미판정 오답 포함, 가운데 60% 정의는 1차와 동일하다. 기존 확률 캐시를 해시·파일 크기로 검증해 재사용했다. 최초 2차 실행에서 캐시 136개를 재사용하고 배우 04의 뒤늦게 풀린 MM=02 우선본 44개만 추가 추론했다. 1차는 MM=01 44개·MM=02 136개였으며 최초 2차 실행은 모두 MM=02다. 동일 3명에서 가운데 정확도는 71.79%로 같고 전체는 68.70% (1420/2067)→68.75% (1421/2067)였다. 이 차이는 대체 영상의 픽셀·디코딩 차이를 포함할 수 있어 알고리즘 개선으로 해석하지 않는다. 추가 배우를 포함한 최종 가운데 정확도는 1차 71.79%→${pct(r.baseline.central.frameAccuracy)}, 전체 68.70%→${pct(r.baseline.all.frameAccuracy)}다. 배우 구성 변화도 포함하므로 같은 표본의 개선폭이 아니다. 최종 실행은 캐시 ${r.cacheStats?.reused}개 재사용·${r.cacheStats?.inferred}개 추가 추론이다.\n\n${overview({ 기존: r.baseline })}\n${details(r.baseline)}\n원본 감정별 재현율과 정답 밖 판정 분포:\n\n${table(['원본 감정 번호', '구간', '전체 프레임', '정답 수', '정답 재현율', ...LABELS, '미판정'], [1, 2, 3, 4, 5, 6, 7, 8].flatMap((key) => parts.map((part) => {
+  const s = r.baseline[part].source[key]
+  return [key, partName(part), s.frames, [6, 8].includes(key) ? '정답 제외' : s.correct, [6, 8].includes(key) ? '정답 제외' : pct(s.correct / s.frames), ...[...LABELS, 'missing'].map((p) => `${s.predictions[p]} (${pct(s.predictions[p] / s.frames)})`)]
+})))}\n### 학습 보정 방법\n\n두 후보의 설정을 고정한 뒤 배우 한 명 전체를 보류하는 교차검증을 수행했다. 학습 표본은 나머지 배우의 가운데 60% 중 raw와 정답이 있는 프레임이다. 프레임에 같은 가중치를 주며 클래스 균형 재가중은 하지 않았다. fearful·surprised 영상은 학습 정답에서 제외하지만 두 raw 확률은 다항 회귀 입력에 포함한다. 별도 후보 탐색 없이 각 fold에서 계수를 처음부터 학습했다.\n\n- 다항 회귀: raw 7종 확률을 입력으로 4종 softmax 출력, 가중치 28개와 절편 4개. 목적함수는 평균 교차 엔트로피 + 0.01/2 × 가중치 제곱합이며 절편은 규제하지 않는다.\n- 바이어스: 기존 4종 정규화 확률(happy, neutral, sad, angry+disgusted)의 로그에 절편 4개만 더해 softmax. 로그 하한 1e-7, 절편 규제 없음. 합계가 0이면 기존과 같이 calm 확률 1을 사용한다.\n- 순수 JS 전체 배치 경사하강, 0 초기화, 학습률 0.3, 1,000회. 보정 후 전체 영상 시간순 EMA α=0.4를 재생하며 영상별 초기화·3회 연속 미검출 초기화를 유지한다. 가운데 구간 이전 이력도 유지한다. 설정·가중치·학습 배우·표본 수·학습 손실은 로컬 JSON에 보존한다.\n\n### 보류 교차검증 결과와 채택 판단\n\n${overview({ 기존: r.baseline, '1차 방식 후보 선택': r.legacy.tuned, ...Object.fromEntries(Object.entries(r.calibration).map(([kind, v]) => [names[kind], v.tuned])) })}\n${table(['후보', '가운데 정확도 개선폭', '배우별 비감소 조건', '채택'], Object.entries(r.calibration).map(([kind, v]) => [names[kind], `${(v.delta * 100).toFixed(2)}%p`, v.consistent ? '통과' : '실패', v.evidenceSupportsChange ? '통과' : '기각']))}\n기준은 1차와 동일하게 보류 가운데 정확도 +2%p 이상이며, 모든 보류 배우에서 정확도·neutral·calm 재현율이 비감소해야 한다. 합산 정확도만 상승해도 배우별 조건이 깨지면 기각한다.\n\n`
+for (const [kind, v] of Object.entries(r.calibration)) report += `#### ${names[kind]}\n\n${folds(v)}\n${details(v.tuned)}\n`
+report += `### 정답 매핑 민감도\n\nEE=02 calm 연기를 정답에서만 제외하고 EE=01 neutral만 앱 calm 정답으로 삼았다. happy·sad·angry·disgust 매핑은 그대로다. EE=02 영상은 검출률과 원본 판정 분포에 유지되지만 프레임·영상 정확도 및 정밀도의 정답 분모에서는 제외된다. calm 연기 재현율은 산출 불가다. 두 학습 후보도 같은 민감도 매핑으로 학습 배우만 사용해 다시 학습했다. 이 결과는 기본 매핑의 채택 판단에 섞지 않는다.\n\n${overview({ '기본 매핑 기존': r.baseline, 'neutral만 calm 기존': r.sensitivity.baseline, ...Object.fromEntries(Object.entries(r.sensitivity.calibration).map(([kind, v]) => [`neutral만 calm ${names[kind]}`, v.tuned])) })}\n${details(r.sensitivity.baseline)}\n`
+for (const [kind, v] of Object.entries(r.sensitivity.calibration)) report += `민감도 ${names[kind]} 보류 결과:\n\n${folds(v)}\n`
+report += `의견: 앱의 현재 구현은 raw.neutral을 calm으로 매핑하므로, 무표정에 가까운 평온을 평가하는 데는 neutral만 calm 정답으로 삼는 매핑이 더 가깝다. [RAVDESS 공식 설명](https://zenodo.org/records/1188976)은 calm을 보통·강함 두 강도로 연기한 감정으로 두고 neutral은 별도 추가 조건으로 구분한다. 앱 의미와 더 가깝다는 판단은 이 구분과 현재 구현에 따른 해석이며 심리 상태의 동등성을 증명하지 않는다. 정확도가 오른 것은 어려운 calm 정답 표본을 제외해 분모가 바뀐 결과이므로 모델 개선으로 해석할 수 없다. 정답 표본 수도 줄어든다. 기본 매핑은 1차 비교를 위해 유지하고 neutral 중심 결과를 의미 적합성 보조 지표로 함께 보고하는 편이 타당하다. 실제 휴식 얼굴·발화·자연 표정의 별도 동의 데이터 검증이 필요하다.\n\n### 2차 결론과 재현\n\n채택 여부는 위 후보별 합산 개선폭과 배우별 재현율 표를 함께 기준으로 판단한다. 두 보정 모두 배우별 조건을 통과하지 못해 배포하지 않으며 features/algorithm/emotion/**는 수정하지 않았다. 배우 수가 적어 일반화 근거는 제한적이며 추가 배우가 풀리면 같은 명령으로 캐시를 재사용해 확장할 수 있다.\n\n\`\`\`powershell\nnode scripts/analysis/emotion-ravdess/run.mjs '<RAVDESS 루트>'\nnode scripts/analysis/emotion-ravdess/round2.mjs '.eval/summary-<시각>.json'\nnode scripts/analysis/emotion-ravdess/round2-report.mjs '.eval/round2-<시각>.json'\nnpx.cmd vitest run tests/algorithm\nnpx.cmd tsc --noEmit\nnpm.cmd run check\ngit diff --check\n\`\`\`\n\n2차 검사 결과는 아래에 기록한다.\n`
+const destination = 'docs/analysis/EMOTION_RAVDESS_EVAL.md'
+const previous = await readFile(destination, 'utf8')
+await writeFile(destination, previous.split('\n## 2차 평가:')[0].trimEnd() + '\n\n' + report)
+console.log(`2차 보고서 갱신: ${destination}`)
