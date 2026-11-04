@@ -17,13 +17,13 @@ import { useFaceTrack } from './useFaceTrack'
 /**
  * 오브 후보 비교. 같은 맥박으로 움직이고, 감정에 따라 색이 바뀐다.
  * 감정은 카메라가 읽은 값을 따르고, 버튼을 누르면 그 감정으로 고정해 볼 수 있다.
- * 맥박은 측정 화면과 같은 심박 원천을 쓴다. rPPG 연결 전에는 두근거리지 않는다.
+ * 맥박은 측정 화면과 같은 심박 원천(ME-rPPG)을 쓴다. 품질 게이트를 넘기 전에는 두근거리지 않는다.
  */
 export default function OrbLab() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const webcam = useWebcam(videoRef, true)
   const face = useFaceTrack(videoRef, webcam === 'ready')
-  const { bpm, getPulse } = useHeartRateSource()
+  const { bpm, getPulse } = useHeartRateSource(videoRef, webcam === 'ready')
   const [manual, setManual] = useState<Emotion | null>(null)
   const [theme, toggleTheme] = useDemoTheme()
   const emotion: Emotion = manual ?? face.emotion ?? 'calm'

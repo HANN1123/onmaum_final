@@ -50,6 +50,7 @@ import {
 } from '@/features/rppg/lib/labProtocol'
 import type { MeWorkerIn, MeWorkerOut } from '@/features/rppg/lib/meRppg.worker'
 import { useHeartRateDevice } from '@/features/rppg/hooks/useHeartRateDevice'
+import { getBlazeFace } from '@/features/rppg/engine/blazeFace'
 
 const WINDOW_MS = 10_000
 const BUFFER_MS = 12_000
@@ -158,27 +159,6 @@ function downloadText(text: string, prefix: string) {
 function rawReferenceCsv(samples: ReferenceSample[]): string {
   const lines = samples.map((s) => `${(s.t / 1000).toFixed(3)},${s.bpm},${s.contact}`)
   return ['received_s,bpm,contact', ...lines].join('\n')
-}
-
-/** BlazeFace(MediaPipe) — 메인 스레드 전용. WASM 인스턴스를 측정마다 새로 만들면 close() 후에도
- *  메모리가 반납되지 않아(시작/정지 1회당 약 20MB 증가) 페이지에서 한 번만 만들어 재사용한다. */
-let blazePromise: Promise<FaceDetector> | null = null
-function getBlazeFace(): Promise<FaceDetector> {
-  blazePromise ??= createBlazeFace().catch((err: unknown) => {
-    blazePromise = null
-    throw err
-  })
-  return blazePromise
-}
-
-async function createBlazeFace(): Promise<FaceDetector> {
-  const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
-  const vision = await FilesetResolver.forVisionTasks('/vendor/mediapipe')
-  return FaceDetector.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: '/models/blazeface/blaze_face_short_range.tflite', delegate: 'CPU' },
-    runningMode: 'VIDEO',
-    minDetectionConfidence: 0.5,
-  })
 }
 
 export function RppgLab() {
