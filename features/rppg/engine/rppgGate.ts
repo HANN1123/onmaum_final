@@ -1,4 +1,5 @@
 import type { HeartRate } from '../lib/rppg'
+import { MOTION_LIMIT } from '../lib/hrEstimator'
 
 /**
  * ME-rPPG 엔진의 상태와 품질 게이트(순수 함수). 화면은 이 결과만 보고 심박을 보여줄지 정한다.
@@ -11,6 +12,8 @@ import type { HeartRate } from '../lib/rppg'
  *   10/31 실측에서 시작 직후 약 10초 동안 모델이 134~139 BPM(워치 81)을 냈고 그중 일부가 SNR 기준을 넘었다.
  *   같은 기록으로 비교하면 12초 보류 시 표시 비율 73% → 70%, MAE 4.04 → 2.40 BPM, 최대 오차 53 → 10 BPM.
  *   1명·2분 기록이므로 실측으로 다시 확인할 잠정값이다. 중앙값 다듬기는 같은 비교에서 효과가 없어(4.04 → 4.67) 넣지 않았다.
+ * - 움직임(2026-11-04): 추정 창 동안 얼굴 상자가 맥박 대역에서 MOTION_LIMIT(얼굴 너비의 2%) 넘게 흔들리면 숫자를 숨긴다.
+ *   합성 끄덕임(66 BPM) 시험에서 모델이 맥박 대신 끄덕임 주기를 내면서도 SNR 이 기준을 넘었다(SNR 로는 못 거른다).
  */
 
 export type RppgStatus =
@@ -24,6 +27,8 @@ export type RppgStatus =
   | 'warming'
   /** 추정은 됐지만 신호 품질(SNR)이 기준 미달 */
   | 'lowSignal'
+  /** 얼굴이 맥박 대역에서 크게 흔들림(말하기·움직임). 숫자를 숨긴다 */
+  | 'motion'
   /** 기준을 넘은 심박 */
   | 'live'
   /** 모델·worker 오류 */
@@ -64,10 +69,12 @@ export interface GateInput {
   /** 이번 시작(또는 마지막 초기화) 뒤 첫 추정이 나온 시각(ms, now 와 같은 시계). 아직 없으면 null */
   firstEstimateAt: number | null
   minSnrDb: number
+  /** 추정 창의 얼굴 흔들림(얼굴 너비 대비). 없으면 판단하지 않는다 */
+  motion?: number | null
 }
 
 export function gateReading(input: GateInput): RppgReading {
-  const { engine, face, outputs, lastFrameT, now, estimate, firstEstimateAt, minSnrDb } = input
+  const { engine, face, outputs, lastFrameT, now, estimate, firstEstimateAt, minSnrDb, motion = null } = input
   const ageMs = lastFrameT === null ? null : Math.max(0, now - lastFrameT)
   const snrDb = estimate ? estimate.snrDb : null
   if (engine === 'error') return { status: 'error', bpm: null, snrDb: null, ageMs }
@@ -76,6 +83,7 @@ export function gateReading(input: GateInput): RppgReading {
   const fresh = ageMs !== null && ageMs < STALE_MS
   if (outputs <= ME_WARMUP || !fresh || !estimate) return { status: 'warming', bpm: null, snrDb, ageMs }
   if (firstEstimateAt === null || now - firstEstimateAt < SETTLE_MS) return { status: 'warming', bpm: null, snrDb, ageMs }
+  if (motion !== null && motion > MOTION_LIMIT) return { status: 'motion', bpm: null, snrDb, ageMs }
   if (!(estimate.snrDb >= minSnrDb)) return { status: 'lowSignal', bpm: null, snrDb, ageMs }
   return { status: 'live', bpm: estimate.bpm, snrDb, ageMs }
 }
@@ -87,6 +95,7 @@ export const RPPG_STATUS_TEXT: Record<RppgStatus, string> = {
   noFace: '얼굴 찾는 중',
   warming: '신호 모으는 중',
   lowSignal: '신호 약함',
+  motion: '움직임 감지',
   live: '측정 중',
   error: '오류',
 }

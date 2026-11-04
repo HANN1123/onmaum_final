@@ -164,11 +164,16 @@ function detrendLinear(x: number[]): number[] {
   return x.map((v, k) => v - xMean - slope * (k - tMean))
 }
 
-/** Hann 창 + 1 BPM 격자 DFT로 맥박 대역의 피크와 SNR을 구한다. */
-export function spectralPeak(x: number[], fs: number): HeartRate {
+/** 1 BPM 격자 파워 스펙트럼(0.7~4Hz). freqs 는 Hz */
+export interface Spectrum {
+  freqs: number[]
+  power: number[]
+}
+
+/** Hann 창 + 1 BPM 격자 DFT 파워 스펙트럼. 맥박 대역(0.7~3Hz)과 SNR 계산용 2차 고조파(~4Hz)까지 */
+export function powerSpectrum(x: number[], fs: number): Spectrum {
   const n = x.length
   const y = detrendLinear(x).map((v, k) => v * (0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (n - 1))))
-
   const freqs: number[] = []
   const power: number[] = []
   for (let i = 0; ; i++) {
@@ -184,10 +189,27 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
     freqs.push(f)
     power.push(re * re + im * im)
   }
+  return { freqs, power }
+}
 
+export interface PeakOptions {
+  /** 직전 심박(BPM). 주면 그 근처 피크를 가우시안 가중으로 우선한다 */
+  priorBpm?: number | null
+  /** 가우시안 폭(BPM) */
+  priorSigmaBpm?: number
+}
+
+/**
+ * 스펙트럼에서 맥박 피크와 SNR을 구한다. SNR = (피크 ±0.1Hz + 2차 고조파 ±0.2Hz) / 나머지(0.7~4Hz).
+ * priorBpm 이 있으면 피크 선택에만 가중을 쓰고, 보간·SNR 은 원래 파워로 계산한다.
+ */
+export function spectrumPeak({ freqs, power }: Spectrum, opts: PeakOptions = {}): HeartRate {
+  const prior = opts.priorBpm ?? null
+  const sigmaHz = (opts.priorSigmaBpm ?? 9) / 60
+  const weight = (f: number) => (prior === null ? 1 : Math.exp(-((f - prior / 60) ** 2) / (2 * sigmaHz ** 2)))
   let peak = 0
   for (let i = 1; i < freqs.length && freqs[i] <= HR_MAX_HZ + 1e-9; i++) {
-    if (power[i] > power[peak]) peak = i
+    if (power[i] * weight(freqs[i]) > power[peak] * weight(freqs[peak])) peak = i
   }
   let f0 = freqs[peak]
   if (peak > 0 && peak < freqs.length - 1) {
@@ -195,7 +217,10 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
     const b = power[peak]
     const c = power[peak + 1]
     const den = a - 2 * b + c
-    if (den !== 0) f0 += (0.5 * (a - c) / den) * STEP_HZ
+    if (den !== 0) {
+      const d = (0.5 * (a - c)) / den
+      if (Math.abs(d) <= 1) f0 += d * STEP_HZ
+    }
   }
 
   let sig = 0
@@ -208,6 +233,11 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
   const snrDb = noise > 0 && sig > 0 ? 10 * Math.log10(sig / noise) : -Infinity
 
   return { bpm: f0 * 60, snrDb }
+}
+
+/** Hann 창 + 1 BPM 격자 DFT로 맥박 대역의 피크와 SNR을 구한다. */
+export function spectralPeak(x: number[], fs: number): HeartRate {
+  return spectrumPeak(powerSpectrum(x, fs))
 }
 
 /** 피부 평균 RGB 시계열(최소 6초)에서 심박을 추정한다. */
