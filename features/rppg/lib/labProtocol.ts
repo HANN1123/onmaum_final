@@ -31,7 +31,7 @@ export function dueSlots(evaluation: Evaluation, now: number): number[] {
   return due
 }
 
-const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me', 'fp']
+const ESTIMATORS: RoiSet[] = ['forehead', 'all', 'me', 'fp', 'fx']
 
 export interface SlotInput {
   evaluation: Evaluation
@@ -40,14 +40,16 @@ export interface SlotInput {
   now: number
   /** 측정 시작 기준 시각 */
   startedAt: number
-  /** FacePhys 는 켰을 때만 넣는다. 키가 없으면 그 추정기는 이 슬롯의 비교·이유에서 빠진다 */
-  estimates: Record<Exclude<RoiSet, 'fp'>, HeartRate | null> & { fp?: HeartRate | null }
+  /** FacePhys·튜닝 추정(fx)은 켰을 때만 넣는다. 키가 없으면 그 추정기는 이 슬롯의 비교·이유에서 빠진다 */
+  estimates: Record<Exclude<RoiSet, 'fp' | 'fx'>, HeartRate | null> & { fp?: HeartRate | null; fx?: HeartRate | null }
   reference: ReferenceValue | null
   fps: number
   meOutFps: number
   meDropped: number
   fpOutFps?: number
   fpDropped?: number
+  /** 튜닝 추정의 움직임 진폭(얼굴 너비 대비) */
+  fxMotion?: number | null
 }
 
 /** 창이 평가 구간 안에 있고 슬롯 시각·기준값 구간에 맞는 추정만 비교한다. 아니면 그 이유를 돌려준다 */
@@ -97,6 +99,7 @@ export function slotRow(input: SlotInput): LabRow {
     meDropped: input.meDropped,
     ...(input.fpOutFps !== undefined ? { fpOutFps: input.fpOutFps } : {}),
     ...(input.fpDropped !== undefined ? { fpDropped: input.fpDropped } : {}),
+    ...(input.fxMotion !== undefined ? { fxMotion: late ? null : input.fxMotion } : {}),
     ...aligned,
   }
 }
@@ -123,6 +126,7 @@ export function abortedRows(evaluation: Evaluation, startedAt: number): LabRow[]
       all: null,
       me: null,
       fp: null,
+      fx: null,
     })
   }
   return rows
@@ -160,6 +164,8 @@ export function rowsToCsv(rows: LabRow[]): string {
     'me_out_fps,me_dropped,fps',
     // FacePhys 열은 기존 열 순서를 바꾸지 않게 맨 뒤에 붙인다
     'fp_bpm,fp_snr_db,fp_win_start_s,fp_win_end_s,fp_age_s,fp_out_fps,fp_dropped',
+    // 튜닝 추정 열도 맨 뒤에 붙인다
+    'fx_bpm,fx_snr_db,fx_win_start_s,fx_win_end_s,fx_age_s,fx_motion',
   ].join(',')
   const lines = rows.map((r) =>
     [
@@ -183,6 +189,8 @@ export function rowsToCsv(rows: LabRow[]): string {
       ...estimateColumns(r, 'fp'),
       csvNumber(r.fpOutFps, 1),
       r.fpDropped ?? '',
+      ...estimateColumns(r, 'fx'),
+      csvNumber(r.fxMotion, 4),
     ].join(','),
   )
   return [head, ...lines].join('\n')

@@ -281,3 +281,28 @@ describe('FacePhys 비교 열', () => {
     expect(s.fp.mae).toBeCloseTo(3)
   })
 })
+
+describe('튜닝 추정(fx) 비교 열', () => {
+  it('튜닝 추정과 움직임 진폭이 CSV 맨 뒤에 붙고 저장·복원을 거쳐도 유지된다', () => {
+    const base = input()
+    const row = slotRow(input({ estimates: { ...base.estimates, fx: { ...base.estimates.me!, bpm: 73 } }, fxMotion: 0.0123 }))
+    expect(row.fx?.bpm).toBe(73)
+    const [restored] = parseLabRows(JSON.stringify([row]))
+    expect(restored.fx?.bpm).toBe(73)
+    expect(restored.fxMotion).toBeCloseTo(0.0123)
+    const [head, line] = rowsToCsv([restored]).split('\n')
+    const cols = head.split(',')
+    const cells = line.split(',')
+    expect(cols.indexOf('fp_dropped')).toBeLessThan(cols.indexOf('fx_bpm'))
+    expect(cells[cols.indexOf('fx_bpm')]).toBe('73.0')
+    expect(cells[cols.indexOf('fx_motion')]).toBe('0.0123')
+    expect(cols).toHaveLength(cells.length)
+  })
+
+  it('튜닝 추정이 없으면 이유에 fx:none 이 남고, 예전 기록에는 fx 키가 생기지 않는다', () => {
+    const base = input()
+    expect(slotRow(input({ estimates: { ...base.estimates, fx: null } })).reason).toBe('fx:none')
+    const [old] = parseLabRows(JSON.stringify([slotRow(input())]))
+    expect('fx' in old).toBe(false)
+  })
+})
