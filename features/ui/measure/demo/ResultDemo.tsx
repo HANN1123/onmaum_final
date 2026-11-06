@@ -14,7 +14,7 @@ import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
-import { peakWithEmotion, smoothBpm, summarizeSession, type DemoSession } from './sessionLog'
+import { peakWithEmotion, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
 
@@ -24,7 +24,7 @@ import { useStoredSession } from './useStoredSession'
  * 오른쪽은 이번 측정의 감정 요약, 숫자 둘, 행, 버튼. 같은 정보는 한 곳에서만 말한다.
  * 측정 화면이 넘긴 이번 측정만 보여준다. 넘겨받은 기록이 없으면 표본으로 채우지 않고 "기록 없음"을 보여준다.
  * 이번 측정에 대한 스트레스 판정은 하지 않는다(하루 판정은 리포트가 저장된 기록으로 한다).
- * 심박은 rPPG 연결 전이라 "--"이고, 연결되면 같은 자리에 실제 값이 들어간다.
+ * 심박은 선택된 원천의 기록을 쓰고, 유효한 기록이 없으면 "--"를 표시한다.
  */
 
 const MEASURE_HREF = '/demo/measure'
@@ -102,12 +102,9 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   }, [])
 
   const summary = useMemo(() => summarizeSession(session), [session])
-  const smooth = useMemo(() => smoothBpm(cleanBpmSeries(session.samples).map((s) => s.bpm)), [session])
-  // 최고 심박은 차트 선과 같은 다듬은 값에서 읽어, 카메라가 읽어 주는 숫자와 어긋나지 않게 한다.
-  const maxBpm = useMemo(() => {
-    const values = smooth.filter((v): v is number => v !== null)
-    return values.length > 0 ? Math.round(Math.max(...values)) : null
-  }, [smooth])
+  const smooth = useMemo(() => smoothBpm(cleanBpmSeries(session.samples).map((s) => s.bpm), session.samples), [session])
+  // 요약은 사후 정리한 실제 선택값을 쓰고 그래프 이동평균과 구분한다.
+  const maxBpm = summary.maxBpm
   const peak = useMemo(() => peakWithEmotion(session, summary), [summary, session])
   const pulseAtAvg = usePulseAt(summary.avgBpm ?? 60)
   const getPulse = summary.avgBpm === null ? NO_PULSE : pulseAtAvg
@@ -189,7 +186,8 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
 
         <div className={styles.rows}>
           <Row k="감정 비율" v={shareText} />
-          <Row k="심박" v={summary.avgBpm === null ? 'rPPG 연결 전' : `평균 ${summary.avgBpm} BPM`} />
+          <Row k="심박" v={summary.avgBpm === null ? '심박 기록 없음' : `평균 ${summary.avgBpm} BPM`} />
+          <Row k="심박 출처" v={sourceShareText(summary.sourceShares)} />
           <Row k="오늘" v={todayText} />
         </div>
 

@@ -16,6 +16,8 @@ import { rotatedVideoStyle } from './rotationLayout'
 import { useWatch } from './useWatch'
 import { WATCH_HINT } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
+import { selectHeartRate } from '@/features/rppg/lib/heartRateSource'
+import { useLivePulse } from './demoBits'
 import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
 import PulseCanvas from './PulseCanvas'
@@ -31,8 +33,8 @@ import { useStoredSession } from './useStoredSession'
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
  * 왼쪽은 카메라 프레임과 맥박 파형, 오른쪽은 BPM·오브·상태 행이다.
- * 카메라와 얼굴 추적·감정, 심박(ME-rPPG)은 모두 같은 카메라 영상에서 나온 실제 값이다.
- * 심박은 품질 게이트를 넘은 동안에만 숫자로 보이고, 그 밖에는 "--"와 사유(준비 중·얼굴 찾는 중·신호 모으는 중·신호 약함)를 보인다.
+ * 감정·rPPG는 같은 카메라에서 얻고, 유효한 워치가 있으면 표시 심박으로 우선한다.
+ * 워치가 없거나 끊기면 카메라 표시값을 쓰며 품질이 낮으면 참고값으로 알린다.
  * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
  * 측정 종료를 누르면 이번 측정 기록을 sessionStorage 로 넘기고 결과 화면으로 간다(저장 계층에는 저장하지 않는다).
  */
@@ -98,7 +100,18 @@ export default function MeasureDemo() {
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
   const webcam = useWebcam(videoRef, true)
   // rPPG 엔진이 매 프레임 BlazeFace 로 찾은 얼굴 상자를 감정 분석도 같이 쓴다(엔진이 돌지 않을 때만 SSD)
-  const { displayBpm: bpm, quality: rppgQuality, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
+  const { displayBpm: rppgBpm, quality: rppgQuality, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
+  const watch = useWatch(rppg.bpm)
+  // 확인 횟수를 쌓지 않는 순수 선택이므로 최초 연결·재연결·재시작 모두 새 상태로 평가한다.
+  const selected = selectHeartRate({ ...watch, rppgBpm, rppgQuality })
+  const bpm = active ? selected.bpm : null
+  const sourceLabel = selected.source === 'watch' ? '워치'
+    : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
+  const watchPulse = useLivePulse(bpm ?? 0)
+  // 수신 BPM 기반 주기 애니메이션이며 실측 파형이 아니다. 실제 rPPG 파형이 있을 때는 그것을 쓴다.
+  const orbPulse = useCallback(() => !active ? 0
+    : rppg.rawBpm !== null ? getPulse() : selected.source === 'watch' ? watchPulse() : 0,
+  [active, rppg.rawBpm, getPulse, selected.source, watchPulse])
   const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
@@ -106,11 +119,10 @@ export default function MeasureDemo() {
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
   const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
   // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
-  const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null, rppgQuality, rppg.rawBpm)
+  const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null, rppgQuality, rppg.rawBpm,
+    { latest: watch.latest, status: watch.status, rppgBpm })
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
-  // 워치 연동(기준 심박): 카메라·모델 준비와 상관없이 연결할 수 있다
-  const watch = useWatch(rppg.bpm)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
@@ -210,14 +222,15 @@ export default function MeasureDemo() {
           </div>
 
           <div className={styles.right}>
-            <Skeleton loading={!ready} id="measure-head" label="심박 준비 중">
+            <Skeleton loading={!ready && selected.source !== 'watch'} id="measure-head" label="심박 준비 중">
               <div className={styles.head}>
                 <div className={styles.bpmRow}>
                   <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
                   <span className={styles.unit}>BPM</span>
+                  {active && sourceLabel && <span className={styles.k}>{sourceLabel}</span>}
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={getPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
+                  <DotOrb getPulse={orbPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
                 </span>
               </div>
             </Skeleton>

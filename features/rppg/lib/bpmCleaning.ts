@@ -1,10 +1,12 @@
 import type { RppgQuality } from '../engine/rppgGate'
+import type { HeartRateOrigin } from './heartRateSource'
 
 /** 시간은 초 단위다. 품질 없는 이전 세션은 good으로 취급한다. */
 export interface BpmSample {
   t: number
   bpm: number | null
   quality?: RppgQuality
+  source?: HeartRateOrigin
 }
 
 function median(values: number[]): number {
@@ -12,6 +14,12 @@ function median(values: number[]): number {
   const mid = sorted.length >> 1
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
+
+/**
+ * 1초 기록에서 이 간격(초)까지는 같은 구간으로 잇는다. 타이머가 밀리거나(창 최소화·백그라운드)
+ * 반올림으로 t 가 2~3초 건너뛰는 경우까지 끊으면 그래프가 잘게 쪼개진다. 그보다 긴 공백은 끊는다.
+ */
+export const MAX_JOIN_GAP_SEC = 3
 
 export const ONLINE_BPM_OPTIONS = { windowSec: 20, deviation: 8, holdSec: 4, maxRate: 2 }
 export const SERIES_BPM_OPTIONS = { windowSec: 5, goodSigma: 4, flaggedSigma: 2.5, floorBpm: 3, gapSec: 0 }
@@ -65,6 +73,25 @@ export function nextDisplayBpm(
  * gapSec을 지정하면 제거된 짧은 구간만 보간한다. 원래 결측과 양 끝은 보완하지 않는다.
  */
 export function cleanBpmSeries<T extends BpmSample>(samples: readonly T[], options = SERIES_BPM_OPTIONS): T[] {
+  // 명시된 출처는 같은 출처의 연속 구간에서만 정리한다. 워치는 그대로 둔다.
+  // 출처 없는 기존 입력의 정리 방식과 공백 처리는 보존한다.
+  if (samples.some((s) => s.source !== undefined)) {
+    const result: T[] = []
+    let start = 0
+    while (start < samples.length) {
+      const origin = samples[start].source ?? 'rppg'
+      let end = start + 1
+      while (end < samples.length && (samples[end].source ?? 'rppg') === origin
+        && samples[end].bpm !== null && samples[end - 1].bpm !== null
+        && samples[end].t > samples[end - 1].t && samples[end].t - samples[end - 1].t <= MAX_JOIN_GAP_SEC) end++
+      const run = samples.slice(start, end)
+      result.push(...(origin === 'watch' ? run.map((s) => ({ ...s }))
+        : cleanBpmSeries(run.map((s) => { const copy = { ...s }; delete copy.source; return copy }), options)
+          .map((s, i) => ({ ...run[i], bpm: s.bpm }))))
+      start = end
+    }
+    return result
+  }
   const result = samples.map((sample) => {
     if (sample.bpm === null) return { ...sample }
     if (!Number.isFinite(sample.bpm)) return { ...sample, bpm: null }

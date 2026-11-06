@@ -19,9 +19,17 @@ describe('워치 행 상태', () => {
     expect(watchView({ ...base, status: 'connected', latest: sample(99_000) })).toMatchObject({ state: 'live', text: '81 BPM', action: 'disconnect' })
   })
 
-  it('5초 넘게 새 값이 없으면 신호 없음이고, 그때도 끊을 수 있다', () => {
+  it('실측 최대 6.06초 간격을 허용하고 8초 넘게 새 값이 없으면 신호 없음이다', () => {
+    expect(watchView({ ...base, status: 'connected', latest: sample(100_000 - 6060) }).state).toBe('live')
+    expect(watchView({ ...base, status: 'connected', latest: sample(100_000 - WATCH_STALE_MS) }).state).toBe('live')
     const v = watchView({ ...base, status: 'connected', latest: sample(100_000 - WATCH_STALE_MS - 1) })
     expect(v).toMatchObject({ state: 'stale', action: 'disconnect' })
+  })
+
+  it('미래·비유한 시각·범위 밖 심박은 정상으로 표시하지 않는다', () => {
+    for (const latest of [sample(100_001), sample(NaN), sample(99_000, 29), sample(99_000, 221), sample(99_000, NaN)]) {
+      expect(watchView({ ...base, status: 'connected', latest }).state).toBe('stale')
+    }
   })
 
   it('접촉 불량이면 값을 보이지 않고 착용 확인을 안내한다', () => {

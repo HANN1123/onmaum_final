@@ -1,16 +1,24 @@
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import type { RppgQuality } from '@/features/rppg/engine/rppgGate'
-import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
+import { cleanBpmSeries, MAX_JOIN_GAP_SEC } from '@/features/rppg/lib/bpmCleaning'
+import { bpmOrigin, type HeartRateOrigin, type WatchSample } from '@/features/rppg/lib/heartRateSource'
 
 /** 측정 중 1초마다 남기는 표본. */
 export interface TimelinePoint {
   /** 측정 시작부터 지난 초 */
   t: number
-  /** 심박(BPM). rPPG 연결 전이거나 신호를 잃으면 null */
+  /** 선택된 실제 심박. 보간 없이 기록한다. */
   bpm: number | null
-  /** 없으면 이전 형식의 좋은 값으로 취급한다 */
+  source?: HeartRateOrigin
+  /** 마지막 워치 원수신값. 만료·접촉 불량도 비교를 위해 남긴다. */
+  watchBpm?: number | null
+  watchAgeMs?: number | null
+  watchContact?: WatchSample['contact'] | null
+  /** rPPG 표시값. 워치 선택 중에도 함께 기록한다. */
+  rppgBpm?: number | null
+  /** 출처와 무관한 rPPG 품질. 없으면 이전 형식의 좋은 값으로 취급한다. */
   quality?: RppgQuality
-  /** 표시 보정 전 값. 이전 형식에는 없다 */
+  /** 출처와 무관한 rPPG 표시 보정 전 값. 이전 형식에는 없다. */
   rawBpm?: number | null
   /** 그 순간의 안정된 감정. 얼굴을 찾지 못했으면 null */
   emotion: Emotion | null
@@ -64,6 +72,8 @@ export function isSameLocalDay(a: Date, b: Date): boolean {
 }
 
 export interface SessionSummary {
+  /** 정리 후 유효 심박 표본 수 기준. 모두 없으면 양쪽 0이다. */
+  sourceShares: Record<HeartRateOrigin, number>
   /** 심박 표본 평균·최고. 심박 표본이 하나도 없으면(rPPG 연결 전) null */
   avgBpm: number | null
   maxBpm: number | null
@@ -94,13 +104,15 @@ export function summarizeSession(session: DemoSession): SessionSummary {
   let detected = 0
   let bpmSum = 0
   let bpmCount = 0
+  const sourceCounts = { watch: 0, rppg: 0 }
   let maxBpm: number | null = null
   for (const s of samples) {
     if (s.emotion) {
       seconds[s.emotion] += 1
       detected += 1
     }
-    if (s.bpm !== null) {
+    if (s.bpm !== null && Number.isFinite(s.bpm)) {
+      sourceCounts[bpmOrigin(s)!] += 1
       bpmSum += s.bpm
       bpmCount += 1
       if (maxBpm === null || s.bpm > maxBpm) maxBpm = s.bpm
@@ -112,6 +124,7 @@ export function summarizeSession(session: DemoSession): SessionSummary {
     detected > 0 ? (Object.keys(seconds) as Emotion[]).reduce((a, b) => (seconds[b] > seconds[a] ? b : a)) : null
 
   return {
+    sourceShares: { watch: bpmCount ? sourceCounts.watch / bpmCount : 0, rppg: bpmCount ? sourceCounts.rppg / bpmCount : 0 },
     avgBpm: bpmCount > 0 ? Math.round(bpmSum / bpmCount) : null,
     maxBpm,
     shares,
@@ -157,7 +170,17 @@ function findPeakWindow(samples: TimelinePoint[], durationSec: number): SessionS
  * 가운데 정렬 이동 평균. 1초 표본의 잔떨림을 걷어 선을 매끈하게 한다.
  * 심박이 빠진 자리는 이웃 값으로 메우지 않고 null 로 둔다(선이 끊긴다).
  */
-export function smoothBpm(values: (number | null)[]): (number | null)[] {
+export function smoothBpm(values: (number | null)[], samples?: readonly TimelinePoint[]): (number | null)[] {
+  // 출처 없는 포스터·소개 화면은 이전 동작을 보존한다.
+  if (samples?.some((s) => s.source !== undefined)) {
+    const result: (number | null)[] = []
+    for (const run of heartRateRuns(samples, values)) {
+      const smoothed = run.source === 'watch' ? run.indexes.map((i) => values[i])
+        : smoothBpm(run.indexes.map((i) => values[i]))
+      run.indexes.forEach((i, k) => { result[i] = smoothed[k] })
+    }
+    return values.map((_, i) => result[i] ?? null)
+  }
   const half = values.length > 60 ? 4 : 1
   return values.map((value, i) => {
     if (value === null) return null
@@ -172,6 +195,29 @@ export function smoothBpm(values: (number | null)[]): (number | null)[] {
     }
     return sum / n
   })
+}
+
+/** null 과 MAX_JOIN_GAP_SEC 넘는 시간 공백에서 끊는다. 출처 경계는 인접한 실표본 사이에서 끊는다. */
+export function heartRateRuns(points: readonly TimelinePoint[], values = points.map((p) => p.bpm)) {
+  const runs: { source: HeartRateOrigin; indexes: number[] }[] = []
+  points.forEach((point, i) => {
+    const source = bpmOrigin({ ...point, bpm: values[i] })
+    if (!source) return
+    const previous = runs.at(-1)
+    const lastIndex = previous?.indexes.at(-1)
+    if (previous && previous.source === source && lastIndex === i - 1
+      && point.t > points[lastIndex].t && point.t - points[lastIndex].t <= MAX_JOIN_GAP_SEC) previous.indexes.push(i)
+    else runs.push({ source, indexes: [i] })
+  })
+  return runs
+}
+
+export function sourceShareText(shares: SessionSummary['sourceShares']): string {
+  if (!shares.watch && !shares.rppg) return '심박 기록 없음'
+  if (!shares.watch) return '카메라'
+  if (!shares.rppg) return '워치'
+  const watch = Math.round(shares.watch * 100)
+  return `워치 ${watch}% · 카메라 ${100 - watch}%`
 }
 
 /** 강조 구간과 그 구간에서 가장 오래 머문 감정(구간의 색). 얼굴을 못 찾은 구간이면 감정은 null */

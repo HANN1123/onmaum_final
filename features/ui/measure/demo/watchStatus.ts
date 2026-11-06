@@ -1,11 +1,12 @@
 import type { HeartRateFailure } from '@/features/rppg/hooks/useHeartRateDevice'
+import { isWatchBpmValid, isWatchFresh } from '@/features/rppg/lib/heartRateSource'
+export { WATCH_STALE_MS } from '@/features/rppg/lib/heartRateSource'
 
 /**
  * 측정 화면 "워치" 행의 상태 판정(순수 함수).
- * 워치 값은 기준 심박이다. 화면의 rPPG BPM 을 대신하지 않고 이 행에서만 보인다.
- * 우선순위: 지원 안 함 → 연결 중 → (연결됨) 첫 값 대기 → 신호 없음(5초) → 접촉 불량 → 측정 중 → (연결 안 됨) 끊김·못 찾음·실패 → 연결 안 됨
+ * 유효한 워치는 큰 숫자에도 쓰며, 차이는 계속 좋은 rPPG 값 기준이다.
+ * 우선순위: 지원 안 함 → 연결 중 → 첫 값 대기 → 신호 없음(8초·유효하지 않은 값) → 접촉 불량 → 측정 중 → 연결 안 됨
  */
-export const WATCH_STALE_MS = 5_000
 
 export type WatchState =
   | 'unsupported'
@@ -45,7 +46,7 @@ export function watchView(input: WatchInput): WatchView {
   if (status === 'connecting') return { state: 'connecting', text: '연결 중…', action: null }
   if (status === 'connected') {
     if (!latest) return { state: 'waiting', text: '연결됨 · 첫 값 기다리는 중', action: 'disconnect' }
-    if (now - latest.t > WATCH_STALE_MS) return { state: 'stale', text: '신호 없음 · 워치에서 시작했는지 확인', action: 'disconnect' }
+    if (!isWatchFresh(latest, now) || !isWatchBpmValid(latest.bpm)) return { state: 'stale', text: '신호 없음 · 워치에서 시작했는지 확인', action: 'disconnect' }
     if (latest.contact === 'poor') return { state: 'poorContact', text: '연결됨 · 착용 상태 확인', action: 'disconnect' }
     const bpm = Math.round(latest.bpm)
     const diff = rppgBpm === null ? '' : ` · rPPG 차이 ${formatDiff(Math.round(rppgBpm) - bpm)}`
