@@ -328,7 +328,7 @@ function Rows({ rows }: { rows: [string, string][] }) {
       {rows.map(([k, v]) => (
         <div key={k} className={styles.row}>
           <span className={styles.k}>{k}</span>
-          <Morph>{v}</Morph>
+          <Morph className={styles.rowValue}>{v}</Morph>
         </div>
       ))}
     </div>
