@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { RppgQuality } from '@/features/rppg/engine/rppgGate'
 import { saveDemoSession, type DemoSession, type TimelinePoint } from './sessionLog'
 
 /**
@@ -7,22 +8,22 @@ import { saveDemoSession, type DemoSession, type TimelinePoint } from './session
  * 돌려주는 finish() 가 마지막 표본을 더해 기록을 sessionStorage 에 넣고 측정 한 번을 반환한다.
  * 최신 값은 ref 로 들고 있어 interval 콜백이 렌더와 무관하게 읽는다.
  */
-export function useSessionLog(active: boolean, bpm: number | null, emotion: Emotion | null): () => DemoSession {
-  const latest = useRef({ bpm, emotion })
+export function useSessionLog(active: boolean, bpm: number | null, emotion: Emotion | null, quality: RppgQuality | null = null, rawBpm?: number | null): () => DemoSession {
+  const latest = useRef({ bpm, emotion, quality: quality ?? undefined, rawBpm })
   const samples = useRef<TimelinePoint[]>([])
   const startedAt = useRef(0)
 
   useEffect(() => {
-    latest.current = { bpm, emotion }
-  }, [bpm, emotion])
+    latest.current = { bpm, emotion, quality: quality ?? undefined, rawBpm }
+  }, [bpm, emotion, quality, rawBpm])
 
   useEffect(() => {
     if (!active) return
     startedAt.current = Date.now()
-    samples.current = [{ t: 0, bpm: latest.current.bpm, emotion: latest.current.emotion }]
+    samples.current = [{ t: 0, ...latest.current }]
     const timer = setInterval(() => {
       const t = Math.round((Date.now() - startedAt.current) / 1000)
-      samples.current.push({ t, bpm: latest.current.bpm, emotion: latest.current.emotion })
+      samples.current.push({ t, ...latest.current })
     }, 1000)
     return () => clearInterval(timer)
   }, [active])
@@ -33,7 +34,7 @@ export function useSessionLog(active: boolean, bpm: number | null, emotion: Emot
     const recorded = samples.current.slice()
     // 종료 순간을 마지막 표본으로 더한다. 1초 안에 끝내도 표본이 둘이 되어 결과 화면이 이 측정을 보여준다.
     if (recorded[recorded.length - 1]?.t !== durationSec) {
-      recorded.push({ t: durationSec, bpm: latest.current.bpm, emotion: latest.current.emotion })
+      recorded.push({ t: durationSec, ...latest.current })
     }
     const session: DemoSession = { startedAt: startedAt.current, endedAt, durationSec, samples: recorded }
     saveDemoSession(session)

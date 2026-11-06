@@ -2,8 +2,8 @@ import type { HeartRate } from '../lib/rppg'
 import { MOTION_LIMIT } from '../lib/hrEstimator'
 
 /**
- * ME-rPPG 엔진의 상태와 품질 게이트(순수 함수). 화면은 이 결과만 보고 심박을 보여줄지 정한다.
- * 게이트 기준은 실험실(RppgLab)과 같다.
+ * ME-rPPG 엔진의 상태와 품질 게이트(순수 함수).
+ * 기존 bpm과 status 기준은 실험실(RppgLab)과 같다. 측정 UI는 rawBpm과 quality를 별도로 쓴다.
  * - 워밍업: 모델 출력 30개는 버린다.
  * - 신선도: 마지막 출력에 대응하는 원본 프레임 시각이 2초 이내여야 한다(응답 도착 시각이 아님).
  * - 연속성·밀도: heartRateFromBvp 가 공백 500ms 이하로 이어진 6초 이상, 평균 10fps 이상인 구간만 쓴다.
@@ -36,6 +36,10 @@ export type RppgStatus =
 
 export interface RppgReading {
   status: RppgStatus
+  /** 추정 가능한 동안 품질과 관계없이 내는 원래 심박 */
+  rawBpm: number | null
+  /** 원래 심박의 품질. 추정이 없으면 null */
+  quality: RppgQuality | null
   /** status 가 'live' 일 때만 값이 있다 */
   bpm: number | null
   /** 마지막 추정의 SNR(dB). 추정이 없으면 null */
@@ -44,6 +48,8 @@ export interface RppgReading {
   ageMs: number | null
 }
 
+export type RppgQuality = 'good' | 'settling' | 'motion' | 'lowSignal'
+
 export const ME_WARMUP = 30
 export const STALE_MS = 2_000
 /** 잠정 SNR 기준(dB). 작업 지시서 5.3 */
@@ -51,7 +57,7 @@ export const DEFAULT_MIN_SNR_DB = 0
 /** 첫 추정 뒤 표시를 보류하는 시간(ms). 잠정값 */
 export const SETTLE_MS = 12_000
 
-export const OFF_READING: RppgReading = { status: 'off', bpm: null, snrDb: null, ageMs: null }
+export const OFF_READING: RppgReading = { status: 'off', bpm: null, rawBpm: null, quality: null, snrDb: null, ageMs: null }
 
 export interface GateInput {
   /** 모델·검출기 준비 여부. 'error' 면 오류 */
@@ -77,15 +83,17 @@ export function gateReading(input: GateInput): RppgReading {
   const { engine, face, outputs, lastFrameT, now, estimate, firstEstimateAt, minSnrDb, motion = null } = input
   const ageMs = lastFrameT === null ? null : Math.max(0, now - lastFrameT)
   const snrDb = estimate ? estimate.snrDb : null
-  if (engine === 'error') return { status: 'error', bpm: null, snrDb: null, ageMs }
-  if (engine === 'loading') return { status: 'loading', bpm: null, snrDb: null, ageMs }
-  if (!face) return { status: 'noFace', bpm: null, snrDb, ageMs }
+  const empty = { bpm: null, rawBpm: null, quality: null, snrDb, ageMs }
+  if (engine === 'error') return { ...empty, status: 'error', snrDb: null }
+  if (engine === 'loading') return { ...empty, status: 'loading', snrDb: null }
+  if (!face) return { ...empty, status: 'noFace' }
   const fresh = ageMs !== null && ageMs < STALE_MS
-  if (outputs <= ME_WARMUP || !fresh || !estimate) return { status: 'warming', bpm: null, snrDb, ageMs }
-  if (firstEstimateAt === null || now - firstEstimateAt < SETTLE_MS) return { status: 'warming', bpm: null, snrDb, ageMs }
-  if (motion !== null && motion > MOTION_LIMIT) return { status: 'motion', bpm: null, snrDb, ageMs }
-  if (!(estimate.snrDb >= minSnrDb)) return { status: 'lowSignal', bpm: null, snrDb, ageMs }
-  return { status: 'live', bpm: estimate.bpm, snrDb, ageMs }
+  if (outputs <= ME_WARMUP || !fresh || !estimate) return { ...empty, status: 'warming' }
+  const raw = { ...empty, rawBpm: estimate.bpm }
+  if (firstEstimateAt === null || now - firstEstimateAt < SETTLE_MS) return { ...raw, status: 'warming', quality: 'settling' }
+  if (motion !== null && motion > MOTION_LIMIT) return { ...raw, status: 'motion', quality: 'motion' }
+  if (!(estimate.snrDb >= minSnrDb)) return { ...raw, status: 'lowSignal', quality: 'lowSignal' }
+  return { ...raw, status: 'live', bpm: estimate.bpm, quality: 'good' }
 }
 
 /** 화면에 쓰는 짧은 상태 글 */

@@ -1,4 +1,6 @@
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { RppgQuality } from '@/features/rppg/engine/rppgGate'
+import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 
 /** 측정 중 1초마다 남기는 표본. */
 export interface TimelinePoint {
@@ -6,6 +8,10 @@ export interface TimelinePoint {
   t: number
   /** 심박(BPM). rPPG 연결 전이거나 신호를 잃으면 null */
   bpm: number | null
+  /** 없으면 이전 형식의 좋은 값으로 취급한다 */
+  quality?: RppgQuality
+  /** 표시 보정 전 값. 이전 형식에는 없다 */
+  rawBpm?: number | null
   /** 그 순간의 안정된 감정. 얼굴을 찾지 못했으면 null */
   emotion: Emotion | null
 }
@@ -82,7 +88,8 @@ const MIN_PEAK_SESSION_SEC = 20
  * 스트레스 판정이나 기준선 비교는 하지 않는다(판정은 algorithm/baseline 이 저장된 기록으로 한다).
  */
 export function summarizeSession(session: DemoSession): SessionSummary {
-  const { samples, durationSec } = session
+  const { durationSec } = session
+  const samples = cleanBpmSeries(session.samples)
   const seconds: Record<Emotion, number> = { happy: 0, calm: 0, sad: 0, angry: 0 }
   let detected = 0
   let bpmSum = 0

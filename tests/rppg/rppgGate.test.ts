@@ -14,6 +14,18 @@ const base: GateInput = {
 }
 
 describe('rPPG 품질 게이트', () => {
+  it('안정화·움직임·약한 신호에도 원래 추정과 품질을 제공하며 기존 bpm은 숨긴다', () => {
+    expect(gateReading(base)).toMatchObject({ rawBpm: 72, quality: 'good', bpm: 72 })
+    expect(gateReading({ ...base, firstEstimateAt: NOW })).toMatchObject({ rawBpm: 72, quality: 'settling', bpm: null })
+    expect(gateReading({ ...base, motion: 0.04 })).toMatchObject({ rawBpm: 72, quality: 'motion', bpm: null })
+    expect(gateReading({ ...base, minSnrDb: 5 })).toMatchObject({ rawBpm: 72, quality: 'lowSignal', bpm: null })
+  })
+
+  it('추정할 수 없으면 원래 심박과 품질도 비운다', () => {
+    for (const input of [{ ...base, face: false }, { ...base, outputs: ME_WARMUP }, { ...base, estimate: null }, { ...base, lastFrameT: NOW - STALE_MS }, { ...base, engine: 'error' as const }, { ...base, engine: 'loading' as const }]) {
+      expect(gateReading(input)).toMatchObject({ rawBpm: null, quality: null })
+    }
+  })
   it('모든 기준을 넘으면 심박을 보여준다', () => {
     expect(gateReading(base)).toMatchObject({ status: 'live', bpm: 72, snrDb: 3 })
   })

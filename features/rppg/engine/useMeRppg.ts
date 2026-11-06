@@ -5,11 +5,12 @@ import type { FaceDetector } from '@mediapipe/tasks-vision'
 import { createFrameClock, MAX_SAMPLE_GAP_MS } from '../lib/rppg'
 import { createHrTracker, type BoxSample } from '../lib/hrEstimator'
 import { createMotionSmoother } from '../lib/motionSmoothing'
+import { initialDisplayBpmState, nextDisplayBpm } from '../lib/bpmCleaning'
 import { clampCrop, createKalman1D, expandFaceBox, rgbaToModelInput, type Kalman1D } from '../lib/meRppg'
 import type { MeWorkerIn, MeWorkerOut } from '../lib/meRppg.worker'
 import type { CameraRotation } from '@/shared/storage/cameraRotation'
 import { getBlazeFace } from './blazeFace'
-import { DEFAULT_MIN_SNR_DB, gateReading, OFF_READING, pulseLevel, type RppgReading } from './rppgGate'
+import { DEFAULT_MIN_SNR_DB, gateReading, OFF_READING, pulseLevel, STALE_MS, type RppgReading } from './rppgGate'
 
 /** 워커에 쌓인 프레임이 이만큼이면 새 프레임은 건너뛴다(실험실과 같음) */
 const ME_MAX_IN_FLIGHT = 5
@@ -43,10 +44,10 @@ interface Options {
  * 측정 화면용 ME-rPPG 엔진. 실험실(RppgLab)의 ME-rPPG 경로를 그대로 옮겼다.
  *   BlazeFace(매 프레임) 얼굴 박스 → 칼만 → 높이 1.2배·위로 20% → 36×36 → 워커에서 ONNX 추론 → 맥박 파형 → BPM
  * BPM 은 hrEstimator(대역 통과·얼굴 흔들림 주파수 제거·직전 값 추적)로 낸다(2026-11-04, MCD-rPPG 60개 영상에서
- * 평균 오차 2.73 → 2.26 BPM). 흔들림이 크면 게이트가 '움직임 감지'로 숫자를 숨긴다.
+ * 평균 오차 2.73 → 2.26 BPM). 흔들림이 크면 참고값 품질을 붙이고 표시값을 인과적으로 다듬는다.
  * 같은 video 요소에서 감정 분석(face-api)이 따로 돌아도 된다. 영상·프레임·파형은 저장하거나 밖으로 보내지 않는다.
  * enabled 가 false 이면 아무것도 하지 않고 OFF 를 돌려준다.
- * getPulse 는 게이트를 통과한 동안에만 실제 파형을 0~1 로 돌려주고, 그 밖에는 0(평평한 선)이다.
+ * getPulse 는 원래 추정이 있는 동안 실제 파형을 0~1 로 돌려준다.
  */
 export function useMeRppg(
   videoRef: RefObject<HTMLVideoElement | null>,
@@ -54,6 +55,7 @@ export function useMeRppg(
   { minSnrDb = DEFAULT_MIN_SNR_DB, rotation = 0 }: Options = {},
 ): {
   reading: RppgReading
+  displayBpm: number | null
   getPulse: () => number
   /** 마지막 프레임의 얼굴. 엔진이 돌지 않으면 inactive */
   getFace: () => EngineFace
@@ -61,6 +63,7 @@ export function useMeRppg(
   getFaceRate: () => number | null
 } {
   const [reading, setReading] = useState<RppgReading>(OFF_READING)
+  const [displayBpm, setDisplayBpm] = useState<number | null>(null)
   const [restartCount, setRestartCount] = useState(0)
   const engineErrorRef = useRef(false)
   const bufferRef = useRef<{ t: number; v: number }[]>([])
@@ -108,6 +111,7 @@ export function useMeRppg(
     const boxes: BoxSample[] = []
     const motionSmoother = createMotionSmoother()
     const tracker = createHrTracker()
+    let displayState = initialDisplayBpmState()
     liveRef.current = false
 
     let appliedRotation = rotationRef.current
@@ -146,7 +150,8 @@ export function useMeRppg(
       faceRef.current = { status: 'inactive' }
       faceHitsRef.current = []
       liveRef.current = false
-      setReading({ status: 'error', bpm: null, snrDb: null, ageMs: null })
+      setReading({ ...OFF_READING, status: 'error' })
+      setDisplayBpm(null)
       worker?.terminate()
       worker = null
       workerReady = false
@@ -164,6 +169,10 @@ export function useMeRppg(
       hits.length = 0
       boxes.length = 0
       tracker.reset()
+      displayState = initialDisplayBpmState()
+      liveRef.current = false
+      setDisplayBpm(null)
+      setReading({ ...OFF_READING, status: 'warming' })
       const msg: MeWorkerIn = { type: 'reset' }
       worker?.postMessage(msg)
     }
@@ -205,7 +214,7 @@ export function useMeRppg(
         face = false
         lastSendT = null
         liveRef.current = false
-        setReading({ status: 'warming', bpm: null, snrDb: null, ageMs: null })
+        setReading({ ...OFF_READING, status: 'warming' })
       }
       // 얼굴 검출은 worker 가 밀려 있어도 매 프레임 한다(감정 분석·표시가 이 상자를 쓴다). 전송만 건너뛴다
       // 0°는 영상을 그대로 쓴다(추가 비용 없음). BlazeFace 시간축은 원본 영상의 프레임 시각(now)을 그대로 쓴다
@@ -299,9 +308,11 @@ export function useMeRppg(
         minSnrDb,
         motion: estimate?.motion ?? null,
       })
-      liveRef.current = next.status === 'live'
+      liveRef.current = next.rawBpm !== null
+      displayState = nextDisplayBpm(displayState, { t: nowMs / 1000, bpm: next.rawBpm, quality: next.quality ?? undefined })
+      setDisplayBpm(displayState.bpm)
       setReading((prev) =>
-        prev.status === next.status && prev.bpm === next.bpm && prev.snrDb === next.snrDb ? prev : next,
+        prev.status === next.status && prev.bpm === next.bpm && prev.rawBpm === next.rawBpm && prev.quality === next.quality && prev.snrDb === next.snrDb ? prev : next,
       )
     }, ESTIMATE_MS)
 
@@ -317,10 +328,15 @@ export function useMeRppg(
       faceRef.current = { status: 'inactive' }
       faceHitsRef.current = []
       setReading(OFF_READING)
+      setDisplayBpm(null)
     }
   }, [videoRef, enabled, minSnrDb, restartCount])
 
-  const getPulse = useCallback(() => (liveRef.current ? pulseLevel(bufferRef.current) : 0), [])
+  const getPulse = useCallback(() => {
+    const last = bufferRef.current.at(-1)
+    return liveRef.current && faceRef.current.status === 'face' && last && performance.now() - last.t < STALE_MS
+      ? pulseLevel(bufferRef.current) : 0
+  }, [])
 
   const getFace = useCallback(() => faceRef.current, [])
   const getFaceRate = useCallback(() => {
@@ -331,5 +347,5 @@ export function useMeRppg(
     return list.filter((h) => h.hit).length / list.length
   }, [])
 
-  return { reading, getPulse, getFace, getFaceRate }
+  return { reading, displayBpm, getPulse, getFace, getFaceRate }
 }

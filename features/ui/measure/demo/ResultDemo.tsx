@@ -10,6 +10,7 @@ import CallChart, { type ScrubReason } from './CallChart'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
 import { LEGAL } from './demoCopy'
 import { bpmText, NO_PULSE } from './heartRate'
+import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
@@ -101,7 +102,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   }, [])
 
   const summary = useMemo(() => summarizeSession(session), [session])
-  const smooth = useMemo(() => smoothBpm(session.samples.map((s) => s.bpm)), [session])
+  const smooth = useMemo(() => smoothBpm(cleanBpmSeries(session.samples).map((s) => s.bpm)), [session])
   // 최고 심박은 차트 선과 같은 다듬은 값에서 읽어, 카메라가 읽어 주는 숫자와 어긋나지 않게 한다.
   const maxBpm = useMemo(() => {
     const values = smooth.filter((v): v is number => v !== null)

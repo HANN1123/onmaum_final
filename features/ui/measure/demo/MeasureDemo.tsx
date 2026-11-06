@@ -98,7 +98,7 @@ export default function MeasureDemo() {
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
   const webcam = useWebcam(videoRef, true)
   // rPPG 엔진이 매 프레임 BlazeFace 로 찾은 얼굴 상자를 감정 분석도 같이 쓴다(엔진이 돌지 않을 때만 SSD)
-  const { bpm, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
+  const { displayBpm: bpm, quality: rppgQuality, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
   const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
@@ -106,11 +106,11 @@ export default function MeasureDemo() {
   // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
   const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
   // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
-  const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null)
+  const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null, rppgQuality, rppg.rawBpm)
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
   // 워치 연동(기준 심박): 카메라·모델 준비와 상관없이 연결할 수 있다
-  const watch = useWatch(bpm)
+  const watch = useWatch(rppg.bpm)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })

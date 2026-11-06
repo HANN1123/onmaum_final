@@ -78,6 +78,22 @@ describe('smoothBpm', () => {
 })
 
 describe('parseDemoSession', () => {
+  it('품질 필드 없는 옛 세션도 good으로 요약한다', () => {
+    const session = makeSession([{ t: 0, bpm: 70, emotion: 'calm' }, { t: 1, bpm: 74, emotion: 'calm' }])
+    const parsed = parseDemoSession(JSON.stringify(session))!
+    expect(parsed.samples[0].quality).toBeUndefined()
+    expect(summarizeSession(parsed).avgBpm).toBe(72)
+  })
+
+  it('평균·최고·최고 구간은 참고값 이상치를 정리한 뒤 계산한다', () => {
+    const samples: TimelinePoint[] = Array.from({ length: 41 }, (_, t) => ({ t, bpm: 72, emotion: 'calm' }))
+    samples[20] = { t: 20, bpm: 150, rawBpm: 150, quality: 'motion', emotion: 'angry' }
+    const summary = summarizeSession(makeSession(samples))
+    expect(summary.avgBpm).toBe(72)
+    expect(summary.maxBpm).toBe(72)
+    expect(summary.peakWindow?.peakBpm).toBe(72)
+    expect(samples[20].bpm).toBe(150)
+  })
   it('표본이 둘 미만인 기록은 받지 않는다', () => {
     const one = JSON.stringify({ startedAt: 0, endedAt: 1000, durationSec: 1, samples: [{ t: 0, bpm: null, emotion: null }] })
     expect(parseDemoSession(one)).toBeNull()

@@ -46,6 +46,35 @@ afterEach(() => {
 })
 
 describe('엔진 실패 시 감정 분석 얼굴 입력 해제', () => {
+  it('안정화 중에도 표시값과 파형을 내고 얼굴 소실·신선도 만료에는 파형을 멈춘다', async () => {
+    const { result } = mount()
+    await act(async () => {})
+    const worker = FakeWorker.latest
+    const now = vi.spyOn(performance, 'now').mockReturnValue(8_000)
+    act(() => {
+      worker.onmessage?.({ data: { type: 'ready' } })
+      frame(1000, {} as VideoFrameCallbackMetadata)
+      for (let t = 0; t <= 8000; t += 32) {
+        worker.onmessage?.({ data: { type: 'bvp', epoch: 0, t, latency: 0, value: Math.sin(2 * Math.PI * 1.2 * t / 1000) } })
+      }
+      vi.advanceTimersByTime(1000)
+    })
+    expect(result.current.reading).toMatchObject({ status: 'warming', bpm: null, quality: 'settling' })
+    expect(result.current.reading.rawBpm).not.toBeNull()
+    expect(result.current.displayBpm).toBe(result.current.reading.rawBpm)
+    expect(result.current.getPulse()).toBeGreaterThan(0)
+    now.mockReturnValue(10_000)
+    expect(result.current.getPulse()).toBe(0)
+    now.mockReturnValue(8_000)
+    act(() => {
+      detect.mockReturnValueOnce({ detections: [] })
+      frame(1033, {} as VideoFrameCallbackMetadata)
+    })
+    expect(result.current.getPulse()).toBe(0)
+    act(() => vi.advanceTimersByTime(1000))
+    expect(result.current.displayBpm).toBeNull()
+    expect(result.current.reading.quality).toBeNull()
+  })
   it('29회 연속 예외는 허용하고 30회째 얼굴 공유를 해제한다', async () => {
     const { result } = mount()
     await act(async () => {})
