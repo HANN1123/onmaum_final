@@ -24,20 +24,29 @@ export function swatchColor(emotion: Emotion, light: boolean): string {
 }
 
 /**
- * 바뀌는 BPM 으로 뛰는 합성 맥박. 함수는 한 번만 만들고 심박은 ref 로 읽어,
- * 값이 바뀌어도 파형 캔버스·오브가 처음부터 다시 시작하지 않는다.
+ * 수신 BPM 기반 주기 애니메이션이며 실측 파형이 아니다.
+ * 경과 시간만큼 위상을 적분해 BPM이 바뀌어도 주기가 처음으로 튀지 않게 한다.
  */
 export function useLivePulse(bpm: number): () => number {
   const bpmRef = useRef(bpm)
+  const clock = useRef({ t: null as number | null, phase: 0 })
+  const advance = useCallback(() => {
+    const now = performance.now()
+    const last = clock.current
+    if (last.t !== null) last.phase = (last.phase + Math.max(0, now - last.t) / 1000 * bpmRef.current / 60) % 1
+    last.t = now
+    return last.phase
+  }, [])
   useEffect(() => {
+    advance()
     bpmRef.current = bpm
-  }, [bpm])
+  }, [bpm, advance])
   return useCallback(() => {
-    const phase = ((performance.now() / 1000) * (bpmRef.current / 60)) % 1
+    const phase = advance()
     const systolic = Math.exp(-(((phase - 0.16) / 0.06) ** 2))
     const dicrotic = 0.32 * Math.exp(-(((phase - 0.44) / 0.1) ** 2))
     return Math.min(1, systolic + dicrotic)
-  }, [])
+  }, [advance])
 }
 
 /** 정해진 BPM 으로 뛰는 합성 맥박. 정지 화면의 오브도 두근거리게 한다. */

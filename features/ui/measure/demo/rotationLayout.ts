@@ -5,7 +5,9 @@ import type { CameraRotation } from '@/shared/storage/cameraRotation'
  * 측정 화면 카메라 회전의 좌표 규칙(한 곳에서만 정한다).
  * - 분석 입력: 원본 영상을 시계 방향으로 rotation 만큼 돌린 것. 거울 반전하지 않는다(face-api·BlazeFace·rPPG crop 공통).
  * - 화면 표시: 그 분석 입력을 좌우로 한 번 뒤집은 것(거울). 얼굴 상자도 표시할 때 한 번만 뒤집는다.
- * - 칸 채우기: 돌린 뒤 크기(Wr, Hr)로 칸(Cw, Ch)을 꽉 채운다. s = max(Cw/Wr, Ch/Hr), 가운데 정렬(넘치는 부분은 잘림).
+ * - 칸 맞추기: 돌린 뒤 크기(Wr, Hr)가 칸(Cw, Ch) 안에 통째로 들어가게 줄인다. s = min(Cw/Wr, Ch/Hr), 가운데 정렬(남는 곳은 빈 여백).
+ *   웹캠에 찍힌 그대로(잘림·확대 없이) 보여 준다. 예전에는 칸을 꽉 채우느라(cover) 영상을 키워 잘라서,
+ *   세운 폰 영상은 위아래가 크게 잘려 얼굴만 확대돼 보였다(2026-11-05 변경).
  */
 
 export function isSideways(rotation: CameraRotation): boolean {
@@ -17,19 +19,19 @@ export function rotatedSize(vw: number, vh: number, rotation: CameraRotation): {
   return isSideways(rotation) ? { w: vh, h: vw } : { w: vw, h: vh }
 }
 
-export interface CoverLayout {
+export interface FitLayout {
   scale: number
-  /** 칸 안에 그려지는 (돌린) 영상의 크기와 왼쪽 위 위치. 칸보다 크면 음수 위치로 잘린다 */
+  /** 칸 안에 그려지는 (돌린) 영상의 크기와 왼쪽 위 위치. 영상은 항상 칸 안에 들어간다 */
   dispW: number
   dispH: number
   offsetX: number
   offsetY: number
 }
 
-export function coverLayout(cw: number, ch: number, vw: number, vh: number, rotation: CameraRotation): CoverLayout | null {
+export function fitLayout(cw: number, ch: number, vw: number, vh: number, rotation: CameraRotation): FitLayout | null {
   if (!(cw > 0 && ch > 0 && vw > 0 && vh > 0)) return null
   const { w, h } = rotatedSize(vw, vh, rotation)
-  const scale = Math.max(cw / w, ch / h)
+  const scale = Math.min(cw / w, ch / h)
   const dispW = w * scale
   const dispH = h * scale
   return { scale, dispW, dispH, offsetX: (cw - dispW) / 2, offsetY: (ch - dispH) / 2 }
@@ -40,7 +42,7 @@ export function coverLayout(cw: number, ch: number, vw: number, vh: number, rota
  * CSS transform 은 오른쪽부터 적용되므로 `scaleX(-1) rotate(r)` 순서가 "돌린 다음 거울"이다.
  */
 export function rotatedVideoStyle(cw: number, ch: number, vw: number, vh: number, rotation: CameraRotation): CSSProperties | null {
-  const layout = coverLayout(cw, ch, vw, vh, rotation)
+  const layout = fitLayout(cw, ch, vw, vh, rotation)
   if (!layout) return null
   return {
     position: 'absolute',

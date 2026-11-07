@@ -240,3 +240,45 @@ describe('기록 보관', () => {
     expect(cells[head.indexOf('gate_db')]).toBe('2')
   })
 })
+
+describe('튜닝 추정(fx) 비교 열', () => {
+  it('기존 CSV 열은 순서를 보존하고 튜닝 열에만 덧붙인다', () => {
+    const cols = rowsToCsv([]).split(',')
+    expect(cols.slice(-6)).toEqual(['fx_bpm', 'fx_snr_db', 'fx_win_start_s', 'fx_win_end_s', 'fx_age_s', 'fx_motion'])
+    expect(cols.slice(-9, -6)).toEqual(['me_out_fps', 'me_dropped', 'fps'])
+    expect(cols.some((c) => c.startsWith('fp_'))).toBe(false)
+  })
+
+  it('조건별 요약에 튜닝 추정 오차를 별도로 집계한다', () => {
+    const base = input()
+    const rows = Array.from({ length: SLOT_COUNT }, () =>
+      slotRow(input({ estimates: { ...base.estimates, fx: { ...base.estimates.me!, bpm: 75 } } })),
+    )
+    const summary = summarizePairs(rows, 2, SLOT_COUNT).quiet
+    expect(summary.fx.mae).toBeCloseTo(3)
+    expect(summary.me.mae).toBeCloseTo(2)
+  })
+
+  it('튜닝 추정과 움직임 진폭이 CSV 맨 뒤에 붙고 저장·복원을 거쳐도 유지된다', () => {
+    const base = input()
+    const row = slotRow(input({ estimates: { ...base.estimates, fx: { ...base.estimates.me!, bpm: 73 } }, fxMotion: 0.0123 }))
+    expect(row.fx?.bpm).toBe(73)
+    const [restored] = parseLabRows(JSON.stringify([row]))
+    expect(restored.fx?.bpm).toBe(73)
+    expect(restored.fxMotion).toBeCloseTo(0.0123)
+    const [head, line] = rowsToCsv([restored]).split('\n')
+    const cols = head.split(',')
+    const cells = line.split(',')
+    expect(cols.indexOf('fps')).toBeLessThan(cols.indexOf('fx_bpm'))
+    expect(cells[cols.indexOf('fx_bpm')]).toBe('73.0')
+    expect(cells[cols.indexOf('fx_motion')]).toBe('0.0123')
+    expect(cols).toHaveLength(cells.length)
+  })
+
+  it('튜닝 추정이 없으면 이유에 fx:none 이 남고, 예전 기록에는 fx 키가 생기지 않는다', () => {
+    const base = input()
+    expect(slotRow(input({ estimates: { ...base.estimates, fx: null } })).reason).toBe('fx:none')
+    const [old] = parseLabRows(JSON.stringify([slotRow(input())]))
+    expect('fx' in old).toBe(false)
+  })
+})

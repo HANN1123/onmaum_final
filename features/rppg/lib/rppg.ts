@@ -164,11 +164,16 @@ function detrendLinear(x: number[]): number[] {
   return x.map((v, k) => v - xMean - slope * (k - tMean))
 }
 
-/** Hann 창 + 1 BPM 격자 DFT로 맥박 대역의 피크와 SNR을 구한다. */
-export function spectralPeak(x: number[], fs: number): HeartRate {
+/** 1 BPM 격자 파워 스펙트럼(0.7~4Hz). freqs 는 Hz */
+export interface Spectrum {
+  freqs: number[]
+  power: number[]
+}
+
+/** Hann 창 + 1 BPM 격자 DFT 파워 스펙트럼. 맥박 대역(0.7~3Hz)과 SNR 계산용 2차 고조파(~4Hz)까지 */
+export function powerSpectrum(x: number[], fs: number): Spectrum {
   const n = x.length
   const y = detrendLinear(x).map((v, k) => v * (0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (n - 1))))
-
   const freqs: number[] = []
   const power: number[] = []
   for (let i = 0; ; i++) {
@@ -184,10 +189,27 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
     freqs.push(f)
     power.push(re * re + im * im)
   }
+  return { freqs, power }
+}
 
+export interface PeakOptions {
+  /** 직전 심박(BPM). 주면 그 근처 피크를 가우시안 가중으로 우선한다 */
+  priorBpm?: number | null
+  /** 가우시안 폭(BPM) */
+  priorSigmaBpm?: number
+}
+
+/**
+ * 스펙트럼에서 맥박 피크와 SNR을 구한다. SNR = (피크 ±0.1Hz + 2차 고조파 ±0.2Hz) / 나머지(0.7~4Hz).
+ * priorBpm 이 있으면 피크 선택에만 가중을 쓰고, 보간·SNR 은 원래 파워로 계산한다.
+ */
+export function spectrumPeak({ freqs, power }: Spectrum, opts: PeakOptions = {}): HeartRate {
+  const prior = opts.priorBpm ?? null
+  const sigmaHz = (opts.priorSigmaBpm ?? 9) / 60
+  const weight = (f: number) => (prior === null ? 1 : Math.exp(-((f - prior / 60) ** 2) / (2 * sigmaHz ** 2)))
   let peak = 0
   for (let i = 1; i < freqs.length && freqs[i] <= HR_MAX_HZ + 1e-9; i++) {
-    if (power[i] > power[peak]) peak = i
+    if (power[i] * weight(freqs[i]) > power[peak] * weight(freqs[peak])) peak = i
   }
   let f0 = freqs[peak]
   if (peak > 0 && peak < freqs.length - 1) {
@@ -195,7 +217,10 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
     const b = power[peak]
     const c = power[peak + 1]
     const den = a - 2 * b + c
-    if (den !== 0) f0 += (0.5 * (a - c) / den) * STEP_HZ
+    if (den !== 0) {
+      const d = (0.5 * (a - c)) / den
+      if (Math.abs(d) <= 1) f0 += d * STEP_HZ
+    }
   }
 
   let sig = 0
@@ -208,6 +233,11 @@ export function spectralPeak(x: number[], fs: number): HeartRate {
   const snrDb = noise > 0 && sig > 0 ? 10 * Math.log10(sig / noise) : -Infinity
 
   return { bpm: f0 * 60, snrDb }
+}
+
+/** Hann 창 + 1 BPM 격자 DFT로 맥박 대역의 피크와 SNR을 구한다. */
+export function spectralPeak(x: number[], fs: number): HeartRate {
+  return spectrumPeak(powerSpectrum(x, fs))
 }
 
 /** 피부 평균 RGB 시계열(최소 6초)에서 심박을 추정한다. */
@@ -295,7 +325,8 @@ export function roiRects(pts: { x: number; y: number }[]): {
 // ── 실험 페이지용: 워치(정답) vs 앱 추정 오차 집계 ───────────────────────
 
 export type Condition = 'quiet' | 'talk' | 'move'
-export type RoiSet = 'forehead' | 'all' | 'me'
+/** fx = 튜닝 추정(hrEstimator.ts). ME-rPPG 버퍼 하나를 쓴다 */
+export type RoiSet = 'forehead' | 'all' | 'me' | 'fx'
 
 export type RefSource = 'ble' | 'manual'
 
@@ -347,6 +378,8 @@ export interface PairRow {
   all: HeartRate | null
   /** ME-rPPG(딥러닝) 추정 — 없으면 미측정 */
   me?: HeartRate | null
+  /** 튜닝 추정(대역 통과·움직임 마스크·추적) — 없으면 미측정 */
+  fx?: HeartRate | null
 }
 
 export type LabRow = PairRow & {
@@ -367,6 +400,8 @@ export type LabRow = PairRow & {
   originMs?: number
   meOutFps?: number
   meDropped?: number
+  /** 튜닝 추정 창에서 얼굴 상자가 가장 크게 흔들린 진폭(얼굴 너비 대비 비율) */
+  fxMotion?: number | null
 }
 
 function parseEstimate(v: unknown): HeartRate | null {
@@ -415,6 +450,7 @@ export function parseLabRows(raw: string): LabRow[] {
         ...(num(r.originMs) !== null ? { originMs: num(r.originMs) as number } : {}),
         ...(num(r.meOutFps) !== null ? { meOutFps: num(r.meOutFps) as number } : {}),
         ...(num(r.meDropped) !== null ? { meDropped: num(r.meDropped) as number } : {}),
+        ...(num(r.fxMotion) !== null ? { fxMotion: num(r.fxMotion) } : {}),
         t: r.t,
         fps: r.fps,
         condition: r.condition as Condition,
@@ -422,6 +458,7 @@ export function parseLabRows(raw: string): LabRow[] {
         forehead: parseEstimate(r.forehead),
         all: parseEstimate(r.all),
         me: parseEstimate(r.me),
+        ...(r.fx !== undefined ? { fx: parseEstimate(r.fx) } : {}),
       },
     ]
   })
@@ -507,7 +544,12 @@ export function summarizePairs(
   return Object.fromEntries(
     conds.map((c) => [
       c,
-      { forehead: summarize(c, 'forehead'), all: summarize(c, 'all'), me: summarize(c, 'me') },
+      {
+        forehead: summarize(c, 'forehead'),
+        all: summarize(c, 'all'),
+        me: summarize(c, 'me'),
+        fx: summarize(c, 'fx'),
+      },
     ]),
   ) as Record<Condition, Record<RoiSet, ErrorSummary>>
 }

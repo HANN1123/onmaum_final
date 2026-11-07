@@ -1,11 +1,12 @@
 import type { HeartRateFailure } from '@/features/rppg/hooks/useHeartRateDevice'
+import { isWatchBpmValid, isWatchFresh } from '@/features/rppg/lib/heartRateSource'
+export { WATCH_STALE_MS } from '@/features/rppg/lib/heartRateSource'
 
 /**
  * 측정 화면 "워치" 행의 상태 판정(순수 함수).
- * 워치 값은 기준 심박이다. 화면의 rPPG BPM 을 대신하지 않고 이 행에서만 보인다.
- * 우선순위: 지원 안 함 → 연결 중 → (연결됨) 첫 값 대기 → 신호 없음(5초) → 접촉 불량 → 측정 중 → (연결 안 됨) 끊김·못 찾음·실패 → 연결 안 됨
+ * 유효한 워치는 큰 숫자에도 쓰며, 차이는 계속 좋은 rPPG 값 기준이다.
+ * 우선순위: 지원 안 함 → 연결 중 → 첫 값 대기 → 신호 없음(8초·유효하지 않은 값) → 접촉 불량 → 측정 중 → 연결 안 됨
  */
-export const WATCH_STALE_MS = 5_000
 
 export type WatchState =
   | 'unsupported'
@@ -45,7 +46,7 @@ export function watchView(input: WatchInput): WatchView {
   if (status === 'connecting') return { state: 'connecting', text: '연결 중…', action: null }
   if (status === 'connected') {
     if (!latest) return { state: 'waiting', text: '연결됨 · 첫 값 기다리는 중', action: 'disconnect' }
-    if (now - latest.t > WATCH_STALE_MS) return { state: 'stale', text: '신호 없음 · 워치에서 시작했는지 확인', action: 'disconnect' }
+    if (!isWatchFresh(latest, now) || !isWatchBpmValid(latest.bpm)) return { state: 'stale', text: '신호 없음 · 워치에서 시작했는지 확인', action: 'disconnect' }
     if (latest.contact === 'poor') return { state: 'poorContact', text: '연결됨 · 착용 상태 확인', action: 'disconnect' }
     const bpm = Math.round(latest.bpm)
     const diff = rppgBpm === null ? '' : ` · rPPG 차이 ${formatDiff(Math.round(rppgBpm) - bpm)}`
@@ -64,3 +65,14 @@ function formatDiff(d: number): string {
 /** 연결 안내(버튼 title). HeartCast 장치 이름은 환경마다 다를 수 있어 이름으로 안내하지 않는다 */
 export const WATCH_HINT =
   'iPhone과 Apple Watch에서 HeartCast를 열고 워치에서 시작을 누른 뒤 연결하세요. 처음 연결하는 동안 iPhone의 HeartCast를 화면에 켜 두세요.'
+
+/** 워치가 대표값일 때 파형 칸에 붙이는 이름. 워치는 BPM 만 보내므로 실측 파형이 아니라 BPM 리듬이다 */
+export const WATCH_PULSE_TAG = '심박 리듬 · 워치 BPM 기준'
+
+/**
+ * 파형 칸과 오브 박동의 출처.
+ * 측정 중 워치가 대표 심박이면 워치 BPM 리듬을 쓰고(워치를 기준으로 둔다), 아니면 rPPG 실측 파형을 쓴다.
+ */
+export function pulseOrigin(active: boolean, source: 'watch' | 'rppg' | null): 'watch' | 'rppg' {
+  return active && source === 'watch' ? 'watch' : 'rppg'
+}

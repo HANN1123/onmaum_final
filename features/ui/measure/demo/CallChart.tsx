@@ -5,7 +5,8 @@ import { EMOTION_LABELS, type Emotion } from '@/features/algorithm/emotion/emoti
 import { mmss, swatchColor } from './demoBits'
 import styles from './measureDemo.module.css'
 import { mixRgb, ORB_PALETTE, rgba } from './orbs/emotionPalette'
-import type { TimelinePoint } from './sessionLog'
+import { MAX_JOIN_GAP_SEC } from '@/features/rppg/lib/bpmCleaning'
+import { heartRateRuns, type TimelinePoint } from './sessionLog'
 
 /** 차트를 읽는 이유. 'camera' 는 카메라가 심박이 가장 높았던 순간으로 다가간 동안이다. */
 export type ScrubReason = 'pointer' | 'camera'
@@ -159,6 +160,7 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
           pen = false
           continue
         }
+        if (i > 0 && points[i].t - points[i - 1].t > MAX_JOIN_GAP_SEC) pen = false
         d += `${pen ? 'L' : 'M'}${x(points[i].t).toFixed(1)},${y(v).toFixed(1)}`
         pen = true
       }
@@ -166,8 +168,18 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
     }
     const all = points.map((_, i) => i)
     const line = hasLine ? path(all) : ''
+    const runs = heartRateRuns(points, smooth)
+    const segments = runs.map((run, index) => {
+      const previous = runs[index - 1]?.indexes.at(-1)
+      const first = run.indexes[0]
+      // 출처만 바뀐 인접 표본은 다음 출처의 선으로 연결한다. null·시간 공백은 잇지 않는다.
+      const indexes = previous === first - 1 && points[first].t > points[previous].t && points[first].t - points[previous].t <= MAX_JOIN_GAP_SEC
+        ? [previous, ...run.indexes] : run.indexes
+      return { ...run, line: path(indexes), hard: hardest
+        ? path(indexes.filter((i) => points[i].t >= hardest.start && points[i].t <= hardest.end)) : '' }
+    })
     // 면은 선이 끊기지 않을 때만 칠한다.
-    const area = hasLine && smooth.every((v) => v !== null) ? `${line}L${w},${h - BOTTOM}L0,${h - BOTTOM}Z` : ''
+    const area = hasLine && runs.length === 1 && smooth.every((v) => v !== null) ? `${line}L${w},${h - BOTTOM}L0,${h - BOTTOM}Z` : ''
     let hard = ''
     let focus: { x: number; y: number; width: number; height: number } | null = null
     if (hardest && hasLine) {
@@ -183,7 +195,7 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
         focus = { x: x(hardest.start), y: top, width: x(hardest.end) - x(hardest.start), height: bottom - top }
       }
     }
-    return { w, h, x, y, hasLine, line, area, hard, focus }
+    return { w, h, x, y, hasLine, line, area, hard, focus, segments }
   }, [size, points, smooth, durationSec, hardest])
 
   // 카메라 변환: kit Camera 와 같은 식. 장면 가장자리 밖은 보이지 않게 묶는다.
@@ -274,15 +286,20 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
                   }}
                 />
               )}
-              {geo.hasLine && <path d={geo.line} pathLength={1} className={styles.callLine} vectorEffect="non-scaling-stroke" />}
-              {hardest && geo.hasLine && (
-                <path
-                  d={geo.hard}
-                  className={`${styles.callHard} ${styles.callHardLine}`}
-                  style={{ stroke: accent }}
-                  vectorEffect="non-scaling-stroke"
-                />
-              )}
+              {geo.segments.map((segment, index) => (
+                <g key={index} opacity={segment.source === 'watch' ? 1 : 0.55}>
+                  {/* 불투명도로 출처를 구분해 기존 선 그리기 dash 애니메이션과 충돌하지 않는다. */}
+                  <path d={segment.line} pathLength={1} className={styles.callLine} vectorEffect="non-scaling-stroke" />
+                  {hardest && <path d={segment.hard} className={`${styles.callHard} ${styles.callHardLine}`}
+                    style={{ stroke: accent }} vectorEffect="non-scaling-stroke" />}
+                  {segment.indexes.length === 1 && (() => {
+                    const i = segment.indexes[0]
+                    const highlighted = hardest && points[i].t >= hardest.start && points[i].t <= hardest.end
+                    return <circle cx={geo.x(points[i].t)} cy={geo.y(smooth[i]!)} r={2.25}
+                      style={{ fill: highlighted ? accent : 'rgba(var(--text-rgb), 0.62)' }} />
+                  })()}
+                </g>
+              ))}
               {peak !== null && smooth[peak] !== null && (
                 <circle
                   cx={geo.x(points[peak].t)}
@@ -302,7 +319,7 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
             )}
             {!geo.hasLine && (
               <text x={0} y={14} className={styles.callNote}>
-                심박 · rPPG 연결 전
+                심박 기록 없음
               </text>
             )}
             {!busy && active !== null && points[active] && (
@@ -336,6 +353,13 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
           )}
         </span>
         <span>{mmss(durationSec)}</span>
+      </div>
+      <div className={styles.chartFoot}>
+        <span>{(() => {
+          const sources = new Set(heartRateRuns(points, smooth).map((run) => run.source))
+          return sources.size > 1 ? '심박 출처 · 워치 진하게 / 카메라 옅게'
+            : sources.has('watch') ? '심박 출처 · 워치' : sources.has('rppg') ? '심박 출처 · 카메라' : '심박 기록 없음'
+        })()}</span>
       </div>
     </div>
   )

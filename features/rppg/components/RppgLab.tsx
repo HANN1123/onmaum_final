@@ -51,13 +51,38 @@ import {
 import type { MeWorkerIn, MeWorkerOut } from '@/features/rppg/lib/meRppg.worker'
 import { useHeartRateDevice } from '@/features/rppg/hooks/useHeartRateDevice'
 import { getBlazeFace } from '@/features/rppg/engine/blazeFace'
+import { createHrTracker, type BoxSample, type TrackedHeartRate } from '@/features/rppg/lib/hrEstimator'
+import { createMotionSmoother } from '@/features/rppg/lib/motionSmoothing'
+import {
+  DEMO_MATCH_BPM,
+  DEMO_MEASURE_MS,
+  DEMO_STATE_TEXT,
+  DEMO_TOTAL_MS,
+  demoRecordsToCsv,
+  parseDemoRecords,
+  WATCH_LAG_S,
+  settledDemoState,
+  recentMedian,
+  recordDemo,
+  startDemoRun,
+  summarizeDemo,
+  type DemoRun,
+  type DemoPoint,
+  type DemoRecord,
+  type DemoState,
+} from '@/features/rppg/lib/demoCompare'
+import { createWaveLog, logBox, logBvp, logMarker, waveLogToJson, type WaveLog } from '@/features/rppg/lib/waveLog'
 
 const WINDOW_MS = 10_000
 const BUFFER_MS = 12_000
 const STALE_MS = 2_000
+/** 워치 값이 이보다 오래되면 시연 비교에 쓰지 않는다 */
+const WATCH_FRESH_MS = 5_000
 const MIN_SKIN_RATIO = 0.3
 const ROI_EMA = 0.5
 const ROWS_KEY = 'onmaum_rppg_lab_rows'
+/** 시연 30초 측정 결과(회차별 요약). 새로고침해도 남긴다 */
+const DEMO_KEY = 'onmaum_rppg_lab_demo'
 /** ME-rPPG: 처음 출력 30개는 버림 (데모와 동일 워밍업) */
 const ME_WARMUP = 30
 /** 워커에 쌓인 프레임이 이만큼이면 새 프레임은 건너뜀 (데모와 동일) */
@@ -71,7 +96,7 @@ const CONDITIONS: { key: Condition; label: string; target: number | null }[] = [
   { key: 'move', label: '움직이며', target: null },
 ]
 
-const ROI_LABELS: Record<RoiSet, string> = { forehead: 'POS 이마', all: 'POS 이마+볼', me: 'ME-rPPG' }
+const ROI_LABELS: Record<RoiSet, string> = { forehead: 'POS 이마', all: 'POS 이마+볼', me: 'ME-rPPG', fx: '튜닝 추정' }
 
 type MeStatus = 'loading' | 'ready' | 'error'
 
@@ -85,6 +110,9 @@ interface Live {
   forehead: HeartRate | null
   all: HeartRate | null
   me: HeartRate | null
+  /** 측정 화면 엔진과 같은 ME 버퍼·얼굴 상자 기반 튜닝 추정 */
+  fx: TrackedHeartRate | null
+  demo: { state: DemoState; bpm: number | null; watch: number | null }
   meLatency: number
   /** 마지막 영상 프레임 기준 ME 결과가 얼마나 지났는가 (ms) */
   meAgeMs: number | null
@@ -100,6 +128,8 @@ const EMPTY_LIVE: Live = {
   forehead: null,
   all: null,
   me: null,
+  fx: null,
+  demo: { state: 'waiting', bpm: null, watch: null },
   meLatency: 0,
   meAgeMs: null,
   meSentFps: 0,
@@ -147,11 +177,11 @@ function rate(v: number, n: number): string {
   return n > 0 ? `${Math.round(v * 100)}%` : '—'
 }
 
-function downloadText(text: string, prefix: string) {
-  const blob = new Blob([text], { type: 'text/csv' })
+function downloadText(text: string, prefix: string, ext: 'csv' | 'json' = 'csv') {
+  const blob = new Blob([text], { type: ext === 'csv' ? 'text/csv' : 'application/json' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `${prefix}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`
+  a.download = `${prefix}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.${ext}`
   a.click()
   URL.revokeObjectURL(a.href)
 }
@@ -192,6 +222,36 @@ export function RppgLab() {
   const liveRef = useRef<Live>(EMPTY_LIVE)
   const detectMsRef = useRef(detectMs)
   const startRef = useRef(0)
+  /** 이번 측정의 원시 파형 기록(파형 저장 버튼으로 내보낸다) */
+  const waveRef = useRef<WaveLog | null>(null)
+  const [hasWave, setHasWave] = useState(false)
+  /** 시연: 30초 측정 진행(시작 시각과 1초 칸) · 끝난 결과 */
+  const demoRunRef = useRef<DemoRun | null>(null)
+  const [demoRun, setDemoRun] = useState<{ start: number; seconds: number } | null>(null)
+  const [demoResults, setDemoResults] = useState<DemoRecord[]>([])
+  const [demoLoaded, setDemoLoaded] = useState(false)
+  /** 진행 중인 시연 측정의 시작 정보(결과에 붙인다) */
+  const demoMetaRef = useRef<{ startedAt: string; startS: number } | null>(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DEMO_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setDemoResults(parseDemoRecords(saved))
+    } catch {
+      // 저장소 접근 불가 — 메모리에서만 유지
+    }
+    setDemoLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!demoLoaded) return
+    try {
+      localStorage.setItem(DEMO_KEY, JSON.stringify(demoResults))
+    } catch {
+      // 무시
+    }
+  }, [demoResults, demoLoaded])
 
   useEffect(() => {
     detectMsRef.current = detectMs
@@ -268,6 +328,11 @@ export function RppgLab() {
     const meLatencies: number[] = []
     const meOutWalls: number[] = []
     const meSentWalls: number[] = []
+    const boxBuf: BoxSample[] = []
+    const motionSmoother = createMotionSmoother()
+    const tracker = createHrTracker()
+    const demoPoints: DemoPoint[] = []
+    let firstEstimateAt: number | null = null
 
     /** 실패한 프레임은 응답이 오지 않아 전송 수가 어긋난다. 이번 실행은 끝내고 다시 시작하게 한다 */
     const failMe = (message: string) => {
@@ -284,7 +349,14 @@ export function RppgLab() {
       meInFlight = 0
       meOutputs = 0
       meKalman = null
+      motionSmoother.reset()
       meBuffer.length = 0
+      boxBuf.length = 0
+      tracker.reset()
+      demoPoints.length = 0
+      firstEstimateAt = null
+      liveRef.current = { ...liveRef.current, demo: { ...liveRef.current.demo, state: 'waiting', bpm: null } }
+      setLive(liveRef.current)
       const msg: MeWorkerIn = { type: 'reset' }
       worker?.postMessage(msg)
     }
@@ -307,6 +379,7 @@ export function RppgLab() {
           const wall = performance.now()
           meOutWalls.push(wall)
           while (meOutWalls.length > 0 && meOutWalls[0] < wall - 2000) meOutWalls.shift()
+          if (waveRef.current) logBvp(waveRef.current, 'me', m.t, m.value)
           if (meOutputs <= ME_WARMUP) return
           meBuffer.push({ t: m.t, v: m.value })
           while (meBuffer.length > 0 && meBuffer[0].t < m.t - BUFFER_MS) meBuffer.shift()
@@ -374,6 +447,8 @@ export function RppgLab() {
       cropCtx.imageSmoothingEnabled = true
       cropCtx.imageSmoothingQuality = 'high'
       startRef.current = performance.now()
+      waveRef.current = createWaveLog(startRef.current)
+      setHasWave(true)
       runIdRef.current = `run-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}`
 
       // POS용 얼굴 위치: face-api (현행 측정과 같은 부하)
@@ -434,6 +509,11 @@ export function RppgLab() {
           height: kh.update(det.height),
         })
         meBox = box
+        const motionBox = motionSmoother.update(det, t)
+        boxBuf.push(motionBox)
+        while (boxBuf.length > 0 && boxBuf[0].t < t - BUFFER_MS) boxBuf.shift()
+        // 오프라인 재추정도 화면과 같은 움직임 좌표를 쓴다. 모델 입력용 crop 상자는 위에서 별도로 유지한다.
+        if (waveRef.current) logBox(waveRef.current, t, motionBox.cx, motionBox.cy, motionBox.w)
         const c = clampCrop(box, w, h)
         if (!c) return
         cropCtx.drawImage(canvas, c.sx, c.sy, c.sw, c.sh, 0, 0, 36, 36)
@@ -490,10 +570,34 @@ export function RppgLab() {
         while (meOutWalls.length > 0 && meOutWalls[0] < nowWall - 2000) meOutWalls.shift()
         while (meSentWalls.length > 0 && meSentWalls[0] < nowWall - 2000) meSentWalls.shift()
         const meLast = meBuffer[meBuffer.length - 1]
+        const fx = worker && fresh(meBuffer) ? tracker.estimate([meBuffer], boxBuf) : null
+        // 시연: 움직임·약한 신호가 아닐 때만 값을 모아 최근 5초 중앙값을 보여 준다
+        if (fx && firstEstimateAt === null) firstEstimateAt = nowWall
+        const dState = settledDemoState(fx, nowWall, firstEstimateAt)
+        if (fx && dState === 'ok') demoPoints.push({ t: nowWall, bpm: fx.bpm })
+        while (demoPoints.length > 0 && demoPoints[0].t < nowWall - 60_000) demoPoints.shift()
+        const dBpm = dState === 'ok' ? recentMedian(demoPoints, nowWall) : null
+        const lastWatch = getSamples().at(-1)
+        // 접촉 불량 값은 기준으로 쓰지 않는다(referenceBpm 과 같은 규칙)
+        const dWatch = lastWatch && lastWatch.contact !== 'poor' && nowWall - lastWatch.t < WATCH_FRESH_MS ? lastWatch.bpm : null
+        const run = demoRunRef.current
+        if (run) {
+          if (recordDemo(run, nowWall, dWatch, dBpm)) {
+            const meta = demoMetaRef.current ?? { startedAt: new Date().toISOString(), startS: 0 }
+            const record: DemoRecord = { ...summarizeDemo(run.slots, run.lagWatch), ...meta, lagS: WATCH_LAG_S }
+            demoRunRef.current = null
+            demoMetaRef.current = null
+            if (waveRef.current) logMarker(waveRef.current, nowWall, 'demo:end')
+            setDemoRun(null)
+            setDemoResults((rs) => [...rs, record])
+          } else setDemoRun({ start: run.start, seconds: Math.min(DEMO_TOTAL_MS / 1000, Math.floor((nowWall - run.start) / 1000)) })
+        }
         const next: Live = {
           forehead: fresh(buffers.forehead) ? estimateHeartRate(windowed(buffers.forehead)) : null,
           all: fresh(buffers.all) ? estimateHeartRate(windowed(buffers.all)) : null,
           me: fresh(meBuffer) ? heartRateFromBvp(meBuffer) : null,
+          fx,
+          demo: { state: dState, bpm: dBpm, watch: dWatch },
           meLatency: meLatencies.length ? meLatencies.reduce((s, v) => s + v, 0) / meLatencies.length : 0,
           meAgeMs: meLast ? nowWall - meLast.t : null,
           meSentFps: meSentWalls.length / 2,
@@ -516,7 +620,8 @@ export function RppgLab() {
             slot,
             now: nowWall,
             startedAt: startRef.current,
-            estimates: { forehead: next.forehead, all: next.all, me: next.me },
+            estimates: { forehead: next.forehead, all: next.all, me: next.me, fx: next.fx },
+            fxMotion: next.fx?.motion ?? null,
             reference: referenceBpm(getSamples(), current.evalStart + slot * SLOT_MS),
             fps: next.fps,
             meOutFps: next.meOutFps,
@@ -551,6 +656,10 @@ export function RppgLab() {
       video.srcObject = null
       overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height)
       worker?.terminate()
+      if (demoRunRef.current && waveRef.current) logMarker(waveRef.current, performance.now(), 'demo:cancel')
+      demoRunRef.current = null
+      demoMetaRef.current = null
+      setDemoRun(null)
       liveRef.current = EMPTY_LIVE
       setLive(EMPTY_LIVE)
       setMeStatus('loading')
@@ -560,6 +669,7 @@ export function RppgLab() {
   // 이벤트 timeStamp는 performance.now()와 같은 기준 시각
   const handleCondition = (c: Condition, at: number) => {
     meResetRequestRef.current = true
+    if (waveRef.current) logMarker(waveRef.current, at, `condition:${c}`)
     setCondition(c)
     setConditionStart(at)
   }
@@ -582,6 +692,8 @@ export function RppgLab() {
         forehead: l.forehead,
         all: l.all,
         me: l.me,
+        fx: l.fx,
+        fxMotion: l.fx?.motion ?? null,
         fps: l.fps,
       },
     ])
@@ -599,6 +711,7 @@ export function RppgLab() {
       nextSlot: 1,
     }
     meResetRequestRef.current = true
+    if (waveRef.current) logMarker(waveRef.current, next.evalStart, `eval:${next.runId}`)
     evaluationRef.current = next
     setEvaluation(next)
   }
@@ -647,6 +760,31 @@ export function RppgLab() {
           초록·노랑 사각형 = POS 이마·볼 영역 / 회색 점선 = ME-rPPG 얼굴 박스
         </p>
 
+        <DemoPanel
+          live={live.demo}
+          running={running}
+          watchConnected={heartRate.status === 'connected'}
+          blocked={evaluation !== null}
+          run={demoRun}
+          results={demoResults}
+          onExport={() => downloadText(demoRecordsToCsv(demoResults), 'rppg-lab-demo')}
+          onClear={() => setDemoResults([])}
+          onStart={() => {
+            if (liveRef.current.demo.state !== 'ok' || liveRef.current.demo.bpm === null) return
+            const start = performance.now()
+            demoRunRef.current = startDemoRun(start)
+            demoMetaRef.current = { startedAt: new Date().toISOString(), startS: (start - startRef.current) / 1000 }
+            if (waveRef.current) logMarker(waveRef.current, start, `demo:start:${demoResults.length + 1}`)
+            setDemoRun({ start, seconds: 0 })
+          }}
+          onCancel={() => {
+            if (waveRef.current) logMarker(waveRef.current, performance.now(), 'demo:cancel')
+            demoRunRef.current = null
+            demoMetaRef.current = null
+            setDemoRun(null)
+          }}
+        />
+
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -671,7 +809,7 @@ export function RppgLab() {
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm text-ink-600">
-            <input type="checkbox" checked={meEnabled} onChange={(e) => setMeEnabled(e.target.checked)} />
+            <input type="checkbox" disabled={demoRun !== null || evaluation !== null} checked={meEnabled} onChange={(e) => setMeEnabled(e.target.checked)} />
             ME-rPPG 같이 돌리기
           </label>
         </div>
@@ -688,6 +826,11 @@ export function RppgLab() {
             label="ME 처리"
             value={`${fmt(live.meOutFps, 0)} fps`}
             sub={`전송 ${fmt(live.meSentFps, 0)} fps · 결과 나이 ${live.meAgeMs === null ? '—' : Math.round(live.meAgeMs)}ms · 건너뜀 ${live.meDropped}`}
+          />
+          <Stat
+            label="튜닝 추정"
+            value={fmt(live.fx?.bpm, 0)}
+            sub={`SNR ${fmt(live.fx?.snrDb)} dB · 흔들림 ${live.fx?.motion == null ? '—' : `${(live.fx.motion * 100).toFixed(1)}%`}`}
           />
           <Stat label="처리 fps" value={fmt(live.fps, 0)} sub="목표 ≈ 30" />
           <Stat
@@ -737,7 +880,7 @@ export function RppgLab() {
               <button
                 key={c.key}
                 type="button"
-                disabled={evaluation !== null}
+                disabled={evaluation !== null || demoRun !== null}
                 onClick={(e) => handleCondition(c.key, e.timeStamp)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium ${
                   condition === c.key ? 'bg-risk-good text-white' : 'bg-ink-100 text-ink-600'
@@ -753,7 +896,7 @@ export function RppgLab() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={!running || heartRate.status !== 'connected' || evaluation !== null}
+              disabled={!running || heartRate.status !== 'connected' || evaluation !== null || demoRun !== null}
               onClick={startEvaluation}
               className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
@@ -804,7 +947,7 @@ export function RppgLab() {
                 type="number"
                 step={0.5}
                 value={gateDb}
-                disabled={evaluation !== null}
+                disabled={evaluation !== null || demoRun !== null}
                 onChange={(e) => setGateDb(Number(e.target.value))}
                 className="w-16 rounded border border-ink-300 px-2 py-1"
               />
@@ -835,7 +978,7 @@ export function RppgLab() {
             </thead>
             <tbody>
               {visibleConditions.flatMap((c) =>
-                (['forehead', 'all', 'me'] as const).map((roi) => {
+                (['forehead', 'all', 'me', 'fx'] as const).map((roi) => {
                   const s = summary[c.key][roi]
                   return (
                     <tr key={`${c.key}-${roi}`} className="border-b border-ink-100">
@@ -875,6 +1018,14 @@ export function RppgLab() {
             </button>
             <button
               type="button"
+              onClick={() => waveRef.current && downloadText(waveLogToJson(waveRef.current, heartRate.getRawLog()), 'rppg-lab-wave', 'json')}
+              disabled={!hasWave}
+              className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm disabled:opacity-40"
+            >
+              파형 저장
+            </button>
+            <button
+              type="button"
               onClick={() => setRows((rs) => rs.slice(0, -1))}
               disabled={rows.length === 0}
               className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm disabled:opacity-40"
@@ -902,6 +1053,127 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
       <p className="text-xs text-ink-500">{label}</p>
       <p className="text-2xl font-bold text-ink-900">{value}</p>
       <p className="text-xs text-ink-400">{sub}</p>
+    </div>
+  )
+}
+
+/** 시연 패널: 워치와 rPPG 숫자를 크게 나란히 보여 주고, 가만히 30초 측정 결과를 쌓는다 */
+export function DemoPanel({
+  live,
+  running,
+  watchConnected,
+  blocked,
+  run,
+  results,
+  onStart,
+  onCancel,
+  onExport,
+  onClear,
+}: {
+  live: Live['demo']
+  running: boolean
+  watchConnected: boolean
+  /** 자동 평가 중이면 시연 측정을 시작하지 않는다 */
+  blocked: boolean
+  /** seconds = 시작 뒤 지난 초(워치 지연 보정용 추가 시간 포함) */
+  run: { start: number; seconds: number } | null
+  results: DemoRecord[]
+  onStart: () => void
+  onCancel: () => void
+  onExport: () => void
+  onClear: () => void
+}) {
+  const disabledReason = !running ? '측정을 시작하세요'
+    : !watchConnected ? '워치를 연결하세요'
+    : blocked ? '자동 평가 중'
+    : live.state === 'waiting' ? '안정화 중'
+    : live.state === 'motion' ? '움직임 감지'
+    : live.state === 'weak' ? '신호 약함'
+    : live.bpm === null ? '신호 모으는 중'
+    : null
+  const diff = live.bpm !== null && live.watch !== null ? live.bpm - live.watch : null
+  const last = results.at(-1)
+  const measureS = DEMO_MEASURE_MS / 1000
+  const avg = (pick: (r: DemoRecord) => number | null | undefined) => {
+    const xs = results.map(pick).filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v))
+    return xs.length ? (xs.reduce((s, v) => s + v, 0) / xs.length).toFixed(1) : '—'
+  }
+  const lastText = (r: DemoRecord) => {
+    const cover = `rPPG 표시 ${Math.round(r.coverage * 100)}%`
+    if (r.meanAbsDiff === null) return `비교할 값이 없었어요 · ${cover}`
+    const lag = r.lag?.meanAbsDiff != null ? ` (워치 지연 보정 ${r.lag.meanAbsDiff.toFixed(1)})` : ''
+    return `평균 차이 ${r.meanAbsDiff.toFixed(1)} BPM${lag} · ${DEMO_MATCH_BPM} BPM 이내 ${Math.round((r.matchRate ?? 0) * 100)}% · ${cover} · 워치 ${r.watchMean?.toFixed(0)} / rPPG ${r.rppgMean?.toFixed(0)}`
+  }
+  return (
+    <div className="space-y-3 rounded-xl border border-ink-200 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-ink-900">시연: 워치 vs rPPG</p>
+        <p className={`text-xs ${live.state === 'ok' ? 'text-risk-good' : 'text-ink-500'}`}>
+          {running ? DEMO_STATE_TEXT[live.state] : '측정 시작을 누르세요'}
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <p className="text-xs text-ink-500">워치</p>
+          <p className="text-4xl font-bold text-ink-900">{live.watch === null ? '—' : Math.round(live.watch)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-ink-500">rPPG (카메라)</p>
+          <p className="text-4xl font-bold text-ink-900">{live.bpm === null ? '—' : Math.round(live.bpm)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-ink-500">차이</p>
+          <p className="text-4xl font-bold text-ink-900">
+            {diff === null ? '—' : `${diff > 0 ? '+' : ''}${Math.round(diff)}`}
+          </p>
+        </div>
+      </div>
+      <p className="text-xs text-ink-400">워치는 심박을 몇 초 평균해 보내서 약 {WATCH_LAG_S}초 늦게 바뀌어요.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        {run ? (
+          <>
+            <span className="text-sm text-ink-600">
+              {run.seconds < measureS
+                ? `가만히 계세요 · ${measureS - run.seconds}초 남음`
+                : `워치 지연 보정값 받는 중 · ${Math.max(0, DEMO_TOTAL_MS / 1000 - run.seconds)}초`}
+            </span>
+            <button type="button" onClick={onCancel} className="rounded-lg border border-ink-300 px-3 py-1.5 text-sm">
+              취소
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            disabled={disabledReason !== null}
+            aria-describedby={disabledReason ? 'demo-start-reason' : undefined}
+            onClick={onStart}
+            className="rounded-lg bg-risk-good px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            30초 측정
+          </button>
+        )}
+        {!run && disabledReason && <span id="demo-start-reason" className="text-xs text-ink-500">{disabledReason}</span>}
+        {last && !run && <span className="text-sm text-ink-600">{lastText(last)}</span>}
+      </div>
+      {results.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
+          <span>
+            지금까지 {results.length}회 · 평균 차이 {avg((r) => r.meanAbsDiff)} BPM (지연 보정 {avg((r) => r.lag?.meanAbsDiff)}) ·
+            rPPG 표시 {avg((r) => r.coverage * 100)}%
+          </span>
+          <button type="button" onClick={onExport} className="rounded border border-ink-300 px-2 py-1">
+            시연 결과 CSV
+          </button>
+          <button
+            type="button"
+            disabled={run !== null}
+            onClick={onClear}
+            className="rounded border border-ink-300 px-2 py-1 disabled:opacity-40"
+          >
+            시연 기록 지우기
+          </button>
+        </div>
+      )}
     </div>
   )
 }

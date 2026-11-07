@@ -15,8 +15,9 @@ export function useWebcam(videoRef: RefObject<HTMLVideoElement | null>, enabled:
 
     navigator.mediaDevices
       .getUserMedia({
-        // rPPG 는 초당 10프레임 이상이 필요하고 30이 가장 좋다. 카메라가 낮은 프레임으로 열리지 않게 30을 요청한다
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+        // 표정 인식만 하던 때(#31 이전)와 같은 요청으로 되돌린다(2026-11-05). frameRate 를 지정하면 일부 카메라가
+        // 다른 센서 모드(잘리고 확대된 화각)로 열린다. 대부분의 카메라는 지정하지 않아도 30fps 로 연다
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       })
       .then(async (s) => {

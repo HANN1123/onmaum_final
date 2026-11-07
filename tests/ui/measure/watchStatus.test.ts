@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { watchView, WATCH_STALE_MS, type WatchInput } from '@/features/ui/measure/demo/watchStatus'
+import { watchView, pulseOrigin, WATCH_STALE_MS, type WatchInput } from '@/features/ui/measure/demo/watchStatus'
 
 const base: WatchInput = { supported: true, status: 'idle', latest: null, failure: null, now: 100_000, rppgBpm: null }
 const sample = (t: number, bpm = 81, contact: 'good' | 'poor' | 'unsupported' = 'good') => ({ t, bpm, contact })
@@ -19,9 +19,17 @@ describe('워치 행 상태', () => {
     expect(watchView({ ...base, status: 'connected', latest: sample(99_000) })).toMatchObject({ state: 'live', text: '81 BPM', action: 'disconnect' })
   })
 
-  it('5초 넘게 새 값이 없으면 신호 없음이고, 그때도 끊을 수 있다', () => {
+  it('실측 최대 6.06초 간격을 허용하고 8초 넘게 새 값이 없으면 신호 없음이다', () => {
+    expect(watchView({ ...base, status: 'connected', latest: sample(100_000 - 6060) }).state).toBe('live')
+    expect(watchView({ ...base, status: 'connected', latest: sample(100_000 - WATCH_STALE_MS) }).state).toBe('live')
     const v = watchView({ ...base, status: 'connected', latest: sample(100_000 - WATCH_STALE_MS - 1) })
     expect(v).toMatchObject({ state: 'stale', action: 'disconnect' })
+  })
+
+  it('미래·비유한 시각·범위 밖 심박은 정상으로 표시하지 않는다', () => {
+    for (const latest of [sample(100_001), sample(NaN), sample(99_000, 29), sample(99_000, 221), sample(99_000, NaN)]) {
+      expect(watchView({ ...base, status: 'connected', latest }).state).toBe('stale')
+    }
   })
 
   it('접촉 불량이면 값을 보이지 않고 착용 확인을 안내한다', () => {
@@ -37,5 +45,17 @@ describe('워치 행 상태', () => {
     expect(watchView({ ...base, failure: 'disconnected' })).toMatchObject({ state: 'disconnected', action: 'connect' })
     expect(watchView({ ...base, failure: 'notFound' })).toMatchObject({ state: 'notFound', action: 'connect' })
     expect(watchView({ ...base, failure: 'failed' })).toMatchObject({ state: 'failed', action: 'connect' })
+  })
+})
+
+describe('pulseOrigin', () => {
+  it('측정 중 워치가 대표 심박이면 파형도 워치 BPM 리듬을 쓴다', () => {
+    expect(pulseOrigin(true, 'watch')).toBe('watch')
+  })
+
+  it('워치가 대표값이 아니거나 측정 전이면 rPPG 파형을 쓴다', () => {
+    expect(pulseOrigin(true, 'rppg')).toBe('rppg')
+    expect(pulseOrigin(true, null)).toBe('rppg')
+    expect(pulseOrigin(false, 'watch')).toBe('rppg')
   })
 })

@@ -1177,11 +1177,20 @@
   grid-template-rows: minmax(0, 1fr);
   gap: clamp(16px, min(2.6vw, 3vh), 48px);
   overflow-y: auto;
+  /* 글자 전환(Morph) 중 잠깐 넓어진 값이 가로 스크롤바를 띄웠다 지우며 화면을 흔들지 않게 한다 */
+  overflow-x: hidden;
   overscroll-behavior: contain;
 }
 .measureBody .right {
   --right-gap: clamp(8px, 1.6vh, 28px);
   gap: var(--right-gap);
+  min-width: 0;
+}
+/* 상태 행 값은 행 안에서만 바뀐다. 세로로 미끄러지는 글자는 자르지 않도록 가로만 자른다 */
+.measureBody .rowValue {
+  min-width: 0;
+  overflow-x: clip;
+  text-align: right;
 }
 .measureBody .left {
   gap: clamp(8px, 1.4vh, 20px);
