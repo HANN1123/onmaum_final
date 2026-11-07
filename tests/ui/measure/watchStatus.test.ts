@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { watchView, WATCH_STALE_MS, type WatchInput } from '@/features/ui/measure/demo/watchStatus'
+import { watchView, pulseOrigin, WATCH_STALE_MS, type WatchInput } from '@/features/ui/measure/demo/watchStatus'
 
 const base: WatchInput = { supported: true, status: 'idle', latest: null, failure: null, now: 100_000, rppgBpm: null }
 const sample = (t: number, bpm = 81, contact: 'good' | 'poor' | 'unsupported' = 'good') => ({ t, bpm, contact })
@@ -45,5 +45,17 @@ describe('워치 행 상태', () => {
     expect(watchView({ ...base, failure: 'disconnected' })).toMatchObject({ state: 'disconnected', action: 'connect' })
     expect(watchView({ ...base, failure: 'notFound' })).toMatchObject({ state: 'notFound', action: 'connect' })
     expect(watchView({ ...base, failure: 'failed' })).toMatchObject({ state: 'failed', action: 'connect' })
+  })
+})
+
+describe('pulseOrigin', () => {
+  it('측정 중 워치가 대표 심박이면 파형도 워치 BPM 리듬을 쓴다', () => {
+    expect(pulseOrigin(true, 'watch')).toBe('watch')
+  })
+
+  it('워치가 대표값이 아니거나 측정 전이면 rPPG 파형을 쓴다', () => {
+    expect(pulseOrigin(true, 'rppg')).toBe('rppg')
+    expect(pulseOrigin(true, null)).toBe('rppg')
+    expect(pulseOrigin(false, 'watch')).toBe('rppg')
   })
 })

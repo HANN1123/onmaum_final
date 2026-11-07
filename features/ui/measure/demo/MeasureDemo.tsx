@@ -14,7 +14,7 @@ import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type Camera
 import FaceLayer from './FaceLayer'
 import { rotatedVideoStyle } from './rotationLayout'
 import { useWatch } from './useWatch'
-import { WATCH_HINT } from './watchStatus'
+import { WATCH_HINT, WATCH_PULSE_TAG, pulseOrigin } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
 import { selectHeartRate } from '@/features/rppg/lib/heartRateSource'
 import { useLivePulse } from './demoBits'
@@ -108,10 +108,14 @@ export default function MeasureDemo() {
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
-  // 수신 BPM 기반 주기 애니메이션이며 실측 파형이 아니다. 실제 rPPG 파형이 있을 때는 그것을 쓴다.
+  // 워치가 대표 심박이면 파형·오브 박동도 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
+  // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 그 밖에는 rPPG 실측 파형을 쓴다.
+  const pulseFrom = pulseOrigin(active, selected.source)
+  const wavePulse = useCallback(() => pulseFrom === 'watch' ? watchPulse() : getPulse(),
+    [pulseFrom, watchPulse, getPulse])
   const orbPulse = useCallback(() => !active ? 0
-    : rppg.rawBpm !== null ? getPulse() : selected.source === 'watch' ? watchPulse() : 0,
-  [active, rppg.rawBpm, getPulse, selected.source, watchPulse])
+    : pulseFrom === 'watch' ? watchPulse() : rppg.rawBpm !== null ? getPulse() : 0,
+  [active, pulseFrom, rppg.rawBpm, getPulse, watchPulse])
   const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
@@ -213,10 +217,10 @@ export default function MeasureDemo() {
                 style={{ opacity: ready ? 0 : 1 }}
               />
             </div>
-            <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
+            <Skeleton loading={!ready && pulseFrom !== 'watch'} id="measure-wave" label="맥박 파형 준비 중">
               <div className={styles.waveBox} skullet-block="">
-                <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>{pulseTag(rppg)}</span>
+                <PulseCanvas getPulse={wavePulse} className={styles.wave} color={ink} />
+                <span className={styles.frameTag}>{pulseFrom === 'watch' ? WATCH_PULSE_TAG : pulseTag(rppg)}</span>
               </div>
             </Skeleton>
           </div>
