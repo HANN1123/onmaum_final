@@ -16,7 +16,7 @@ describe('NudgeSettings', () => {
 
   it('토글 켜면 settings.nudge.enabled=true 저장', () => {
     render(<NudgeSettings />)
-    const toggle = screen.getByRole('switch', { name: /위험도/ })
+    const toggle = screen.getByRole('switch', { name: /휴식 알림/ })
     fireEvent.click(toggle)
     expect(loadSettings().nudge.enabled).toBe(true)
   })

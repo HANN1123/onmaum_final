@@ -11,7 +11,11 @@ import { loadSettings } from '@/shared/storage/settings'
 import { loadNudgeDayState, saveNudgeDayState } from '@/shared/storage/dayState'
 import { useLocalDate } from './useLocalDate'
 
-const NUDGE_MESSAGE = '마음에 힘이 들어간 지 좀 됐어요. 잠깐 숨 돌릴까요?'
+/** 화면 안 배너 문구. 측정 판정만 말하고 마음 상태를 단정하지 않는다 */
+const NUDGE_MESSAGE = '최근 몇 분 동안 평소보다 높은 상태가 이어졌어요. 잠깐 쉬어 갈까요?'
+/** OS 알림 문구. 잠금 화면·알림 센터에 보일 수 있어 감정·점수는 넣지 않는다 */
+const OS_NOTIFICATION_TITLE = '잠깐 쉬어 갈까요?'
+const OS_NOTIFICATION_BODY = '앱에서 쉬어 가기 제안을 볼 수 있어요.'
 
 export function useNudge() {
   const [bannerOpen, setBannerOpen] = useState(false)
@@ -51,10 +55,11 @@ export function useNudge() {
     if (shouldNudge({ settings: settings.nudge, sustain: sustainRef.current, dayState, now })) {
       saveNudgeDayState(today, { count: dayState.count + 1, lastAtMs: now.getTime() })
       setBannerOpen(true)
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      // 사용자가 OS 알림을 켠 경우에만, 그리고 실제 권한이 있을 때만 띄운다
+      if (settings.nudge.osNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          const n = new Notification('🌿 잠깐 숨 돌릴까요?', {
-            body: NUDGE_MESSAGE,
+          const n = new Notification(OS_NOTIFICATION_TITLE, {
+            body: OS_NOTIFICATION_BODY,
             icon: '/favicon.ico',
             tag: `onmaum-nudge-${today}`,
           })

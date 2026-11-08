@@ -61,6 +61,12 @@ function hasOwn(map: Record<string, string>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(map, key)
 }
 
+/** 이전 설문 답(문구) 하나의 제안 문장. 예전 이름도 읽는다. 문장이 없는 답이면 null */
+export function reliefSentence(saved: string): string | null {
+  const relief = hasOwn(LEGACY_RELIEF_LABELS, saved) ? LEGACY_RELIEF_LABELS[saved] : saved
+  return hasOwn(RELIEF_SUGGESTIONS, relief) ? RELIEF_SUGGESTIONS[relief] : null
+}
+
 /**
  * 지배 감정 + 로컬 프로필(선호 해소법)로 회복 제안을 만든다.
  * 프로필이 있으면 첫 선호의 문장을 그대로 쓰고(감정으로 하루를 단정하는 앞말은 붙이지 않음),

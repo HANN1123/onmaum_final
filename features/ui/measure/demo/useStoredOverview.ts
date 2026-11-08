@@ -4,7 +4,7 @@ import { BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
 import { useLocalDate } from '@/features/feedback/hooks/useLocalDate'
 import { getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
 import { getSessionsByDateRange } from '@/shared/storage/sessionRepository'
-import { loadSettings } from '@/shared/storage/settings'
+import { loadSettings, SETTINGS_CHANGED_EVENT } from '@/shared/storage/settings'
 import { buildStoredOverview, type StoredOverview } from './storedOverview'
 
 /**
@@ -25,10 +25,17 @@ export function useStoredOverview(): StoredOverview | null {
   }, [today])
 
   // 체크인 보정값. localStorage 는 클라이언트에서만 읽는다(첫 렌더는 0, 기존 /stats 와 같은 방식).
+  // 체크인에 답하면(같은 탭 이벤트·다른 탭 storage 이벤트) 다시 읽어 리포트 숫자를 바로 바꾼다.
   const [offset, setOffset] = useState(0)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOffset(loadSettings().calibrationOffset)
+    const read = () => setOffset(loadSettings().calibrationOffset)
+    read()
+    window.addEventListener(SETTINGS_CHANGED_EVENT, read)
+    window.addEventListener('storage', read)
+    return () => {
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, read)
+      window.removeEventListener('storage', read)
+    }
   }, [])
 
   return useMemo(() => (data ? buildStoredOverview(data.records, data.sessions, data.now, offset) : null), [data, offset])

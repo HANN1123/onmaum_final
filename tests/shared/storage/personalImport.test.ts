@@ -350,3 +350,25 @@ describe('교차 검토 반영', () => {
     expect(summary.localKeys).toEqual({ added: 0, kept: 0, ignored: 0, failed: 1 })
   })
 })
+
+describe('2026-11 설문·설정 필드', () => {
+  it('새 설문 답과 체크인 시간대·OS 알림 설정을 검사해 옮기고, 잘못된 새 필드만 뺀다', () => {
+    const parsed = parsePersonalDataImport(
+      file({
+        localData: {
+          onmaum_profile: { reliefs: [], deskActions: ['water'], breathing: 'slow1', tone: 'loud' },
+          [SETTINGS_KEY]: { checkinSlots: { morning: false, afternoon: true }, nudge: { enabled: true, osNotify: false } },
+        },
+      }),
+      NOW,
+    )
+    const map = Object.fromEntries(parsed.localData.map(([k, v]) => [k, JSON.parse(v)]))
+    expect(map.onmaum_profile).toEqual({ reliefs: [], deskActions: ['water'], breathing: 'slow1' })
+    expect(map[SETTINGS_KEY]).toEqual({ checkinSlots: { morning: false, afternoon: true }, nudge: { enabled: true, osNotify: false } })
+  })
+
+  it('저장 동의는 다른 기기에서 가져오지 않는다', () => {
+    const parsed = parsePersonalDataImport(file({ localData: { onmaum_consent: { version: 1, record: true, decidedAt: 'x' } } }), NOW)
+    expect(parsed.localData).toHaveLength(0)
+  })
+})

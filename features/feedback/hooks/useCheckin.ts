@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getEmotionsByDate, getEmotionsByDateRange } from '@/shared/storage/emotionRepository'
 import { recentStress, dailyStressHistory } from '@/features/algorithm/stress/dailyStress'
@@ -42,14 +42,19 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
 
   const settings = loadSettings()
   const hasTodayData = (todayRecords?.length ?? 0) > 0
+  // 방금 응답한 시간대. 응답 직후 같은 카드를 다시 묻지 않는다(저장 실패로 기록이 남지 않아도)
+  const [answered, setAnswered] = useState<string | null>(null)
+  // 끈 시간대는 이미 응답한 것처럼 다뤄 묻지 않는다
+  const disabledSlots = (['morning', 'afternoon'] as const).filter((s) => !settings.checkinSlots[s])
 
-  const { due: inWindow, slot } = checkinDue({
+  const { due: windowDue, slot } = checkinDue({
     now,
     morning: settings.morningWindow,
     afternoon: settings.afternoonWindow,
-    doneSlots: loadCheckinDone(date),
+    doneSlots: [...loadCheckinDone(date), ...disabledSlots],
     hasTodayData,
   })
+  const inWindow = windowDue && answered !== `${date}:${slot}`
 
   let line = ''
   let context: CheckinContext | undefined
@@ -77,15 +82,16 @@ export function useCheckin({ now = new Date() }: Args = {}): CheckinView {
   // 빈 카드에 응답해 보정값이 바뀌는 것을 막는다.
   const due = inWindow && context !== undefined
 
-  const submit = useCallback(
-    (report: SelfReport) => {
-      if (!slot || !context) return
-      const s = loadSettings()
-      saveSettings({ ...s, calibrationOffset: nextOffset(s.calibrationOffset, report) })
-      saveCheckinEntry(date, slot, report, nowMs, context)
-    },
-    [slot, date, nowMs, context],
-  )
+  // React Compiler 가 메모이즈한다(응답 상태 갱신이 들어가 수동 useCallback 은 두지 않는다)
+  const submit = (report: SelfReport) => {
+    if (!slot || !context) return
+    setAnswered(`${date}:${slot}`)
+    // 두 번 누르거나 다른 탭에서 이미 응답했으면 보정을 다시 하지 않는다
+    if (loadCheckinDone(date).includes(slot)) return
+    const s = loadSettings()
+    saveSettings({ ...s, calibrationOffset: nextOffset(s.calibrationOffset, report) })
+    saveCheckinEntry(date, slot, report, nowMs, context)
+  }
 
   return { due, slot, line, submit }
 }
