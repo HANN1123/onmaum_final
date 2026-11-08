@@ -51,6 +51,7 @@ describe('SurveyDemo: 처음 설문', () => {
     // 체크인 문항에 답하지 않았으므로 기존 설정 유지
     expect(loadSettings().checkinSlots).toEqual({ morning: true, afternoon: true })
     expect(localStorage.getItem('onmaum_onboarded')).toBe('true')
+    expect(localStorage.getItem('onmaum_survey_version')).toBe('2')
   })
 
   it('기록 화면에서 고치러 오면 저장된 답을 미리 고르고, 마치면 기록 화면으로 돌아간다', async () => {

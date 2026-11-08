@@ -274,7 +274,7 @@ function Report({
           <Row k="심박" v="저장하지 않음 · 측정 결과 화면에서 확인" />
         </div>
 
-        <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" />
+        <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" level={today.level} mode={baseline.mode} />
 
         <div className={styles.actions} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>

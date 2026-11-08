@@ -1,3 +1,4 @@
+import type { BaselineMode, StressLevel } from '../../algorithm/baseline/baseline'
 import type { BreakBudget, MessageTone, Profile } from '../../../shared/storage/profile'
 import type { BreathingDuration, BreathingTechnique } from './breathing'
 import { reliefSentence } from './selfCareSuggestion'
@@ -18,7 +19,10 @@ import { reliefSentence } from './selfCareSuggestion'
  * - 고른 답을 모두 후보로 쓴다. 고른 순서를 선호 순위로 보지 않는다.
  * - 언제 보이는지(moment)에 맞는 것만 고른다. 측정 중에는 여유 시간 안에 끝나는 것만, 걷기·샤워 같은 회복법은
  *   결과·하루 리포트에서 "쉬는 시간이나 퇴근 후"로만 제안한다.
- * - 측정 중 휴식 알림(상태가 높게 이어질 때)은 먹거리를 골랐으면 그것부터 권한다("한숨 돌리고 …").
+ * - 상태(기존 4단계 판정 StressLevel)에 따라 순서를 바꾼다(levelOrder).
+ *   높음·많이 높음: 고른 먹거리부터("한숨 돌리고 커피 한 잔"), 이어서 호흡·자리에서 몸 풀기.
+ *   보통: 날짜마다 다른 제안으로 시작해 돌려 보인다.  낮음: 마음 돌보기·회복법으로 지금 흐름을 이어 가게 한다.
+ *   측정 중 휴식 알림은 높은 상태가 이어질 때만 뜨므로 높음으로 다룬다.
  * - 호흡 안내를 받지 않기로 했으면 자동 제안에서 뺀다(사용자가 직접 여는 것은 막지 않는다).
  * - 표정·점수로 기분을 단정하는 앞말을 붙이지 않는다.
  */
@@ -167,7 +171,7 @@ function idsFor(profile: Profile, context: CareContext): string[] {
  * - after(측정 결과): 먹거리·자리에서·마음 돌보기·쉬는 시간/퇴근 후 + 호흡
  * - day(하루 리포트): 쉬는 시간/퇴근 후·마음 돌보기·먹거리 + 호흡(5분을 골랐으면 5분)
  */
-export function careSuggestions(profile: Profile | null, moment: CareMoment): CareSuggestion[] {
+export function careSuggestions(profile: Profile | null, moment: CareMoment, level: StressLevel | null = null): CareSuggestion[] {
   const tone: MessageTone = profile?.tone ?? 'warm'
   const plan = breathingPlan(profile, moment)
   const budget = BUDGET_SEC[profile?.breakBudget ?? 'varies']
@@ -194,7 +198,49 @@ export function careSuggestions(profile: Profile | null, moment: CareMoment): Ca
   if (list.every((s) => s.breathing !== null)) {
     list.unshift({ id: `fallback:${moment}`, kind: 'fallback', text: FALLBACK[moment][tone], breathing: null })
   }
-  return list
+  const order = level ? LEVEL_ORDER[levelTier(level)] : null
+  if (!order) return list
+  // 같은 갈래 안에서는 고른 순서를 지킨다(안정 정렬)
+  const rank = (s: CareSuggestion) => {
+    const i = order.indexOf(s.kind)
+    return i < 0 ? order.length : i
+  }
+  return list.map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map(({ s }) => s)
+}
+
+export type CareTier = 'heavy' | 'steady' | 'light'
+
+export function levelTier(level: StressLevel): CareTier {
+  if (level === 'high' || level === 'veryHigh') return 'heavy'
+  return level === 'low' ? 'light' : 'steady'
+}
+
+/** 상태별 제안 순서. 보통(steady)은 설문 갈래 순서를 그대로 쓰고 날짜마다 다른 제안으로 시작한다 */
+const LEVEL_ORDER: Record<CareTier, CareKind[] | null> = {
+  heavy: ['treat', 'breathing', 'desk', 'mind', 'fallback', 'legacy', 'recovery'],
+  steady: null,
+  light: ['mind', 'recovery', 'treat', 'legacy', 'desk', 'fallback', 'breathing'],
+}
+
+const LEVEL_RESULT: Record<BaselineMode, Record<StressLevel, string>> = {
+  relative: { low: '평소보다 가벼운 편이었어요', typical: '평소와 비슷했어요', high: '평소보다 높은 편이었어요', veryHigh: '평소보다 많이 높은 편이었어요' },
+  absolute: { low: '가벼운 편이었어요', typical: '보통이었어요', high: '높은 편이었어요', veryHigh: '많이 높은 편이었어요' },
+}
+const TIER_LEAD: Record<CareTier, string> = {
+  heavy: '잠깐 쉬어 가요.',
+  steady: '틈날 때 쉬어 가요.',
+  light: '지금 흐름을 이어 가요.',
+}
+
+/**
+ * 제안 위에 붙일 상태 한 줄. 측정 기록으로 본 판정만 말하고 마음 상태를 단정하지 않는다.
+ * 예) "이번 측정 스트레스는 평소보다 높은 편이었어요. 잠깐 쉬어 가요."
+ * 판정이 없으면 null(제안만 보인다). 측정 중 휴식 알림은 배너 문구가 따로 있어 쓰지 않는다.
+ */
+export function careHeadline(level: StressLevel | null, mode: BaselineMode, moment: CareMoment): string | null {
+  if (!level || moment === 'during') return null
+  const subject = moment === 'after' ? '이번 측정 스트레스는' : '오늘 스트레스는'
+  return `${subject} ${LEVEL_RESULT[mode][level]}. ${TIER_LEAD[levelTier(level)]}`
 }
 
 function dayNumber(date: Date): number {
@@ -202,16 +248,17 @@ function dayNumber(date: Date): number {
 }
 
 /**
- * 처음 보여 줄 후보 위치. 날짜와 화면마다 다르게 시작해, 매번 첫 답만 보이지 않게 한다.
+ * 처음 보여 줄 후보 위치. 보통 상태(또는 판정 없음)는 날짜와 화면마다 다르게 시작해, 매번 첫 답만 보이지 않게 한다.
  * 같은 날 같은 화면에서는 같은 제안으로 시작한다(새로고침할 때마다 바뀌지 않게).
- * 측정 중 휴식 알림은 먹거리를 골랐으면 그중 하나로 시작한다("한숨 돌리고 커피 한 잔").
+ * 높음·낮음은 상태에 맞춰 앞에 둔 갈래(levelOrder) 안에서 날짜마다 돌린다.
+ * 예) 높음 + 커피·차를 골랐으면 "한숨 돌리고 커피 한 잔"과 "따뜻한 차 한 잔"을 날마다 번갈아 먼저 보인다.
  */
-export function suggestionStart(list: readonly CareSuggestion[], moment: CareMoment, date: Date): number {
+export function suggestionStart(list: readonly CareSuggestion[], moment: CareMoment, date: Date, level: StressLevel | null = null): number {
   if (list.length <= 1) return 0
   const day = dayNumber(date)
-  if (moment === 'during') {
-    const treats = list.map((s, i) => (s.kind === 'treat' ? i : -1)).filter((i) => i >= 0)
-    if (treats.length > 0) return treats[day % treats.length]
+  if (level && levelTier(level) !== 'steady') {
+    const lead = list.map((s, i) => (s.kind === list[0].kind ? i : -1)).filter((i) => i >= 0)
+    return lead[day % lead.length]
   }
   const offset = moment === 'during' ? 0 : moment === 'after' ? 1 : 2
   return (day + offset) % list.length

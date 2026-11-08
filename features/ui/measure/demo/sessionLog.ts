@@ -1,4 +1,7 @@
-import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
+import type { Emotion, EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { classifyStress, type BaselineState, type StressLevel } from '@/features/algorithm/baseline/baseline'
+import { applyOffset } from '@/features/algorithm/baseline/calibration'
+import { aggregateStress } from '@/features/algorithm/stress/stressIndex'
 import type { RppgQuality } from '@/features/rppg/engine/rppgGate'
 import { cleanBpmSeries, MAX_JOIN_GAP_SEC } from '@/features/rppg/lib/bpmCleaning'
 import { bpmOrigin, type HeartRateOrigin, type WatchSample } from '@/features/rppg/lib/heartRateSource'
@@ -35,6 +38,11 @@ export interface DemoSession {
   durationSec: number
   /** 같은 측정의 1분 감정 요약이 저장된 세션 id. 저장하지 않았으면 없다 */
   sessionId?: string
+  /**
+   * 측정 동안 얼굴을 찾은 검출의 감정 비율 평균(다듬기 전 값, 저장 기록과 같은 입력). 얼굴을 못 찾았으면 없다.
+   * 결과 화면이 이번 측정의 스트레스 단계를 기존 판정(classifyStress)으로 정해 상태에 맞는 제안을 고른다.
+   */
+  faceMean?: EmotionResult
   /** t 오름차순 */
   samples: TimelinePoint[]
 }
@@ -49,10 +57,24 @@ export function saveDemoSession(session: DemoSession): void {
   }
 }
 
-/** 방금 넘긴 측정에 저장된 세션 id 를 붙인다. 넘긴 측정이 없거나 못 읽으면 아무것도 하지 않는다 */
-export function attachSessionId(sessionId: string): void {
+/** 방금 넘긴 측정에 세션 id·표정 평균을 붙인다. 넘긴 측정이 없거나 못 읽으면 아무것도 하지 않는다 */
+export function attachSessionExtras(extras: Pick<DemoSession, 'sessionId' | 'faceMean'>): void {
   const session = parseDemoSession(readDemoSessionRaw())
-  if (session) saveDemoSession({ ...session, sessionId })
+  if (!session) return
+  const next = { ...session }
+  if (extras.sessionId) next.sessionId = extras.sessionId
+  if (extras.faceMean) next.faceMean = extras.faceMean
+  saveDemoSession(next)
+}
+
+/**
+ * 이번 측정의 스트레스 단계. 표정 평균으로 기존 지수(aggregateStress)를 내고, 오늘 리포트와 같이 상태 확인 보정값을 더해
+ * 개인 기준선(없으면 절대 기준)으로 나눈다. 표정 평균이 없으면 null.
+ */
+export function sessionStressLevel(session: DemoSession, baseline: BaselineState, offset: number): StressLevel | null {
+  if (!session.faceMean) return null
+  const scores = aggregateStress([{ ...session.faceMean, duration: 1 }])
+  return scores ? classifyStress(applyOffset(scores.stress, offset), baseline) : null
 }
 
 /** 저장된 원문. 없거나 못 읽으면 null. 문자열이라 useSyncExternalStore 스냅샷으로 안전하다. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { careSuggestions, suggestionStart } from '@/features/feedback/lib/careActions'
+import { careHeadline, careSuggestions, suggestionStart } from '@/features/feedback/lib/careActions'
 import type { Profile } from '@/shared/storage/profile'
 
 const ids = (p: Profile | null, m: 'during' | 'after' | 'day') => careSuggestions(p, m).map((s) => s.id)
@@ -67,11 +67,15 @@ describe('careSuggestions: 설문 답으로 고르는 쉬어 가기 제안', () 
 describe('suggestionStart: 첫 제안 위치', () => {
   const profile: Profile = { reliefs: [], treats: ['coffee', 'tea'], deskActions: ['shoulders', 'stretch'], mindActions: ['photo'] }
 
-  it('측정 중 휴식 알림은 먹거리를 골랐으면 그중 하나로 시작한다', () => {
-    const list = careSuggestions(profile, 'during')
+  it('높은 상태(측정 중 휴식 알림 포함)는 고른 먹거리 중 하나로 시작해 날마다 번갈아 보인다', () => {
+    const list = careSuggestions(profile, 'during', 'high')
+    const firsts = new Set<string>()
     for (let d = 1; d <= 4; d += 1) {
-      expect(list[suggestionStart(list, 'during', new Date(2026, 10, d))].kind).toBe('treat')
+      const first = list[suggestionStart(list, 'during', new Date(2026, 10, d), 'high')]
+      expect(first.kind).toBe('treat')
+      firsts.add(first.id)
     }
+    expect(firsts).toEqual(new Set(['coffee', 'tea']))
   })
 
   it('결과·리포트는 날짜·화면마다 다르게 시작하고 같은 날 같은 화면은 같다', () => {
@@ -80,5 +84,39 @@ describe('suggestionStart: 첫 제안 위치', () => {
     expect(suggestionStart(list.slice(0, 1), 'after', d)).toBe(0)
     expect(suggestionStart(list, 'after', d)).toBe(suggestionStart(list, 'after', new Date(2026, 10, 9, 18)))
     expect(suggestionStart(list, 'after', new Date(2026, 10, 10))).toBe((suggestionStart(list, 'after', d) + 1) % list.length)
+  })
+})
+
+describe('상태별 제안: 기존 4단계 판정에 맞춰 순서를 바꾼다', () => {
+  const profile: Profile = {
+    reliefs: [],
+    treats: ['coffee'],
+    deskActions: ['stretch'],
+    mindActions: ['music'],
+    recoveryActions: ['walk'],
+    breathing: 'sigh1',
+  }
+  const kinds = (level: 'low' | 'typical' | 'high' | 'veryHigh' | null) => careSuggestions(profile, 'after', level).map((s) => s.kind)
+
+  it('높음·많이 높음: 먹거리 → 호흡 → 몸 풀기 → 마음 → 회복법', () => {
+    expect(kinds('high')).toEqual(['treat', 'breathing', 'desk', 'mind', 'recovery'])
+    expect(kinds('veryHigh')).toEqual(kinds('high'))
+  })
+
+  it('낮음: 마음 돌보기·회복법을 먼저, 호흡은 마지막', () => {
+    expect(kinds('low')).toEqual(['mind', 'recovery', 'treat', 'desk', 'breathing'])
+  })
+
+  it('보통·판정 없음: 설문 갈래 순서 그대로', () => {
+    expect(kinds('typical')).toEqual(['treat', 'desk', 'mind', 'recovery', 'breathing'])
+    expect(kinds(null)).toEqual(kinds('typical'))
+  })
+
+  it('상태 한 줄은 측정 판정만 말하고, 기준선이 없으면 "평소"라고 하지 않는다', () => {
+    expect(careHeadline('high', 'relative', 'after')).toBe('이번 측정 스트레스는 평소보다 높은 편이었어요. 잠깐 쉬어 가요.')
+    expect(careHeadline('low', 'absolute', 'day')).toBe('오늘 스트레스는 가벼운 편이었어요. 지금 흐름을 이어 가요.')
+    expect(careHeadline('typical', 'absolute', 'after')).not.toContain('평소')
+    expect(careHeadline(null, 'relative', 'after')).toBeNull()
+    expect(careHeadline('high', 'relative', 'during')).toBeNull()
   })
 })

@@ -28,7 +28,8 @@ import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
 import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
-import { attachSessionId } from './sessionLog'
+import { attachSessionExtras } from './sessionLog'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
@@ -81,6 +82,11 @@ export default function MeasureDemo() {
     setVideoEl(el)
   }, [])
   const [active, setActive] = useState(true)
+  // 표본 콜백이 렌더 중 값이 아니라 최신 측정 여부를 읽게 한다
+  const activeRef = useRef(active)
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
   // 카메라 회전(시계 방향). 웹캠을 세워 쓰거나 뒤집어 달았을 때 화면과 분석 입력을 함께 돌린다. 이 기기에만 저장한다
   const [rotation, setRotation] = useState<CameraRotation>(0)
   useEffect(() => {
@@ -147,11 +153,28 @@ export default function MeasureDemo() {
   }
   const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
   const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
+  // 이번 측정의 표정 평균(결과 화면의 상태별 제안용). 측정을 다시 시작하면 처음부터 모은다
+  const faceSum = useRef({ happy: 0, calm: 0, sad: 0, angry: 0, n: 0 })
+  useEffect(() => {
+    if (active) faceSum.current = { happy: 0, calm: 0, sad: 0, angry: 0, n: 0 }
+  }, [active])
+  const pushSample = recording.push
+  const onSample = useCallback((raw: EmotionResult | null) => {
+    pushSample(raw)
+    if (!raw || !activeRef.current) return
+    const acc = faceSum.current
+    acc.happy += raw.happy
+    acc.calm += raw.calm
+    acc.sad += raw.sad
+    acc.angry += raw.angry
+    acc.n += 1
+  }, [pushSample])
   const face = useFaceTrack(videoRef, webcam === 'ready', {
     rotation,
     getFace,
     intervalMs: FACE_INTERVAL_MS,
-    onSample: breathing ? undefined : recording.push,
+    // 호흡 안내 중에는 저장·평균 모두 넘기지 않는다
+    onSample: breathing ? undefined : onSample,
   })
   const nudge = useNudge()
   /** 위쪽 숨 고르기: 설문에서 고른 호흡 방법(받지 않기여도 직접 열면 순환 한숨 1분) */
@@ -187,7 +210,11 @@ export default function MeasureDemo() {
     setEnding(true)
     finishLog()
     const saved = await recording.stop()
-    if (saved?.sessionId && saved.saved > 0) attachSessionId(saved.sessionId)
+    const acc = faceSum.current
+    attachSessionExtras({
+      sessionId: saved?.sessionId && saved.saved > 0 ? saved.sessionId : undefined,
+      faceMean: acc.n > 0 ? { happy: acc.happy / acc.n, calm: acc.calm / acc.n, sad: acc.sad / acc.n, angry: acc.angry / acc.n } : undefined,
+    })
     setActive(false)
     setEnding(false)
     router.push(RESULT_HREF)
@@ -382,6 +409,7 @@ export default function MeasureDemo() {
             <p className={styles.nudgeMessage}>{nudge.message}</p>
             <CareCard
               moment="during"
+              level="high"
               title="지금 해볼 수 있는 것"
               onBreathe={(plan) => {
                 nudge.close()

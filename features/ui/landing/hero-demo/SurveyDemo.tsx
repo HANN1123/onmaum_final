@@ -18,7 +18,7 @@ import { LEGAL } from '@/features/ui/measure/demo/demoCopy'
 import { nudgeModeOf, withNudgeMode, type NudgeMode } from '@/features/ui/measure/demo/DemoSettings'
 import styles from '@/features/ui/measure/demo/measureDemo.module.css'
 import { loadConsent, saveConsent } from '@/shared/storage/consent'
-import { markOnboarded } from '@/shared/storage/onboarding'
+import { markSurveyDone } from '@/shared/storage/onboarding'
 import { loadProfile, saveProfile } from '@/shared/storage/profile'
 import { loadSettings, saveSettings } from '@/shared/storage/settings'
 import { jetbrainsMono, sora } from './fonts'
@@ -89,7 +89,7 @@ export default function SurveyDemo() {
     const settings = loadSettings()
     saveSettings(withNudgeMode(slots ? { ...settings, checkinSlots: slots } : settings, nudgeMode))
     saveConsent(record)
-    markOnboarded()
+    markSurveyDone()
     // 윈도우 알림을 골랐으면 이때 한 번만 권한을 묻는다(거부 뒤에는 다시 묻지 않는다)
     if (nudgeMode === 'os' && supported && permission === 'default') await request()
     router.push(editing ? RECORDS_HREF : MEASURE_HREF)

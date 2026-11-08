@@ -14,7 +14,8 @@ import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
-import { peakWithEmotion, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
+import { peakWithEmotion, sessionStressLevel, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
+import { loadSettings } from '@/shared/storage/settings'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
 import BreathingGuide from './BreathingGuide'
@@ -196,7 +197,12 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
           <Row k="오늘" v={todayText} />
         </div>
 
-        <CareCard moment="after" onBreathe={setBreathing} />
+        <CareCard
+          moment="after"
+          onBreathe={setBreathing}
+          level={stored ? sessionStressLevel(session, stored.baseline, loadSettings().calibrationOffset) : null}
+          mode={stored?.baseline.mode ?? 'absolute'}
+        />
 
         <div className={styles.actions} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>

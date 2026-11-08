@@ -1592,3 +1592,12 @@
   line-height: 1.5;
   color: var(--text-dimmer);
 }
+
+/* 제안 위 상태 한 줄(측정 기록으로 본 판정) */
+.careHeadline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
