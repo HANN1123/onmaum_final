@@ -2,18 +2,20 @@ import { describe, expect, it } from 'vitest'
 import {
   answersFromProfile,
   CARE_SURVEY,
-  checkinFromAnswers,
   emptyAnswers,
   profileFromAnswers,
   toggleChoice,
 } from '@/features/feedback/lib/careSurvey'
-import { careAction, DESK_NONE } from '@/features/feedback/lib/careActions'
+import { careAction, DESK_NONE, MIND_NONE } from '@/features/feedback/lib/careActions'
 
 const step = (id: string) => CARE_SURVEY.find((s) => s.id === id)!
 
 describe('careSurvey: 처음 설문', () => {
+  it('먹거리·자리에서·마음 돌보기·호흡 4문항만 묻는다', () => {
+    expect(CARE_SURVEY.map((s) => s.id)).toEqual(['treat', 'desk', 'mind', 'breathing'])
+  })
+
   it('먹거리 문항이 처음이고 이전 설문의 음료·간식 선택지를 그대로 둔다', () => {
-    expect(CARE_SURVEY[0].id).toBe('treat')
     expect(CARE_SURVEY[0].choices.map((c) => c.label)).toEqual(['커피', '따뜻한 차', '시원한 물', '달달한 간식', '탄산음료', '과일', '딱히 없어요'])
   })
 
@@ -25,7 +27,7 @@ describe('careSurvey: 처음 설문', () => {
     for (const s of CARE_SURVEY) {
       const idsInStep = s.choices.map((c) => c.id)
       expect(new Set(idsInStep).size).toBe(idsInStep.length)
-      if (s.id === 'treat' || s.id === 'desk' || s.id === 'mind' || s.id === 'recovery') {
+      if (s.id !== 'breathing') {
         for (const c of s.choices) if (!c.exclusive) expect(careAction(c.id)?.context).toBe(s.id)
       }
     }
@@ -44,24 +46,19 @@ describe('careSurvey: 처음 설문', () => {
   })
 
   it('단일 선택: 바꾸면 하나만 남고, 같은 것을 다시 누르면 답하지 않은 상태가 된다', () => {
-    const budget = step('budget')
-    expect(toggleChoice(budget, ['under30s'], 'about3m')).toEqual(['about3m'])
-    expect(toggleChoice(budget, ['about3m'], 'about3m')).toEqual([])
+    const breathing = step('breathing')
+    expect(toggleChoice(breathing, ['sigh1'], 'slow1')).toEqual(['slow1'])
+    expect(toggleChoice(breathing, ['slow1'], 'slow1')).toEqual([])
   })
 
-  it('답을 프로필로 바꾸고, 답하지 않은 문항은 필드를 만들지 않는다', () => {
-    const answers = { ...emptyAnswers(), treat: ['coffee', 'sweets'], desk: [DESK_NONE], mind: ['quote'], recovery: ['walk'], breathing: ['slow1'], checkin: ['morning'] }
-    const profile = profileFromAnswers(answers, { reliefs: ['커피'] })
-    expect(profile).toEqual({ reliefs: ['커피'], treats: ['coffee', 'sweets'], deskActions: [], mindActions: ['quote'], recoveryActions: ['walk'], breathing: 'slow1' })
-    expect(checkinFromAnswers(answers)).toEqual({ morning: true, afternoon: false })
-    expect(checkinFromAnswers(emptyAnswers())).toBeNull()
+  it('답을 프로필로 바꾸고, 답하지 않은 문항은 필드를 만들지 않으며, 지금 묻지 않는 필드는 그대로 둔다', () => {
+    const answers = { ...emptyAnswers(), treat: ['coffee', 'sweets'], desk: [DESK_NONE], mind: ['quote'] }
+    const profile = profileFromAnswers(answers, { reliefs: ['커피'], recoveryActions: ['walk'], tone: 'plain' })
+    expect(profile).toEqual({ reliefs: ['커피'], recoveryActions: ['walk'], tone: 'plain', treats: ['coffee', 'sweets'], deskActions: [], mindActions: ['quote'] })
   })
 
   it('다시 열면 저장된 답을 미리 고른 상태로 보인다("해당 없음" 포함)', () => {
-    const answers = answersFromProfile(
-      { reliefs: [], treats: ['tea'], deskActions: [], recoveryActions: ['talk'], breakBudget: 'over5m', tone: 'plain' },
-      { morning: false, afternoon: false },
-    )
-    expect(answers).toEqual({ treat: ['tea'], desk: [DESK_NONE], mind: [], recovery: ['talk'], budget: ['over5m'], breathing: [], tone: ['plain'], checkin: ['off'] })
+    const answers = answersFromProfile({ reliefs: [], treats: ['tea'], mindActions: [], breathing: 'sigh5' })
+    expect(answers).toEqual({ treat: ['tea'], desk: [], mind: [MIND_NONE], breathing: ['sigh5'] })
   })
 })

@@ -31,12 +31,8 @@ describe('SurveyDemo: 처음 설문', () => {
     click(/어깨·목 풀기/)
     click('다음')
     click('건너뛰기') // 마음 돌보기는 답하지 않음
-    click('건너뛰기') // 회복법도 답하지 않음
-    click(/30초 미만/)
-    click('다음')
     click(/숨 참기 없는 느린 호흡/)
-    click('다음')
-    click('남은 질문 건너뛰기')
+    click('다음') // 질문 4개 다음이 저장·알림 화면
 
     const finish = screen.getByRole('button', { name: '기록 저장 여부를 골라 주세요' })
     expect(finish).toBeDisabled()
@@ -45,10 +41,10 @@ describe('SurveyDemo: 처음 설문', () => {
     click('저장하고 측정 시작')
 
     await vi.waitFor(() => expect(nav.push).toHaveBeenCalledWith('/demo/measure'))
-    expect(loadProfile()).toEqual({ reliefs: [], treats: ['coffee'], deskActions: ['shoulders'], breakBudget: 'under30s', breathing: 'slow1' })
+    expect(loadProfile()).toEqual({ reliefs: [], treats: ['coffee'], deskActions: ['shoulders'], breathing: 'slow1' })
     expect(loadConsent()?.record).toBe(true)
     expect(loadSettings().nudge).toMatchObject({ enabled: true, osNotify: false })
-    // 체크인 문항에 답하지 않았으므로 기존 설정 유지
+    // 상태 확인 시간대는 설문에서 묻지 않으므로 기존 설정 그대로
     expect(loadSettings().checkinSlots).toEqual({ morning: true, afternoon: true })
     expect(localStorage.getItem('onmaum_onboarded')).toBe('true')
     expect(localStorage.getItem('onmaum_survey_version')).toBe('2')

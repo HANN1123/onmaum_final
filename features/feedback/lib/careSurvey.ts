@@ -1,30 +1,21 @@
 import type { CheckinSlot } from './checkin'
-import { CARE_ACTIONS, DESK_NONE, MIND_NONE, RECOVERY_NONE, TREAT_NONE, type CareContext } from './careActions'
-import {
-  BREAK_BUDGETS,
-  BREATHING_PREFERENCES,
-  MESSAGE_TONES,
-  type BreakBudget,
-  type BreathingPreference,
-  type MessageTone,
-  type Profile,
-} from '../../../shared/storage/profile'
+import { CARE_ACTIONS, DESK_NONE, MIND_NONE, TREAT_NONE, type CareContext } from './careActions'
+import { BREATHING_PREFERENCES, type BreathingPreference, type Profile } from '../../../shared/storage/profile'
 
 /**
  * 처음 설문(2026-11). 설문 → 측정 → 피드백 흐름에서, 모든 답이 피드백 어디에 쓰이는지 정해져 있는 것만 묻는다.
  *  1 treat     쉴 때 즐겨 먹거나 마시는 것 → 측정 중 휴식 알림("한숨 돌리고 커피 한 잔")·결과 제안
  *  2 desk      응대 사이 자리에서 할 수 있는 것 → 측정 중 휴식 알림·결과 제안
  *  3 mind      마음이 복잡할 때 도움이 되는 것 → 휴식 알림·결과·하루 리포트 제안
- *  4 recovery  쉬는 시간·퇴근 후 도움이 되는 것 → 결과·하루 리포트 제안
- *  5 budget    응대 사이 여유 시간 → 측정 중 제안을 시간으로 거름(30초 미만이면 1분 호흡 제외)
- *  6 breathing 호흡 안내 선호 → 호흡 방법·길이, 받지 않기면 자동 제안에서 뺌
- *  7 tone      말투 → 같은 제안을 다정하게/짧게
- *  8 checkin   상태 확인 시간대 → 끈 시간대는 묻지 않음(화면에는 "체크인" 대신 "상태 확인"이라 쓴다)
+ *  4 breathing 호흡 안내 선호 → 호흡 방법·길이, 받지 않기면 자동 제안에서 뺌
+ * 퇴근 후 회복법·여유 시간·말투·상태 확인 시간대는 설문을 짧게 하려고 묻지 않는다(2026-11-09 결정).
+ * 프로필의 해당 필드(recoveryActions·breakBudget·tone)는 이전에 저장된 값을 읽기 위해 남겨 두고, 없으면 기본값을 쓴다
+ * (여유 시간은 "그때마다 달라요", 말투는 다정하게). 상태 확인 시간대는 기록 화면 "내 설정"에서 바꾼다.
  * 그 뒤 마지막 화면에서 기록 저장·휴식 알림을 한 번 고르고 기억한다(설문 화면이 따로 그린다).
  * 민원 종류·상대·근무지·건강 상태·자유 서술은 묻지 않는다. 선택지의 id 를 저장한다(문구를 고쳐도 데이터는 그대로).
  */
 
-export type CareSurveyStepId = 'treat' | 'desk' | 'mind' | 'recovery' | 'budget' | 'breathing' | 'tone' | 'checkin'
+export type CareSurveyStepId = 'treat' | 'desk' | 'mind' | 'breathing'
 
 export interface SurveyChoice {
   id: string
@@ -71,26 +62,6 @@ export const CARE_SURVEY: readonly CareSurveyStep[] = [
     choices: [...actionChoices('mind'), { id: MIND_NONE, label: '잘 모르겠어요', exclusive: true }],
   },
   {
-    id: 'recovery',
-    kind: 'multi',
-    question: '쉬는 시간이나 퇴근 후\n무엇이 도움이 되나요?',
-    hint: '여러 개 골라도 돼요. 측정 결과와 하루 리포트에서 제안해요.',
-    choices: [...actionChoices('recovery'), { id: RECOVERY_NONE, label: '아직 잘 모르겠어요', exclusive: true }],
-  },
-  {
-    id: 'budget',
-    kind: 'single',
-    question: '응대 사이에 보통\n얼마나 여유가 있나요?',
-    hint: '여유 시간보다 오래 걸리는 것은 측정 중에 제안하지 않아요.',
-    choices: [
-      { id: 'under30s', label: '30초 미만' },
-      { id: 'about1m', label: '1분 정도' },
-      { id: 'about3m', label: '3분 정도' },
-      { id: 'over5m', label: '5분 이상' },
-      { id: 'varies', label: '그때마다 달라요' },
-    ],
-  },
-  {
     id: 'breathing',
     kind: 'single',
     question: '호흡 안내는\n어떻게 받고 싶나요?',
@@ -102,34 +73,12 @@ export const CARE_SURVEY: readonly CareSurveyStep[] = [
       { id: 'none', label: '호흡 안내는 받지 않을게요' },
     ],
   },
-  {
-    id: 'tone',
-    kind: 'single',
-    question: '제안은 어떤 말투가\n편한가요?',
-    hint: '같은 제안을 고른 말투로 보여 드려요.',
-    choices: [
-      { id: 'warm', label: '다정하게', detail: '“한숨 돌리고 커피 한 잔 어때요?”' },
-      { id: 'plain', label: '짧고 담백하게', detail: '“커피 한 잔”' },
-    ],
-  },
-  {
-    id: 'checkin',
-    kind: 'single',
-    question: '측정으로 본 내 상태가 맞는지\n언제 물어볼까요?',
-    hint: '최근 30분 측정 기록으로 본 상태가 맞는지 짧게 묻고(상태 확인), 답을 다음 판정에 조금씩 반영해요. 리포트 화면에서만 물어요.',
-    choices: [
-      { id: 'both', label: '오전·오후 모두', detail: '10–12시 · 15–17시' },
-      { id: 'morning', label: '오전만', detail: '10–12시' },
-      { id: 'afternoon', label: '오후만', detail: '15–17시' },
-      { id: 'off', label: '묻지 않기' },
-    ],
-  },
 ]
 
 export type SurveyAnswers = Record<CareSurveyStepId, string[]>
 
 export function emptyAnswers(): SurveyAnswers {
-  return { treat: [], desk: [], mind: [], recovery: [], budget: [], breathing: [], tone: [], checkin: [] }
+  return { treat: [], desk: [], mind: [], breathing: [] }
 }
 
 /**
@@ -158,19 +107,15 @@ export function checkinSlotsFor(choice: CheckinChoice): Record<CheckinSlot, bool
   return { morning: choice === 'both' || choice === 'morning', afternoon: choice === 'both' || choice === 'afternoon' }
 }
 
-/** 저장된 프로필·상태 확인 시간대로 설문을 다시 열 때의 답. 설문에 답하지 않은 항목은 비워 둔다 */
-export function answersFromProfile(profile: Profile | null, checkinSlots: Record<CheckinSlot, boolean> | null): SurveyAnswers {
+/** 저장된 프로필로 설문을 다시 열 때의 답. 설문에 답하지 않은 항목은 비워 둔다 */
+export function answersFromProfile(profile: Profile | null): SurveyAnswers {
   const answers = emptyAnswers()
   // 빈 목록은 "해당 없음"을 고른 것이다
   const restore = (ids: string[] | undefined, none: string) => (ids ? (ids.length > 0 ? [...ids] : [none]) : [])
   answers.treat = restore(profile?.treats, TREAT_NONE)
   answers.desk = restore(profile?.deskActions, DESK_NONE)
   answers.mind = restore(profile?.mindActions, MIND_NONE)
-  answers.recovery = restore(profile?.recoveryActions, RECOVERY_NONE)
-  if (profile?.breakBudget) answers.budget = [profile.breakBudget]
   if (profile?.breathing) answers.breathing = [profile.breathing]
-  if (profile?.tone) answers.tone = [profile.tone]
-  if (checkinSlots) answers.checkin = [checkinChoice(checkinSlots)]
   return answers
 }
 
@@ -180,29 +125,21 @@ function single<T extends string>(answer: readonly string[], allowed: readonly T
 }
 
 /**
- * 설문 답을 저장할 프로필로 바꾼다. 이전 설문 답(reliefs)은 그대로 둔다(옛 화면 호환).
+ * 설문 답을 저장할 프로필로 바꾼다. 이전 설문 답(reliefs)과 지금 묻지 않는 필드(퇴근 후·여유 시간·말투)는 그대로 둔다.
  * 답하지 않은 문항은 필드를 만들지 않는다. "해당 없음"은 빈 목록으로 저장한다(답은 했음).
  */
 export function profileFromAnswers(answers: SurveyAnswers, previous: Profile | null): Profile {
   const profile: Profile = { reliefs: previous?.reliefs ?? [] }
+  if (previous?.recoveryActions) profile.recoveryActions = previous.recoveryActions
+  if (previous?.breakBudget) profile.breakBudget = previous.breakBudget
+  if (previous?.tone) profile.tone = previous.tone
   const actions = (ids: string[], none: string) => ids.filter((id) => id !== none)
   if (answers.treat.length > 0) profile.treats = actions(answers.treat, TREAT_NONE)
   if (answers.desk.length > 0) profile.deskActions = actions(answers.desk, DESK_NONE)
   if (answers.mind.length > 0) profile.mindActions = actions(answers.mind, MIND_NONE)
-  if (answers.recovery.length > 0) profile.recoveryActions = actions(answers.recovery, RECOVERY_NONE)
-  const budget = single<BreakBudget>(answers.budget, BREAK_BUDGETS)
-  if (budget) profile.breakBudget = budget
   const breathing = single<BreathingPreference>(answers.breathing, BREATHING_PREFERENCES)
   if (breathing) profile.breathing = breathing
-  const tone = single<MessageTone>(answers.tone, MESSAGE_TONES)
-  if (tone) profile.tone = tone
   return profile
-}
-
-/** 상태 확인 시간대 문항 답. 답하지 않았으면 null(설정을 바꾸지 않는다) */
-export function checkinFromAnswers(answers: SurveyAnswers): Record<CheckinSlot, boolean> | null {
-  const v = single<CheckinChoice>(answers.checkin, ['both', 'morning', 'afternoon', 'off'])
-  return v ? checkinSlotsFor(v) : null
 }
 
 /** 고른 답이 하나라도 있는지(마지막 버튼 문구에 쓴다) */

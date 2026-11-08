@@ -8,7 +8,6 @@ import {
   answeredCount,
   answersFromProfile,
   CARE_SURVEY,
-  checkinFromAnswers,
   emptyAnswers,
   profileFromAnswers,
   toggleChoice,
@@ -40,7 +39,7 @@ const NUDGE_CHOICES: [NudgeMode, string, string][] = [
 
 /**
  * 새 디자인 흐름의 처음 설문(개인화). 측정·결과 화면과 같은 틀·글꼴·검정/흰 테마를 쓴다.
- * 문항은 features/feedback/lib/careSurvey.ts 의 CARE_SURVEY(답마다 쓰이는 곳이 정해진 8문항).
+ * 문항은 features/feedback/lib/careSurvey.ts 의 CARE_SURVEY(먹거리·자리에서·마음 돌보기·호흡 4문항).
  * - 질문은 모두 건너뛸 수 있다. "남은 질문 건너뛰기"는 마지막 저장·알림 화면으로 간다.
  * - 마지막 화면에서 기록 저장 여부를 꼭 고르고(한 번 고르면 기억), 휴식 알림 방식을 고른다(기본 받지 않음).
  * - 저장된 답이 있으면 미리 골라 둔다. 기록 화면에서 "다시 고치기"로 열면 마친 뒤 기록 화면으로 돌아간다.
@@ -59,15 +58,10 @@ export default function SurveyDemo() {
 
   // 저장된 답·설정을 불러와 미리 고른다(localStorage 는 클라이언트에서만)
   useEffect(() => {
-    const profile = loadProfile()
-    const settings = loadSettings()
-    const hasSurvey = profile !== null && (profile.treats !== undefined || profile.deskActions !== undefined
-      || profile.mindActions !== undefined || profile.recoveryActions !== undefined
-      || profile.breakBudget !== undefined || profile.breathing !== undefined || profile.tone !== undefined)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAnswers(answersFromProfile(profile, hasSurvey ? settings.checkinSlots : null))
+    setAnswers(answersFromProfile(loadProfile()))
     setRecord(loadConsent()?.record ?? null)
-    setNudgeMode(nudgeModeOf(settings))
+    setNudgeMode(nudgeModeOf(loadSettings()))
     setEditing(new URLSearchParams(window.location.search).has('edit'))
   }, [])
 
@@ -85,9 +79,7 @@ export default function SurveyDemo() {
   const finish = async () => {
     if (record === null) return
     saveProfile(profileFromAnswers(answers, loadProfile()))
-    const slots = checkinFromAnswers(answers)
-    const settings = loadSettings()
-    saveSettings(withNudgeMode(slots ? { ...settings, checkinSlots: slots } : settings, nudgeMode))
+    saveSettings(withNudgeMode(loadSettings(), nudgeMode))
     saveConsent(record)
     markSurveyDone()
     // 윈도우 알림을 골랐으면 이때 한 번만 권한을 묻는다(거부 뒤에는 다시 묻지 않는다)
