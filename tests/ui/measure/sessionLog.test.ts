@@ -99,3 +99,16 @@ describe('parseDemoSession', () => {
     expect(parseDemoSession(one)).toBeNull()
   })
 })
+
+describe('attachSessionId: 저장된 세션과 잇기', () => {
+  it('넘긴 측정에 세션 id 를 붙이고, 넘긴 측정이 없으면 아무것도 만들지 않는다', async () => {
+    const { attachSessionId, saveDemoSession, parseDemoSession, readDemoSessionRaw } = await import('@/features/ui/measure/demo/sessionLog')
+    sessionStorage.clear()
+    attachSessionId('s1')
+    expect(readDemoSessionRaw()).toBeNull()
+    saveDemoSession({ startedAt: 0, endedAt: 2000, durationSec: 2, samples: [{ t: 0, bpm: null, emotion: null }, { t: 1, bpm: null, emotion: 'calm' }] })
+    attachSessionId('s1')
+    expect(parseDemoSession(readDemoSessionRaw())?.sessionId).toBe('s1')
+    sessionStorage.clear()
+  })
+})

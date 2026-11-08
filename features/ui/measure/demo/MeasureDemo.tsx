@@ -28,9 +28,13 @@ import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
 import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
+import { attachSessionId } from './sessionLog'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
+import { useMeasureRecording } from './useMeasureRecording'
+import { storageRowText } from './storageStatus'
+import { loadConsent, saveConsent, type StorageConsent } from '@/shared/storage/consent'
 
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
@@ -38,11 +42,15 @@ import { useStoredSession } from './useStoredSession'
  * 감정·rPPG는 같은 카메라에서 얻고, 유효한 워치가 있으면 표시 심박으로 우선한다.
  * 워치가 없거나 끊기면 카메라 표시값을 쓰며 품질이 낮으면 참고값으로 알린다.
  * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
- * 측정 종료를 누르면 이번 측정 기록을 sessionStorage 로 넘기고 결과 화면으로 간다(저장 계층에는 저장하지 않는다).
+ * 기록 저장에 동의했으면 측정하는 동안 1분 감정 요약을 이 기기에 저장한다(useMeasureRecording, 세션 연결).
+ * 아직 고르지 않았으면 오른쪽 위에 저장 여부를 한 번 묻고 기억한다. 영상·심박 원시값은 저장하지 않는다.
+ * 측정 종료를 누르면 남은 기록 저장을 마친 뒤 1초 표본(심박 포함)을 sessionStorage 로 넘기고 결과 화면으로 간다.
  */
 
 const HERO_HREF = DEMO_HOME_HREF
 const RESULT_HREF = '/demo/result'
+/** 얼굴 검출 주기. 저장 표본 간격의 기본값으로도 쓴다 */
+const FACE_INTERVAL_MS = 250
 /**
  * 준비 중 뼈대(Skullet) 색. 화면 토큰과 같은 결: 검정 바탕엔 흰 잉크를, 흰 바탕엔 검정 잉크를 옅게.
  * 모서리는 각지게, 글자 막대는 대문자 높이에서 기준선까지만 그려 실제 글자 덩어리와 맞춘다.
@@ -120,7 +128,18 @@ export default function MeasureDemo() {
   const orbPulse = useCallback(() => !active ? 0
     : pulseFrom === 'watch' ? watchPulse() : rppg.rawBpm !== null ? getPulse() : 0,
   [active, pulseFrom, rppg.rawBpm, getPulse, watchPulse])
-  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
+  // 기록 저장 동의. 아직 고르지 않았으면 null, 첫 렌더(서버와 맞춤) 동안은 undefined
+  const [consent, setConsent] = useState<StorageConsent | null | undefined>(undefined)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConsent(loadConsent())
+  }, [])
+  const decideConsent = (record: boolean) => {
+    saveConsent(record)
+    setConsent({ version: 1, record, decidedAt: new Date().toISOString() })
+  }
+  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
+  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace, intervalMs: FACE_INTERVAL_MS, onSample: recording.push })
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
   const elapsed = useElapsed(active)
@@ -134,14 +153,24 @@ export default function MeasureDemo() {
   // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
   const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
-  // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
-  useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
+  useDesktopMeasurementPublisher({
+    active,
+    emotions: active ? face.emotions : null,
+    recordCount: recording.status?.saved ?? 0,
+    videoEl,
+    saveFailed: recording.status?.failed ?? false,
+  })
 
-  /** 측정 종료: 기록을 넘기고 결과 화면으로 간다. */
-  const endMeasure = () => {
-    if (!active) return
+  /** 측정 종료: 남은 1분 기록 저장을 마치고, 이번 측정 표본을 넘긴 뒤 결과 화면으로 간다. */
+  const [ending, setEnding] = useState(false)
+  const endMeasure = async () => {
+    if (!active || ending) return
+    setEnding(true)
     finishLog()
+    const saved = await recording.stop()
+    if (saved?.sessionId && saved.saved > 0) attachSessionId(saved.sessionId)
     setActive(false)
+    setEnding(false)
     router.push(RESULT_HREF)
   }
 
@@ -189,7 +218,7 @@ export default function MeasureDemo() {
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
           </div>
-          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? endMeasure() : setActive(true))}>
+          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? void endMeasure() : setActive(true))}>
             {active ? '측정 종료' : '측정 시작'}
           </button>
         </nav>
@@ -244,10 +273,25 @@ export default function MeasureDemo() {
                 </span>
               </div>
             </Skeleton>
+            {consent === null && (
+              <div className={styles.consentBox} role="region" aria-label="기록 저장 여부">
+                <p className={styles.consentText}>
+                  측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·체크인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
+                </p>
+                <span className={styles.presets}>
+                  <button type="button" className={`${styles.preset} ${styles.presetOn} ${styles.focusable}`} onClick={() => decideConsent(true)}>
+                    저장
+                  </button>
+                  <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={() => decideConsent(false)}>
+                    저장 안 함
+                  </button>
+                </span>
+              </div>
+            )}
             <div className={styles.rows}>
               <div className={styles.row}>
                 <span className={styles.k}>측정</span>
-                <CallSwitch on={active} onToggle={() => (active ? endMeasure() : setActive(true))} />
+                <CallSwitch on={active} onToggle={() => (active ? void endMeasure() : setActive(true))} />
               </div>
               <div className={styles.row}>
                 <span className={styles.k}>색 반응</span>
@@ -279,6 +323,7 @@ export default function MeasureDemo() {
                   ...fusedRows(active, fused, stored?.baseline ?? null, heartSource),
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
+                  ['기록 저장', storageRowText(consent, active, recording.status)],
                 ]}
               />
             </Skeleton>
@@ -303,7 +348,7 @@ export default function MeasureDemo() {
             </div>
             {/* 세로 배치에서는 위쪽 메뉴의 측정 종료와 같아서 숨긴다(measureEndBottom) */}
             <div className={styles.measureEndBottom} style={{ marginTop: 'auto' }}>
-              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endMeasure}>
+              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={() => void endMeasure()}>
                 측정 종료
               </button>
             </div>

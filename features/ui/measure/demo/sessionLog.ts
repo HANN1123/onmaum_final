@@ -25,13 +25,16 @@ export interface TimelinePoint {
 }
 
 /**
- * 측정 한 번의 기록(데모). 측정 화면이 1초마다 표본을 쌓고, 종료 때 sessionStorage 에 넣어
- * 결과 화면으로 넘긴다. 실제 저장 계층(shared/storage)에는 저장하지 않는다.
+ * 측정 한 번의 1초 표본(심박 포함). 측정 화면이 1초마다 쌓고, 종료 때 sessionStorage 에 넣어 결과 화면으로 넘긴다.
+ * 이 1초 표본 자체는 저장 계층(shared/storage)에 넣지 않는다. 기록 저장에 동의했으면 1분 감정 요약만
+ * 따로 저장되고(useMeasureRecording), 그 세션 id 를 sessionId 로 붙여 리포트 목록과 잇는다.
  */
 export interface DemoSession {
   startedAt: number
   endedAt: number
   durationSec: number
+  /** 같은 측정의 1분 감정 요약이 저장된 세션 id. 저장하지 않았으면 없다 */
+  sessionId?: string
   /** t 오름차순 */
   samples: TimelinePoint[]
 }
@@ -44,6 +47,12 @@ export function saveDemoSession(session: DemoSession): void {
   } catch {
     // 저장할 수 없는 환경이면 결과 화면이 "기록 없음"을 보여준다.
   }
+}
+
+/** 방금 넘긴 측정에 저장된 세션 id 를 붙인다. 넘긴 측정이 없거나 못 읽으면 아무것도 하지 않는다 */
+export function attachSessionId(sessionId: string): void {
+  const session = parseDemoSession(readDemoSessionRaw())
+  if (session) saveDemoSession({ ...session, sessionId })
 }
 
 /** 저장된 원문. 없거나 못 읽으면 null. 문자열이라 useSyncExternalStore 스냅샷으로 안전하다. */
