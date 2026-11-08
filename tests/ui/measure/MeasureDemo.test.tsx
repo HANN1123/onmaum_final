@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   latest: { t: 1000, bpm: 92, contact: 'good' } as WatchSample | null,
   status: 'connected' as 'connected' | 'idle', push: vi.fn(),
   recordingEnabled: [] as boolean[],
+  nudgeOpen: false, nudgeClose: vi.fn(), onSample: [] as unknown[],
   stop: vi.fn(async () => null as unknown),
 }))
 vi.mock('@/features/ui/measure/demo/useMeasureRecording', () => ({ useMeasureRecording: (enabled: boolean) => {
@@ -30,7 +31,13 @@ vi.mock('@/features/ui/measure/demo/heartRate', async (original) => ({
     reading: { ...OFF_READING, rawBpm: state.rppgBpm, quality: state.rppgBpm === null ? null : 'motion' },
     getPulse: () => 0, getFace: () => ({ status: 'inactive' }), getFaceRate: () => null }),
 }))
-vi.mock('@/features/ui/measure/demo/useFaceTrack', () => ({ useFaceTrack: () => ({ modelsReady: state.modelsReady, box: null, emotion: null }) }))
+vi.mock('@/features/ui/measure/demo/useFaceTrack', () => ({ useFaceTrack: (_v: unknown, _e: unknown, opts?: { onSample?: unknown }) => {
+  state.onSample.push(opts?.onSample)
+  return { modelsReady: state.modelsReady, box: null, emotion: null }
+} }))
+vi.mock('@/features/feedback/hooks/useNudge', () => ({ useNudge: () => ({
+  bannerOpen: state.nudgeOpen, message: '최근 몇 분 동안 평소보다 높은 상태가 이어졌어요. 잠깐 쉬어 갈까요?', close: state.nudgeClose, muteToday: vi.fn(),
+}) }))
 vi.mock('@/features/ui/measure/demo/useStoredOverview', () => ({ useStoredOverview: () => null }))
 vi.mock('@/features/ui/measure/demo/useStoredSession', () => ({ useStoredSession: () => null }))
 vi.mock('@/features/ui/measure/demo/FaceLayer', () => ({ default: () => null }))
@@ -45,7 +52,7 @@ vi.mock('skullet/react', () => ({
 }))
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); sessionStorage.clear(); localStorage.clear()
-  state.push.mockReset(); state.stop.mockReset(); state.stop.mockImplementation(async () => null); state.recordingEnabled = []
+  state.push.mockReset(); state.stop.mockReset(); state.nudgeOpen = false; state.onSample = []; state.stop.mockImplementation(async () => null); state.recordingEnabled = []
 })
 
 it('카메라 오류·모델 로딩 중에도 워치 숫자와 오브가 보이며 종료 때 기록하고 표시를 멈춘다', async () => {
@@ -106,4 +113,24 @@ it('측정 종료는 남은 기록 저장이 끝난 뒤 결과 화면으로 간�
   expect(state.push).not.toHaveBeenCalled()
   await act(async () => { release({ saved: 1, failed: false, sessionId: 's1' }) })
   expect(state.push).toHaveBeenCalledWith('/demo/result')
+})
+
+it('휴식 알림이 뜨면 쉬어 가기 제안을 보이고, 호흡을 따라 하는 동안은 감정 기록 표본을 넘기지 않는다', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  localStorage.setItem('onmaum_consent', JSON.stringify({ version: 1, record: true, decidedAt: '2026-11-09T00:00:00.000Z' }))
+  localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: [], deskActions: [], breathing: 'sigh1', breakBudget: 'about1m' }))
+  state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74; state.status = 'idle'; state.latest = null
+  state.nudgeOpen = true
+  render(<MeasureDemo />)
+  expect(screen.getByText(/평소보다 높은 상태가 이어졌어요/)).toBeVisible()
+  expect(state.onSample.at(-1)).toBeTypeOf('function')
+  // 자리에서 할 것을 고르지 않았으니 중립 제안 → 다른 제안으로 호흡
+  fireEvent.click(await screen.findByRole('button', { name: '다른 제안' }))
+  const follow = screen.queryByRole('button', { name: '따라 하기' }) ?? (fireEvent.click(screen.getByRole('button', { name: '다른 제안' })), screen.getByRole('button', { name: '따라 하기' }))
+  fireEvent.click(follow)
+  expect(state.nudgeClose).toHaveBeenCalled()
+  expect(screen.getByRole('dialog', { name: '순환 한숨 호흡' })).toBeVisible()
+  expect(state.onSample.at(-1)).toBeUndefined()
+  fireEvent.click(screen.getByRole('button', { name: '닫기' }))
+  expect(state.onSample.at(-1)).toBeTypeOf('function')
 })

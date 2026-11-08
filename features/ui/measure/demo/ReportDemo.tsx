@@ -18,6 +18,10 @@ import { isSameLocalDay, summarizeSession } from './sessionLog'
 import { dayLevelCopy, type StoredOverview } from './storedOverview'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
+import BreathingGuide from './BreathingGuide'
+import CareCard from './CareCard'
+import CheckInDemo from './CheckInDemo'
+import type { BreathingPlan } from '@/features/feedback/lib/careActions'
 
 /**
  * 하루 리포트 화면 데모. 측정·결과 화면과 같은 틀.
@@ -27,6 +31,7 @@ import { useStoredSession } from './useStoredSession'
  * 방금 끝낸 측정이 저장됐으면(sessionId) 목록의 그 세션에서 결과 화면으로 잇는다.
  * 저장하지 않은 측정이 오늘이면 목록 맨 위에 따로 올리고, 숫자에는 넣지 않는다.
  * 심박은 저장하지 않으므로 하루 리포트에는 심박 숫자를 만들지 않는다(측정 결과 화면에서만 보인다).
+ * 오른쪽에는 체크인(시간대·최근 30분 기록이 있을 때)과 쉬는 시간·퇴근 후 제안(CareCard)을 둔다.
  */
 
 const MEASURE_HREF = '/demo/measure'
@@ -100,6 +105,7 @@ function Report({
 }) {
   const { history, baseline, today } = stored
   const baselineN = baseline.baselineN
+  const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
   const days = stored.days
   const todayIndex = days.length - 1
 
@@ -238,7 +244,7 @@ function Report({
         </div>
       </div>
 
-      <div className={styles.right}>
+      <div className={`${styles.right} ${styles.rightScroll}`}>
         <div className={styles.head}>
           <div className={styles.verdictBox}>
             <span className={styles.chip}>
@@ -249,6 +255,8 @@ function Report({
           </div>
           <DotOrb getPulse={NO_PULSE} emotion={dominant ?? 'calm'} scheme={theme} size={112} />
         </div>
+
+        <CheckInDemo />
 
         <div className={styles.stats}>
           <Stat k="긍정" v={today.scores ? String(Math.round(today.scores.positive)) : '–'} />
@@ -266,6 +274,8 @@ function Report({
           <Row k="심박" v="저장하지 않음 · 측정 결과 화면에서 확인" />
         </div>
 
+        <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" />
+
         <div className={styles.actions} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             측정 시작
@@ -275,6 +285,7 @@ function Report({
           </Link>
         </div>
       </div>
+      {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
     </div>
   )
 }

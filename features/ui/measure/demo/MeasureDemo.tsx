@@ -35,6 +35,11 @@ import { useStoredSession } from './useStoredSession'
 import { useMeasureRecording } from './useMeasureRecording'
 import { storageRowText } from './storageStatus'
 import { loadConsent, saveConsent, type StorageConsent } from '@/shared/storage/consent'
+import { useNudge } from '@/features/feedback/hooks/useNudge'
+import { careSuggestions, type BreathingPlan } from '@/features/feedback/lib/careActions'
+import { loadProfile } from '@/shared/storage/profile'
+import BreathingGuide from './BreathingGuide'
+import CareCard from './CareCard'
 
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
@@ -45,6 +50,8 @@ import { loadConsent, saveConsent, type StorageConsent } from '@/shared/storage/
  * 기록 저장에 동의했으면 측정하는 동안 1분 감정 요약을 이 기기에 저장한다(useMeasureRecording, 세션 연결).
  * 아직 고르지 않았으면 오른쪽 위에 저장 여부를 한 번 묻고 기억한다. 영상·심박 원시값은 저장하지 않는다.
  * 측정 종료를 누르면 남은 기록 저장을 마친 뒤 1초 표본(심박 포함)을 sessionStorage 로 넘기고 결과 화면으로 간다.
+ * 휴식 알림(useNudge, 저장된 기록으로 판정)이 뜨면 아래에 쉬어 가기 제안을 띄운다. 위쪽 "숨 고르기"로 언제든 호흡 안내를 연다.
+ * 호흡 안내를 하는 동안은 감정 기록을 저장하지 않는다(호흡이 표정·심박을 바꿔 평소 기록·기준선에 섞이지 않게).
  */
 
 const HERO_HREF = DEMO_HOME_HREF
@@ -139,7 +146,19 @@ export default function MeasureDemo() {
     setConsent({ version: 1, record, decidedAt: new Date().toISOString() })
   }
   const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
-  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace, intervalMs: FACE_INTERVAL_MS, onSample: recording.push })
+  const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
+  const face = useFaceTrack(videoRef, webcam === 'ready', {
+    rotation,
+    getFace,
+    intervalMs: FACE_INTERVAL_MS,
+    onSample: breathing ? undefined : recording.push,
+  })
+  const nudge = useNudge()
+  /** 위쪽 숨 고르기: 설문에서 고른 호흡 방법(받지 않기여도 직접 열면 순환 한숨 1분) */
+  const openBreathing = () => {
+    const plan = careSuggestions(loadProfile(), 'during').find((s) => s.breathing)?.breathing
+    setBreathing(plan ?? { technique: 'sigh', durationSec: 60 })
+  }
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
   const elapsed = useElapsed(active)
@@ -214,6 +233,9 @@ export default function MeasureDemo() {
               {active && <span className={styles.liveDot} aria-hidden="true" />}
               <Morph>{`${active ? '측정 중' : '측정 종료'} ${elapsedText}`}</Morph>
             </span>
+            <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={openBreathing}>
+              숨 고르기
+            </button>
             <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
@@ -355,6 +377,28 @@ export default function MeasureDemo() {
           </div>
         </div>
         <p className={styles.legal}>{LEGAL}</p>
+        {nudge.bannerOpen && !breathing && (
+          <div className={styles.nudgeDock} role="status">
+            <p className={styles.nudgeMessage}>{nudge.message}</p>
+            <CareCard
+              moment="during"
+              title="지금 해볼 수 있는 것"
+              onBreathe={(plan) => {
+                nudge.close()
+                setBreathing(plan)
+              }}
+            />
+            <span className={styles.presets}>
+              <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={nudge.close}>
+                나중에
+              </button>
+              <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={nudge.muteToday}>
+                오늘은 그만
+              </button>
+            </span>
+          </div>
+        )}
+        {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
       </SkulletProvider>
     </section>
   )

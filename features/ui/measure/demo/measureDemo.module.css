@@ -1435,3 +1435,160 @@
   color: var(--text-dim);
   word-break: keep-all;
 }
+
+/* 오른쪽 칸이 넘치면 그 칸만 스크롤한다(결과·리포트·기록에 제안·체크인·설정을 더했다) */
+.rightScroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+/* 쉬어 가기 제안·체크인 카드 */
+.careBox {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--fill-ghost);
+}
+.careLabel {
+  composes: mono;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.careText {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(16px, 1.2vw, 20px);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+/* 측정 중 휴식 알림: 화면 오른쪽 아래에 떠 있다. 측정은 계속된다 */
+.nudgeDock {
+  position: fixed;
+  right: clamp(16px, 2vw, 32px);
+  bottom: clamp(16px, 2vw, 32px);
+  z-index: 20;
+  width: min(380px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  animation: swapIn 0.4s var(--ease-arrive);
+}
+.nudgeMessage {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  word-break: keep-all;
+}
+
+/* 내 설정: 선택지가 길면 다음 줄로 */
+.settingOptions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 설문 선택지 설명·마지막 저장·알림 화면 */
+.surveyOptionText {
+  display: grid;
+  gap: 4px;
+}
+.surveyDetail {
+  font-size: 12px;
+  color: var(--text-dimmer);
+  line-height: 1.4;
+}
+.consentSteps {
+  display: grid;
+  gap: clamp(18px, 2vw, 28px);
+}
+.consentQuestion {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.2vw, 20px);
+}
+.btnSolid:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 호흡 안내 창 */
+.breathBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(var(--bg-rgb), 0.82);
+  backdrop-filter: blur(6px);
+}
+.breathPanel {
+  width: min(520px, 100%);
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 2vw, 28px);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.breathTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.breathBody {
+  display: grid;
+  gap: 14px;
+}
+.breathLead {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(18px, 1.5vw, 24px);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.breathChoices {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px 16px;
+}
+.breathStage {
+  display: grid;
+  place-items: center;
+  height: clamp(180px, 32vh, 260px);
+}
+.breathCircle {
+  display: block;
+  width: clamp(160px, 28vh, 230px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: radial-gradient(circle, rgba(var(--text-rgb), 0.16), rgba(var(--text-rgb), 0.04) 70%);
+  will-change: transform;
+}
+.breathCue {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1.8vw, 28px);
+  font-weight: 300;
+  min-height: 1.5em;
+}
+.breathSource {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}

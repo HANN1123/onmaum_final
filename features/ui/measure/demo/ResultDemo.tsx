@@ -17,6 +17,9 @@ import { Roll, Swap } from './Roll'
 import { peakWithEmotion, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
+import BreathingGuide from './BreathingGuide'
+import CareCard from './CareCard'
+import type { BreathingPlan } from '@/features/feedback/lib/careActions'
 
 /**
  * 측정이 끝난 뒤 나오는 결과 화면 데모. 측정 화면과 같은 틀.
@@ -25,6 +28,7 @@ import { useStoredSession } from './useStoredSession'
  * 측정 화면이 넘긴 이번 측정만 보여준다. 넘겨받은 기록이 없으면 표본으로 채우지 않고 "기록 없음"을 보여준다.
  * 이번 측정에 대한 스트레스 판정은 하지 않는다(하루 판정은 리포트가 저장된 기록으로 한다).
  * 심박은 선택된 원천의 기록을 쓰고, 유효한 기록이 없으면 "--"를 표시한다.
+ * 오른쪽 아래에 처음 설문 답으로 고른 쉬어 가기 제안(CareCard, 측정 직후용)을 하나 보이고, 호흡 제안은 바로 따라 할 수 있다.
  */
 
 const MEASURE_HREF = '/demo/measure'
@@ -96,6 +100,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   const stored = useStoredOverview()
   const [active, setActive] = useState<number | null>(null)
   const [reason, setReason] = useState<ScrubReason>('pointer')
+  const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
   const onScrub = useCallback((index: number | null, why: ScrubReason = 'pointer') => {
     setActive(index)
     setReason(why)
@@ -163,7 +168,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
         />
       </div>
 
-      <div className={styles.right}>
+      <div className={`${styles.right} ${styles.rightScroll}`}>
         <div className={styles.head}>
           <div className={styles.verdictBox}>
             <span className={styles.chip}>이번 측정</span>
@@ -191,6 +196,8 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
           <Row k="오늘" v={todayText} />
         </div>
 
+        <CareCard moment="after" onBreathe={setBreathing} />
+
         <div className={styles.actions} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             다시 측정
@@ -200,6 +207,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
           </Link>
         </div>
       </div>
+      {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
     </div>
   )
 }
