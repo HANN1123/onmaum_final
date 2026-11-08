@@ -22,9 +22,11 @@ import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
 import PulseCanvas from './PulseCanvas'
 import styles from './measureDemo.module.css'
+import { fusedRows } from './fusedText'
 import { levelShort } from './storedOverview'
 import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
+import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
@@ -127,6 +129,8 @@ export default function MeasureDemo() {
     { latest: watch.latest, status: watch.status, rppgBpm })
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
+  // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
+  const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
@@ -270,6 +274,7 @@ export default function MeasureDemo() {
                   ['얼굴', faceState],
                   ['심박 신호', quality],
                   ['현재 감정', emotion],
+                  ...fusedRows(active, fused, stored?.baseline ?? null),
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
                 ]}
