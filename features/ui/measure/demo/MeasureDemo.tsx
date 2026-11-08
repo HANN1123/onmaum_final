@@ -22,9 +22,11 @@ import { Morph } from './Morph'
 import DotOrb from './orbs/DotOrb'
 import PulseCanvas from './PulseCanvas'
 import styles from './measureDemo.module.css'
+import { fusedRows } from './fusedText'
 import { levelShort } from './storedOverview'
 import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
+import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
@@ -105,12 +107,14 @@ export default function MeasureDemo() {
   // 확인 횟수를 쌓지 않는 순수 선택이므로 최초 연결·재연결·재시작 모두 새 상태로 평가한다.
   const selected = selectHeartRate({ ...watch, rppgBpm, rppgQuality })
   const bpm = active ? selected.bpm : null
+  // 문자열 상수로 다시 만들어 React Compiler 가 아래 useCallback 의존값과 별개인 원시값으로 보게 한다
+  const heartSource = selected.source === 'watch' ? 'watch' : selected.source === 'rppg' ? 'rppg' : null
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
   // 워치가 대표 심박이면 파형·오브 박동도 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
   // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 그 밖에는 rPPG 실측 파형을 쓴다.
-  const pulseFrom = pulseOrigin(active, selected.source)
+  const pulseFrom = pulseOrigin(active, heartSource)
   const wavePulse = useCallback(() => pulseFrom === 'watch' ? watchPulse() : getPulse(),
     [pulseFrom, watchPulse, getPulse])
   const orbPulse = useCallback(() => !active ? 0
@@ -127,6 +131,8 @@ export default function MeasureDemo() {
     { latest: watch.latest, status: watch.status, rppgBpm })
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
+  // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
+  const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
@@ -270,6 +276,7 @@ export default function MeasureDemo() {
                   ['얼굴', faceState],
                   ['심박 신호', quality],
                   ['현재 감정', emotion],
+                  ...fusedRows(active, fused, stored?.baseline ?? null, heartSource),
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
                 ]}
