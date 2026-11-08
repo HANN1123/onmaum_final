@@ -9,8 +9,14 @@ const ABSOLUTE: BaselineState = { mode: 'absolute', baselineN: null }
  * 측정 화면의 "현재 상태"·"결합 근거" 행 문구.
  * 현재 상태: 결합 점수 S 를 기존 4단계 판정(classifyStress, 개인 기준선)에 넣은 결과.
  * 결합 근거: 최근 1분 표정 점수 N, 심박과 세션 기준 심박의 차이.
+ * 심박 차이 앞에는 지금 대표 심박의 출처(워치·카메라)를 붙여 어느 값으로 결합했는지 보인다.
  */
-export function fusedRows(active: boolean, state: LiveFusedState | null, baseline: BaselineState | null): [string, string][] {
+export function fusedRows(
+  active: boolean,
+  state: LiveFusedState | null,
+  baseline: BaselineState | null,
+  source: 'watch' | 'rppg' | null = null,
+): [string, string][] {
   if (!active) return [['현재 상태', '측정 전'], ['결합 근거', '—']]
   if (state === null) return [['현재 상태', '표정 수집 중'], ['결합 근거', '—']]
   const base = baseline ?? ABSOLUTE
@@ -24,6 +30,7 @@ export function fusedRows(active: boolean, state: LiveFusedState | null, baselin
     return [['현재 상태', `${level} · 점수 ${Math.round(state.s)}`], ['결합 근거', `${face} · 심박 신호 부족`]]
   }
   const diff = Math.round(state.hr - state.baseline.mu)
-  const heart = `심박 ${diff >= 0 ? '+' : ''}${diff} BPM(기준 ${Math.round(state.baseline.mu)})`
+  const origin = source === 'watch' ? '워치 ' : source === 'rppg' ? '카메라 ' : ''
+  const heart = `${origin}심박 ${diff >= 0 ? '+' : ''}${diff} BPM(기준 ${Math.round(state.baseline.mu)})`
   return [['현재 상태', `${level} · 점수 ${Math.round(state.s)}`], ['결합 근거', `${face} · ${heart}`]]
 }

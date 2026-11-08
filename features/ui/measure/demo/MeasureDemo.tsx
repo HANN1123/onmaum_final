@@ -107,12 +107,14 @@ export default function MeasureDemo() {
   // 확인 횟수를 쌓지 않는 순수 선택이므로 최초 연결·재연결·재시작 모두 새 상태로 평가한다.
   const selected = selectHeartRate({ ...watch, rppgBpm, rppgQuality })
   const bpm = active ? selected.bpm : null
+  // 문자열 상수로 다시 만들어 React Compiler 가 아래 useCallback 의존값과 별개인 원시값으로 보게 한다
+  const heartSource = selected.source === 'watch' ? 'watch' : selected.source === 'rppg' ? 'rppg' : null
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
   // 워치가 대표 심박이면 파형·오브 박동도 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
   // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 그 밖에는 rPPG 실측 파형을 쓴다.
-  const pulseFrom = pulseOrigin(active, selected.source)
+  const pulseFrom = pulseOrigin(active, heartSource)
   const wavePulse = useCallback(() => pulseFrom === 'watch' ? watchPulse() : getPulse(),
     [pulseFrom, watchPulse, getPulse])
   const orbPulse = useCallback(() => !active ? 0
@@ -274,7 +276,7 @@ export default function MeasureDemo() {
                   ['얼굴', faceState],
                   ['심박 신호', quality],
                   ['현재 감정', emotion],
-                  ...fusedRows(active, fused, stored?.baseline ?? null),
+                  ...fusedRows(active, fused, stored?.baseline ?? null, heartSource),
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
                 ]}

@@ -27,4 +27,10 @@ describe('fusedRows: 측정 화면 결합 상태 문구', () => {
     expect(rows[0]).toEqual(['현재 상태', '높음 · 점수 40'])
     expect(rows[1]).toEqual(['결합 근거', '표정 40 · 심박 신호 부족'])
   })
+
+  it('대표 심박의 출처(워치·카메라)를 심박 차이 앞에 표기한다', () => {
+    const state = { n: 30, hr: 95, baseline: { mu: 72, sigma: 3 }, a: 100, s: 40.5 }
+    expect(fusedRows(true, state, relative, 'watch')[1]).toEqual(['결합 근거', '표정 30 · 워치 심박 +23 BPM(기준 72)'])
+    expect(fusedRows(true, state, relative, 'rppg')[1]).toEqual(['결합 근거', '표정 30 · 카메라 심박 +23 BPM(기준 72)'])
+  })
 })
