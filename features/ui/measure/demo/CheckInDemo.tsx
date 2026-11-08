@@ -6,12 +6,12 @@ import type { SelfReport } from '@/features/algorithm/baseline/calibration'
 import type { CheckinSlot } from '@/features/feedback/lib/checkin'
 import styles from './measureDemo.module.css'
 
-const SLOT_LABEL: Record<CheckinSlot, string> = { morning: '오전 체크인', afternoon: '오후 체크인' }
+const SLOT_LABEL: Record<CheckinSlot, string> = { morning: '오전 상태 확인', afternoon: '오후 상태 확인' }
 /** 체크인 시간대에 들어오고 나가는 것을 알 수 있게 1분마다 시각을 새로 잡는다 */
 const TICK_MS = 60_000
 
 /**
- * 하루 리포트의 체크인. 조건(시간대·최근 30분 기록·응답 여부·끈 시간대)은 useCheckin 이 정한다.
+ * 하루 리포트의 상태 확인(코드 이름은 체크인). 화면에는 "체크인" 대신 "상태 확인"이라 쓴다. 조건(시간대·최근 30분 기록·응답 여부·끈 시간대)은 useCheckin 이 정한다.
  * 측정 기록으로 본 최근 30분 판정이 맞는지 묻고, 답은 다음 판정 보정에 쓴다(맞아요 0, 더 힘들었어요 +3, 괜찮았어요 −3).
  * 응답하면 감사 문구로 바꾸고 다시 묻지 않는다.
  */

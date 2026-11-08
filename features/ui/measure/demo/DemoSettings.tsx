@@ -36,7 +36,7 @@ const CHECKIN_OPTIONS: [CheckinChoice, string][] = [
  * - 기록 저장: 끄면 다음 측정부터 저장하지 않는다. 이미 저장한 기록은 아래 "지우기"로 따로 지운다.
  * - 휴식 알림: 측정 중 평소보다 높은 상태가 5분 넘게 이어질 때. 하루 2번, 90분 간격(기존 규칙).
  *   윈도우 알림을 고르면 그때 권한을 묻는다. 권한이 막혀 있으면 화면 안에서만 알린다고 보인다.
- * - 체크인 시간대.
+ * - 상태 확인(체크인) 시간대.
  * - 설문 답 고치기: 저장된 답을 미리 고른 채로 설문을 다시 연다.
  */
 export default function DemoSettings() {
@@ -85,7 +85,7 @@ export default function DemoSettings() {
       {nudgeMode === 'os' && supported && permission === 'denied' && (
         <p className={styles.notice}>윈도우 알림이 막혀 있어 화면 안에서만 알려요.</p>
       )}
-      <SettingRow label="체크인">
+      <SettingRow label="상태 확인">
         {CHECKIN_OPTIONS.map(([choice, label]) => (
           <Option key={choice} on={checkin === choice} onClick={() => update({ ...loadSettings(), checkinSlots: checkinSlotsFor(choice) })}>
             {label}

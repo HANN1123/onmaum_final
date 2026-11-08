@@ -219,7 +219,7 @@ function Manage() {
     <div className={styles.manage}>
       {confirming ? (
         <div className={styles.confirm} role="group" aria-label="모든 기록 지우기 확인">
-          <p>측정 기록, 체크인과 알림 기록을 모두 지웁니다. 지운 기록은 되돌릴 수 없습니다.</p>
+          <p>측정 기록, 상태 확인 응답과 알림 기록을 모두 지웁니다. 지운 기록은 되돌릴 수 없습니다.</p>
           <label className={styles.check}>
             <input type="checkbox" checked={alsoSettings} onChange={(e) => setAlsoSettings(e.target.checked)} />
             알림 설정과 처음 설문 답변도 함께 지우기

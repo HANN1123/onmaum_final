@@ -356,14 +356,14 @@ describe('2026-11 설문·설정 필드', () => {
     const parsed = parsePersonalDataImport(
       file({
         localData: {
-          onmaum_profile: { reliefs: [], deskActions: ['water'], breathing: 'slow1', tone: 'loud' },
+          onmaum_profile: { reliefs: [], treats: ['coffee'], mindActions: ['photo'], breathing: 'slow1', tone: 'loud' },
           [SETTINGS_KEY]: { checkinSlots: { morning: false, afternoon: true }, nudge: { enabled: true, osNotify: false } },
         },
       }),
       NOW,
     )
     const map = Object.fromEntries(parsed.localData.map(([k, v]) => [k, JSON.parse(v)]))
-    expect(map.onmaum_profile).toEqual({ reliefs: [], deskActions: ['water'], breathing: 'slow1' })
+    expect(map.onmaum_profile).toEqual({ reliefs: [], treats: ['coffee'], mindActions: ['photo'], breathing: 'slow1' })
     expect(map[SETTINGS_KEY]).toEqual({ checkinSlots: { morning: false, afternoon: true }, nudge: { enabled: true, osNotify: false } })
   })
 

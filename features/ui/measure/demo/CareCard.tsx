@@ -30,7 +30,7 @@ export default function CareCard({
   }, [])
   const list = useMemo(() => careSuggestions(profile ?? null, moment), [profile, moment])
   const [turn, setTurn] = useState(0)
-  const start = useMemo(() => suggestionStart(list.length, moment, new Date()), [list.length, moment])
+  const start = useMemo(() => suggestionStart(list, moment, new Date()), [list, moment])
   const current = list[(start + turn) % list.length]
   const plan = current.breathing
 

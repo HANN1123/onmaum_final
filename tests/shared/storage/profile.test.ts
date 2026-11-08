@@ -24,8 +24,8 @@ describe('profile', () => {
 describe('profile: 2026-11 설문 필드', () => {
   beforeEach(() => localStorage.clear())
   it('새 필드를 읽고, 잘못된 새 필드만 뺀다', () => {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ reliefs: [], deskActions: ['water'], breakBudget: 'about1m', breathing: 'x', tone: 'plain' }))
-    expect(loadProfile()).toEqual({ reliefs: [], deskActions: ['water'], breakBudget: 'about1m', tone: 'plain' })
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ reliefs: [], treats: ['coffee'], deskActions: ['stretch'], mindActions: 'photo', breakBudget: 'about1m', breathing: 'x', tone: 'plain' }))
+    expect(loadProfile()).toEqual({ reliefs: [], treats: ['coffee'], deskActions: ['stretch'], breakBudget: 'about1m', tone: 'plain' })
   })
   it('reliefs 원소가 문자열이 아니면 null', () => {
     localStorage.setItem(PROFILE_KEY, JSON.stringify({ reliefs: [1] }))

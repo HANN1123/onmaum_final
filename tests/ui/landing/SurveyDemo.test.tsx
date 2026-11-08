@@ -22,13 +22,16 @@ const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('butto
 describe('SurveyDemo: 처음 설문', () => {
   it('답을 고르고 건너뛴 뒤, 기록 저장을 골라야 끝나며 답·설정·동의를 저장한다', async () => {
     render(<SurveyDemo />)
-    click(/어깨 힘 풀기/)
+    click(/커피/)
+    click('다음')
+    click(/어깨·목 풀기/)
     click(/지금은 어려워요/)
     // "해당 없음"을 고르면 다른 선택이 풀린다
-    expect(screen.getByRole('button', { name: /어깨 힘 풀기/ })).toHaveAttribute('aria-pressed', 'false')
-    click(/어깨 힘 풀기/)
+    expect(screen.getByRole('button', { name: /어깨·목 풀기/ })).toHaveAttribute('aria-pressed', 'false')
+    click(/어깨·목 풀기/)
     click('다음')
-    click('건너뛰기') // 회복법은 답하지 않음
+    click('건너뛰기') // 마음 돌보기는 답하지 않음
+    click('건너뛰기') // 회복법도 답하지 않음
     click(/30초 미만/)
     click('다음')
     click(/숨 참기 없는 느린 호흡/)
@@ -42,7 +45,7 @@ describe('SurveyDemo: 처음 설문', () => {
     click('저장하고 측정 시작')
 
     await vi.waitFor(() => expect(nav.push).toHaveBeenCalledWith('/demo/measure'))
-    expect(loadProfile()).toEqual({ reliefs: [], deskActions: ['shoulders'], breakBudget: 'under30s', breathing: 'slow1' })
+    expect(loadProfile()).toEqual({ reliefs: [], treats: ['coffee'], deskActions: ['shoulders'], breakBudget: 'under30s', breathing: 'slow1' })
     expect(loadConsent()?.record).toBe(true)
     expect(loadSettings().nudge).toMatchObject({ enabled: true, osNotify: false })
     // 체크인 문항에 답하지 않았으므로 기존 설정 유지
@@ -51,12 +54,12 @@ describe('SurveyDemo: 처음 설문', () => {
   })
 
   it('기록 화면에서 고치러 오면 저장된 답을 미리 고르고, 마치면 기록 화면으로 돌아간다', async () => {
-    localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: [], deskActions: ['water'], tone: 'plain' }))
+    localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: [], treats: ['water'], tone: 'plain' }))
     localStorage.setItem('onmaum_consent', JSON.stringify({ version: 1, record: false, decidedAt: 'x' }))
     saveSettings({ ...DEFAULT_SETTINGS, checkinSlots: { morning: false, afternoon: true } })
     window.history.replaceState(null, '', '/demo/survey?edit=1')
     render(<SurveyDemo />)
-    expect(await screen.findByRole('button', { name: /물 한 모금/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByRole('button', { name: /시원한 물/ })).toHaveAttribute('aria-pressed', 'true')
     click('남은 질문 건너뛰기')
     expect(screen.getByRole('button', { name: /저장하지 않을게요/ })).toHaveAttribute('aria-pressed', 'true')
     click('고친 내용 저장')

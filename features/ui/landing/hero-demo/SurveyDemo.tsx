@@ -29,7 +29,7 @@ import { useDemoTheme } from './useDemoTheme'
 const MEASURE_HREF = '/demo/measure'
 /** 기록 화면에서 "다시 고치기"로 열었을 때 돌아갈 곳 */
 const RECORDS_HREF = '/demo/records'
-/** 질문 6개 다음의 마지막 화면(저장·알림) */
+/** 질문 다음의 마지막 화면(저장·알림) */
 const CONSENT_STEP = CARE_SURVEY.length
 
 const NUDGE_CHOICES: [NudgeMode, string, string][] = [
@@ -40,7 +40,7 @@ const NUDGE_CHOICES: [NudgeMode, string, string][] = [
 
 /**
  * 새 디자인 흐름의 처음 설문(개인화). 측정·결과 화면과 같은 틀·글꼴·검정/흰 테마를 쓴다.
- * 문항은 features/feedback/lib/careSurvey.ts 의 CARE_SURVEY(답마다 쓰이는 곳이 정해진 6문항).
+ * 문항은 features/feedback/lib/careSurvey.ts 의 CARE_SURVEY(답마다 쓰이는 곳이 정해진 8문항).
  * - 질문은 모두 건너뛸 수 있다. "남은 질문 건너뛰기"는 마지막 저장·알림 화면으로 간다.
  * - 마지막 화면에서 기록 저장 여부를 꼭 고르고(한 번 고르면 기억), 휴식 알림 방식을 고른다(기본 받지 않음).
  * - 저장된 답이 있으면 미리 골라 둔다. 기록 화면에서 "다시 고치기"로 열면 마친 뒤 기록 화면으로 돌아간다.
@@ -61,7 +61,8 @@ export default function SurveyDemo() {
   useEffect(() => {
     const profile = loadProfile()
     const settings = loadSettings()
-    const hasSurvey = profile !== null && (profile.deskActions !== undefined || profile.recoveryActions !== undefined
+    const hasSurvey = profile !== null && (profile.treats !== undefined || profile.deskActions !== undefined
+      || profile.mindActions !== undefined || profile.recoveryActions !== undefined
       || profile.breakBudget !== undefined || profile.breathing !== undefined || profile.tone !== undefined)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnswers(answersFromProfile(profile, hasSurvey ? settings.checkinSlots : null))
@@ -148,7 +149,7 @@ export default function SurveyDemo() {
             <div className={styles.consentSteps}>
               <div role="group" aria-label="측정 기록 저장">
                 <p className={styles.consentQuestion}>측정 기록을 이 기기에 저장할까요?</p>
-                <p className={styles.notice}>측정하는 동안 1분마다 감정 요약만 저장해요. 리포트·체크인·휴식 알림이 이 기록을 써요.</p>
+                <p className={styles.notice}>측정하는 동안 1분마다 감정 요약만 저장해요. 리포트·상태 확인·휴식 알림이 이 기록을 써요.</p>
                 <div className={styles.surveyOptions}>
                   <Choice on={record === true} label="저장할게요" detail="리포트에 오늘·14일 흐름이 쌓여요" onClick={() => setRecord(true)} />
                   <Choice on={record === false} label="저장하지 않을게요" detail="측정 결과는 그 자리에서만 보여요" onClick={() => setRecord(false)} />

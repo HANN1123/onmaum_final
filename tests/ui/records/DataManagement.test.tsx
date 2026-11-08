@@ -179,7 +179,7 @@ describe('DataManagement 가져오기 부분 실패', () => {
     chooseFile('{}')
     await waitFor(() =>
       expect(screen.getByRole('status').textContent).toBe(
-        '기록 3개를 가져왔어요. 설정·체크인 기록 2개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요',
+        '기록 3개를 가져왔어요. 설정·상태 확인 기록 2개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요',
       ),
     )
   })

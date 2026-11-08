@@ -298,7 +298,7 @@ export default function MeasureDemo() {
             {consent === null && (
               <div className={styles.consentBox} role="region" aria-label="기록 저장 여부">
                 <p className={styles.consentText}>
-                  측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·체크인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
+                  측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·상태 확인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
                 </p>
                 <span className={styles.presets}>
                   <button type="button" className={`${styles.preset} ${styles.presetOn} ${styles.focusable}`} onClick={() => decideConsent(true)}>

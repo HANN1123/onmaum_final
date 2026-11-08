@@ -15,13 +15,17 @@ export const MESSAGE_TONES: readonly MessageTone[] = ['warm', 'plain']
  * 로컬 프로필 — 처음 설문 결과. 데이터는 기기에만(서버 없음).
  * - reliefs: 이전 설문(문구 그대로 저장)의 답. 기존 데이터 호환용으로 남긴다.
  * - 2026-11 설문부터는 선택지의 고정 id 를 저장한다(문구를 고쳐도 데이터는 그대로).
- *   deskActions·recoveryActions 는 features/feedback/lib/careActions.ts 의 id 다.
+ *   treats·deskActions·mindActions·recoveryActions 는 features/feedback/lib/careActions.ts 의 id 다.
  * 답하지 않은 항목은 필드가 없다(미응답을 '받지 않기'로 해석하지 않는다).
  */
 export interface Profile {
   reliefs: string[]
+  /** 쉴 때 즐겨 먹거나 마시는 것 */
+  treats?: string[]
   /** 응대 사이 자리에서 해볼 수 있는 것 */
   deskActions?: string[]
+  /** 마음이 복잡할 때 도움이 되는 것 */
+  mindActions?: string[]
   /** 휴식 시간·퇴근 후 도움이 되는 것 */
   recoveryActions?: string[]
   breakBudget?: BreakBudget
@@ -50,8 +54,12 @@ export function sanitizeProfileValue(parsed: unknown): Profile | null {
   if (!Array.isArray(p.reliefs) || p.reliefs.length > 50) return null
   if (!p.reliefs.every((r) => typeof r === 'string' && r.length > 0 && r.length <= 100)) return null
   const profile: Profile = { reliefs: [...(p.reliefs as string[])] }
+  const treats = idList(p.treats)
+  if (treats) profile.treats = treats
   const desk = idList(p.deskActions)
   if (desk) profile.deskActions = desk
+  const mind = idList(p.mindActions)
+  if (mind) profile.mindActions = mind
   const recovery = idList(p.recoveryActions)
   if (recovery) profile.recoveryActions = recovery
   const budget = oneOf(p.breakBudget, BREAK_BUDGETS)

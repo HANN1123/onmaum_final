@@ -12,11 +12,20 @@ import { careAction, DESK_NONE } from '@/features/feedback/lib/careActions'
 const step = (id: string) => CARE_SURVEY.find((s) => s.id === id)!
 
 describe('careSurvey: 처음 설문', () => {
+  it('먹거리 문항이 처음이고 이전 설문의 음료·간식 선택지를 그대로 둔다', () => {
+    expect(CARE_SURVEY[0].id).toBe('treat')
+    expect(CARE_SURVEY[0].choices.map((c) => c.label)).toEqual(['커피', '따뜻한 차', '시원한 물', '달달한 간식', '탄산음료', '과일', '딱히 없어요'])
+  })
+
+  it('화면 문구에 "체크인"이라는 말을 쓰지 않는다', () => {
+    for (const s of CARE_SURVEY) expect(s.question + ' ' + s.hint).not.toContain('체크인')
+  })
+
   it('행동 선택지는 모두 제안 목록에 있고, 같은 문항 안에서 id 가 겹치지 않는다', () => {
     for (const s of CARE_SURVEY) {
       const idsInStep = s.choices.map((c) => c.id)
       expect(new Set(idsInStep).size).toBe(idsInStep.length)
-      if (s.id === 'desk' || s.id === 'recovery') {
+      if (s.id === 'treat' || s.id === 'desk' || s.id === 'mind' || s.id === 'recovery') {
         for (const c of s.choices) if (!c.exclusive) expect(careAction(c.id)?.context).toBe(s.id)
       }
     }
@@ -24,14 +33,14 @@ describe('careSurvey: 처음 설문', () => {
 
   it('복수 선택: "해당 없음"은 다른 선택과 함께 고를 수 없다', () => {
     const desk = step('desk')
-    let a = toggleChoice(desk, [], 'water')
+    let a = toggleChoice(desk, [], 'stretch')
     a = toggleChoice(desk, a, 'shoulders')
-    expect(a).toEqual(['water', 'shoulders'])
+    expect(a).toEqual(['stretch', 'shoulders'])
     a = toggleChoice(desk, a, DESK_NONE)
     expect(a).toEqual([DESK_NONE])
-    a = toggleChoice(desk, a, 'water')
-    expect(a).toEqual(['water'])
-    expect(toggleChoice(desk, a, 'water')).toEqual([])
+    a = toggleChoice(desk, a, 'stretch')
+    expect(a).toEqual(['stretch'])
+    expect(toggleChoice(desk, a, 'stretch')).toEqual([])
   })
 
   it('단일 선택: 바꾸면 하나만 남고, 같은 것을 다시 누르면 답하지 않은 상태가 된다', () => {
@@ -41,18 +50,18 @@ describe('careSurvey: 처음 설문', () => {
   })
 
   it('답을 프로필로 바꾸고, 답하지 않은 문항은 필드를 만들지 않는다', () => {
-    const answers = { ...emptyAnswers(), desk: [DESK_NONE], recovery: ['walk'], breathing: ['slow1'], checkin: ['morning'] }
+    const answers = { ...emptyAnswers(), treat: ['coffee', 'sweets'], desk: [DESK_NONE], mind: ['quote'], recovery: ['walk'], breathing: ['slow1'], checkin: ['morning'] }
     const profile = profileFromAnswers(answers, { reliefs: ['커피'] })
-    expect(profile).toEqual({ reliefs: ['커피'], deskActions: [], recoveryActions: ['walk'], breathing: 'slow1' })
+    expect(profile).toEqual({ reliefs: ['커피'], treats: ['coffee', 'sweets'], deskActions: [], mindActions: ['quote'], recoveryActions: ['walk'], breathing: 'slow1' })
     expect(checkinFromAnswers(answers)).toEqual({ morning: true, afternoon: false })
     expect(checkinFromAnswers(emptyAnswers())).toBeNull()
   })
 
   it('다시 열면 저장된 답을 미리 고른 상태로 보인다("해당 없음" 포함)', () => {
     const answers = answersFromProfile(
-      { reliefs: [], deskActions: [], recoveryActions: ['music'], breakBudget: 'over5m', tone: 'plain' },
+      { reliefs: [], treats: ['tea'], deskActions: [], recoveryActions: ['talk'], breakBudget: 'over5m', tone: 'plain' },
       { morning: false, afternoon: false },
     )
-    expect(answers).toEqual({ desk: [DESK_NONE], recovery: ['music'], budget: ['over5m'], breathing: [], tone: ['plain'], checkin: ['off'] })
+    expect(answers).toEqual({ treat: ['tea'], desk: [DESK_NONE], mind: [], recovery: ['talk'], budget: ['over5m'], breathing: [], tone: ['plain'], checkin: ['off'] })
   })
 })

@@ -40,15 +40,15 @@ describe('BreathingGuide: 호흡 안내 창', () => {
 
 describe('CareCard: 쉬어 가기 제안', () => {
   it('고른 답을 돌려 보이고, 호흡 제안이면 따라 하기로 연다', async () => {
-    localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: [], deskActions: ['water'], breakBudget: 'about1m', breathing: 'sigh1', tone: 'plain' }))
+    localStorage.setItem('onmaum_profile', JSON.stringify({ reliefs: [], treats: ['water'], breakBudget: 'about1m', breathing: 'sigh1', tone: 'plain' }))
     const onBreathe = vi.fn()
     render(<CareCard moment="during" onBreathe={onBreathe} />)
     const texts = new Set<string>()
     for (let i = 0; i < 2; i += 1) {
-      texts.add((await screen.findByText(/물 한 모금|순환 한숨 호흡 1분/)).textContent!)
+      texts.add((await screen.findByText(/물 한 잔|순환 한숨 호흡 1분/)).textContent!)
       fireEvent.click(screen.getByRole('button', { name: '다른 제안' }))
     }
-    expect(texts).toEqual(new Set(['물 한 모금', '순환 한숨 호흡 1분']))
+    expect(texts).toEqual(new Set(['물 한 잔', '순환 한숨 호흡 1분']))
     if (!screen.queryByRole('button', { name: '따라 하기' })) fireEvent.click(screen.getByRole('button', { name: '다른 제안' }))
     fireEvent.click(screen.getByRole('button', { name: '따라 하기' }))
     expect(onBreathe).toHaveBeenCalledWith({ technique: 'sigh', durationSec: 60 })
