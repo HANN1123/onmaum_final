@@ -23,7 +23,7 @@ const importSummary = {
   localKeys: { added: 0, kept: 1, ignored: 0, failed: 0 },
 }
 const parsePersonalDataImport = vi.fn((text: string) => ({ text }))
-const importPersonalData = vi.fn(async (_parsed: unknown) => importSummary)
+const importPersonalData = vi.fn<(parsed: unknown) => Promise<typeof importSummary>>(async () => importSummary)
 
 vi.mock('@/shared/storage/personalImport', () => ({
   parsePersonalDataImport: (text: string) => parsePersonalDataImport(text),
