@@ -66,11 +66,11 @@ function formatDiff(d: number): string {
 export const WATCH_HINT =
   'iPhone과 Apple Watch에서 HeartCast를 열고 워치에서 시작을 누른 뒤 연결하세요. 처음 연결하는 동안 iPhone의 HeartCast를 화면에 켜 두세요.'
 
-/** 워치가 대표값일 때 파형 칸에 붙이는 이름. 워치는 BPM 만 보내므로 실측 파형이 아니라 BPM 리듬이다 */
+/** 워치 리듬 칸에 붙이는 이름. 워치는 BPM 만 보내므로 실측 파형이 아니라 BPM 리듬이다 */
 export const WATCH_PULSE_TAG = '심박 리듬 · 워치 BPM 기준'
 
 /**
- * 파형 칸과 오브 박동의 출처.
+ * 오브 박동의 출처. 'watch' 인 동안에는 카메라 파형 칸 아래에 워치 리듬 칸도 보인다.
  * 측정 중 워치가 대표 심박이면 워치 BPM 리듬을 쓰고(워치를 기준으로 둔다), 아니면 rPPG 실측 파형을 쓴다.
  */
 export function pulseOrigin(active: boolean, source: 'watch' | 'rppg' | null): 'watch' | 'rppg' {

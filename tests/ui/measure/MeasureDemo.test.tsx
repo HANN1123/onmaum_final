@@ -88,6 +88,34 @@ it('측정 도중 워치가 끊기면 카메라 참고값을 표시하고 정상
   expect(screen.queryByText('카메라 · 참고값')).toBeNull()
 })
 
+it('워치가 대표 심박이면 카메라 파형 칸은 그대로 두고 워치 리듬 칸을 따로 보이며, 워치가 끊기면 그 칸이 사라진다', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.spyOn(performance, 'now').mockReturnValue(1000)
+  state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74
+  state.status = 'connected'; state.latest = { t: 1000, bpm: 92, contact: 'good' }
+  const { rerender } = render(<MeasureDemo />)
+  // 두 칸의 이름표에 각자의 심박을 적어 그래프 옆에서 두 값을 읽는다
+  expect(screen.getByText('맥박 파형 · rPPG 대기 · 참고값 · 74 BPM')).toBeVisible()
+  expect(screen.getByText('심박 리듬 · 워치 BPM 기준 · 92 BPM')).toBeVisible()
+  state.status = 'idle'; state.latest = null
+  rerender(<MeasureDemo />)
+  expect(screen.getByText('맥박 파형 · rPPG 대기 · 참고값')).toBeVisible()
+  expect(screen.queryByText(/심박 리듬/)).toBeNull()
+})
+
+it('측정을 끝내는 버튼은 하나뿐이고, 끝낸 뒤에는 같은 버튼으로 다시 잰다', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.spyOn(performance, 'now').mockReturnValue(1000)
+  state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74
+  state.status = 'connected'; state.latest = { t: 1000, bpm: 92, contact: 'good' }
+  render(<MeasureDemo />)
+  fireEvent.click(screen.getByRole('button', { name: '측정 종료' }))
+  expect(await screen.findByText('--')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '측정 시작' }))
+  expect(await screen.findByText('92')).toBeVisible()
+  expect(screen.getByRole('button', { name: '측정 종료' })).toBeVisible()
+})
+
 it('저장 여부를 아직 고르지 않았으면 한 번 묻고, 고른 값을 기억해 저장을 켠다', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74; state.status = 'idle'; state.latest = null

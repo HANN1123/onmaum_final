@@ -30,7 +30,7 @@ import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
 import { attachSessionExtras } from './sessionLog'
 import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
-import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
+import { useSteadyEmotion } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
 import { useMeasureRecording } from './useMeasureRecording'
@@ -47,6 +47,8 @@ import CareCard from './CareCard'
  * 왼쪽은 카메라 프레임과 맥박 파형, 오른쪽은 BPM·오브·상태 행이다.
  * 감정·rPPG는 같은 카메라에서 얻고, 유효한 워치가 있으면 표시 심박으로 우선한다.
  * 워치가 없거나 끊기면 카메라 표시값을 쓰며 품질이 낮으면 참고값으로 알린다.
+ * 워치가 대표 심박인 동안에는 카메라 파형 칸 아래에 워치 리듬 칸이 하나 더 생긴다(워치 표시는 연두색).
+ * 측정 시작·종료는 오른쪽 아래 버튼 하나로 한다.
  * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
  * 기록 저장에 동의했으면 측정하는 동안 1분 감정 요약을 이 기기에 저장한다(useMeasureRecording, 세션 연결).
  * 아직 고르지 않았으면 오른쪽 위에 저장 여부를 한 번 묻고 기억한다. 영상·심박 원시값은 저장하지 않는다.
@@ -121,9 +123,10 @@ export default function MeasureDemo() {
   // 카메라 칸을 돌린 영상의 비율(가로/세로)로 만든다. 칸과 영상 비율이 같아 칸 안에 빈 띠가 생기지 않는다(CSS --cam-ratio)
   const camSize = frameSize.vw > 0 && frameSize.vh > 0 ? rotatedSize(frameSize.vw, frameSize.vh, rotation) : null
   const leftStyle = camSize ? ({ '--cam-ratio': (camSize.w / camSize.h).toFixed(4) } as CSSProperties) : undefined
-  const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
+  // 워치 리듬 선 색. 글자에 쓰는 CSS --watch 와 같은 값이다
+  const watchInk = theme === 'dark' ? '#c8f26b' : '#3f6b00'
   const webcam = useWebcam(videoRef, true)
   // rPPG 엔진이 매 프레임 BlazeFace 로 찾은 얼굴 상자를 감정 분석도 같이 쓴다(엔진이 돌지 않을 때만 SSD)
   const { displayBpm: rppgBpm, quality: rppgQuality, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
@@ -136,11 +139,12 @@ export default function MeasureDemo() {
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
-  // 워치가 대표 심박이면 파형·오브 박동도 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
-  // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 그 밖에는 rPPG 실측 파형을 쓴다.
+  // 워치가 대표 심박이면 오브 박동이 워치 BPM 리듬을 따르고(워치를 기준으로 둔다), 워치 리듬 칸이 따로 생긴다.
+  // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 카메라 파형 칸은 늘 rPPG 실측 파형을 그린다.
   const pulseFrom = pulseOrigin(active, heartSource)
-  const wavePulse = useCallback(() => pulseFrom === 'watch' ? watchPulse() : getPulse(),
-    [pulseFrom, watchPulse, getPulse])
+  const showWatchWave = pulseFrom === 'watch'
+  // 두 칸이 같이 보일 때는 카메라 이름표에도 카메라 심박을 적어, 두 값을 그래프 옆에서 읽게 한다
+  const cameraWaveTag = `${pulseTag(rppg)}${showWatchWave && rppgBpm !== null ? ` · ${bpmText(rppgBpm)} BPM` : ''}`
   const orbPulse = useCallback(() => !active ? 0
     : pulseFrom === 'watch' ? watchPulse() : rppg.rawBpm !== null ? getPulse() : 0,
   [active, pulseFrom, rppg.rawBpm, getPulse, watchPulse])
@@ -188,8 +192,8 @@ export default function MeasureDemo() {
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
   const elapsed = useElapsed(active)
-  // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
-  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
+  // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다. 반응 속도는 빠른 쪽('demo')으로 고정한다.
+  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, 'demo', 'calm', rotation)
   // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
   const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null, rppgQuality, rppg.rawBpm,
     { latest: watch.latest, status: watch.status, rppgBpm })
@@ -247,7 +251,7 @@ export default function MeasureDemo() {
           : `기록 3일 미만 · ${levelShort(stored.today.level, stored.baseline)}`
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
+    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell} ${styles.measureShell}`} data-theme={theme}>
       <SkulletProvider mode={theme} theme={SKULLET_THEME} reveal="smart">
         <nav className={styles.nav}>
           <Link href={HERO_HREF} className={`${styles.logo} ${styles.focusable}`}>
@@ -270,13 +274,10 @@ export default function MeasureDemo() {
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
           </div>
-          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? void endMeasure() : setActive(true))}>
-            {active ? '측정 종료' : '측정 시작'}
-          </button>
         </nav>
 
         <div className={`${styles.body} ${styles.measureBody}`}>
-          <div className={styles.left} style={leftStyle}>
+          <div className={styles.left} style={leftStyle} data-waves={showWatchWave ? 2 : 1}>
             <div ref={setFrameEl} className={styles.frame}>
               <video ref={attachVideo} muted playsInline autoPlay style={videoStyle} />
               <FaceLayer box={active ? face.box : null} videoRef={videoRef} rotation={rotation} />
@@ -304,12 +305,19 @@ export default function MeasureDemo() {
                 style={{ opacity: ready ? 0 : 1 }}
               />
             </div>
-            <Skeleton loading={!ready && pulseFrom !== 'watch'} id="measure-wave" label="맥박 파형 준비 중">
+            <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
               <div className={styles.waveBox} skullet-block="">
-                <PulseCanvas getPulse={wavePulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>{pulseFrom === 'watch' ? WATCH_PULSE_TAG : pulseTag(rppg)}</span>
+                <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
+                <span className={styles.frameTag}>{cameraWaveTag}</span>
               </div>
             </Skeleton>
+            {/* 워치 리듬 칸은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 보이게 한다 */}
+            {showWatchWave && (
+              <div className={`${styles.waveBox} ${styles.watchWave}`}>
+                <PulseCanvas getPulse={watchPulse} className={styles.wave} color={watchInk} />
+                <span className={styles.frameTag}>{`${WATCH_PULSE_TAG} · ${bpmText(bpm)} BPM`}</span>
+              </div>
+            )}
           </div>
 
           <div className={styles.right}>
@@ -318,10 +326,19 @@ export default function MeasureDemo() {
                 <div className={styles.bpmRow}>
                   <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
                   <span className={styles.unit}>BPM</span>
-                  {active && sourceLabel && <span className={styles.k}>{sourceLabel}</span>}
+                  {active && sourceLabel && (
+                    <span className={`${styles.bpmSource} ${selected.source === 'watch' ? styles.watchInk : ''}`}>{sourceLabel}</span>
+                  )}
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={orbPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
+                  <DotOrb
+                    getPulse={orbPulse}
+                    emotion={orbEmotion}
+                    bpm={bpm ?? undefined}
+                    scheme={theme}
+                    size={192}
+                    className={`${styles.measureOrb} ${consent === null ? styles.measureOrbSmall : ''}`}
+                  />
                 </span>
               </div>
             </Skeleton>
@@ -340,33 +357,9 @@ export default function MeasureDemo() {
                 </span>
               </div>
             )}
-            <div className={styles.rows}>
-              <div className={styles.row}>
-                <span className={styles.k}>측정</span>
-                <CallSwitch on={active} onToggle={() => (active ? void endMeasure() : setActive(true))} />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.k}>색 반응</span>
-                <span className={styles.presets}>
-                  <button
-                    type="button"
-                    className={`${styles.preset} ${styles.focusable} ${responseMode === 'demo' ? styles.presetOn : ''}`}
-                    onClick={() => setResponseMode('demo')}
-                  >
-                    시연
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.preset} ${styles.focusable} ${responseMode === 'daily' ? styles.presetOn : ''}`}
-                    onClick={() => setResponseMode('daily')}
-                  >
-                    사용
-                  </button>
-                </span>
-              </div>
-            </div>
             <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
               <Rows
+                emphasize={KEY_ROWS}
                 rows={[
                   ['측정 시간', elapsedText],
                   ['얼굴', faceState],
@@ -384,7 +377,7 @@ export default function MeasureDemo() {
               <div className={styles.row}>
                 <span className={styles.k}>워치</span>
                 <span className={styles.watchValue}>
-                  <span role="status">{watch.text}</span>
+                  <span role="status" className={watch.state === 'live' ? styles.watchInk : undefined}>{watch.text}</span>
                   {watch.action && (
                     <button
                       type="button"
@@ -398,10 +391,10 @@ export default function MeasureDemo() {
                 </span>
               </div>
             </div>
-            {/* 세로 배치에서는 위쪽 메뉴의 측정 종료와 같아서 숨긴다(measureEndBottom) */}
-            <div className={styles.measureEndBottom} style={{ marginTop: 'auto' }}>
-              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={() => void endMeasure()}>
-                측정 종료
+            {/* 측정 시작·종료는 이 버튼 하나로 한다(위쪽 메뉴 버튼과 측정 스위치를 없앴다) */}
+            <div style={{ marginTop: 'auto' }}>
+              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={() => (active ? void endMeasure() : setActive(true))}>
+                {active ? '측정 종료' : '측정 시작'}
               </button>
             </div>
           </div>
@@ -435,29 +428,14 @@ export default function MeasureDemo() {
   )
 }
 
-/** 측정 시작/종료 스위치. 켜짐이 측정 중이다. */
-function CallSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      className={`${styles.switch} ${styles.focusable} ${on ? styles.switchOn : ''}`}
-      onClick={onToggle}
-    >
-      <span className={styles.switchTrack} aria-hidden="true">
-        <span className={styles.switchKnob} />
-      </span>
-      <span>{on ? '측정 중' : '대기'}</span>
-    </button>
-  )
-}
+/** 다른 행보다 크고 굵게 보이는 핵심 행 */
+const KEY_ROWS = ['현재 감정', '현재 상태']
 
-function Rows({ rows }: { rows: [string, string][] }) {
+function Rows({ rows, emphasize = [] }: { rows: [string, string][]; emphasize?: string[] }) {
   return (
     <div className={styles.rows}>
       {rows.map(([k, v]) => (
-        <div key={k} className={styles.row}>
+        <div key={k} className={`${styles.row} ${emphasize.includes(k) ? styles.rowKey : ''}`}>
           <span className={styles.k}>{k}</span>
           <Morph className={styles.rowValue}>{v}</Morph>
         </div>
