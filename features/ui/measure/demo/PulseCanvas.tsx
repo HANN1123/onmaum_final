@@ -12,9 +12,17 @@ interface Props {
   className?: string
 }
 
-/** 오른쪽에서 왼쪽으로 흐르는 맥박 파형. 선 하나, 색 하나. */
+/**
+ * 오른쪽에서 왼쪽으로 흐르는 맥박 파형. 선 하나, 색 하나.
+ * getPulse·색·선 굵기는 ref 로 읽는다. 값이 바뀌어도 그려 둔 표본을 버리지 않고 이어 그린다
+ * (함수·테마가 바뀔 때마다 파형이 처음부터 다시 그려지던 문제).
+ */
 export default function PulseCanvas({ getPulse, color = '#ffffff', lineWidth = 1.5, speed = 2, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawProps = useRef({ getPulse, color, lineWidth })
+  useEffect(() => {
+    drawProps.current = { getPulse, color, lineWidth }
+  }, [getPulse, color, lineWidth])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -44,6 +52,7 @@ export default function PulseCanvas({ getPulse, color = '#ffffff', lineWidth = 1
 
     const draw = () => {
       const capacity = Math.ceil(width / speed) + 2
+      const { getPulse, color, lineWidth } = drawProps.current
       samples.push(getPulse())
       if (samples.length > capacity) samples.splice(0, samples.length - capacity)
 
@@ -70,7 +79,7 @@ export default function PulseCanvas({ getPulse, color = '#ffffff', lineWidth = 1
       cancelAnimationFrame(frame)
       observer.disconnect()
     }
-  }, [getPulse, color, lineWidth, speed])
+  }, [speed])
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />
 }
