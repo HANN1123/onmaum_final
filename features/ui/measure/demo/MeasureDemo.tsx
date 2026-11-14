@@ -139,10 +139,16 @@ export default function MeasureDemo() {
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
-  // 워치가 대표 심박이면 오브 박동이 워치 BPM 리듬을 따르고(워치를 기준으로 둔다), 워치 리듬 칸이 따로 생긴다.
+  // 워치가 대표 심박이면 오브 박동이 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
   // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 카메라 파형 칸은 늘 rPPG 실측 파형을 그린다.
   const pulseFrom = pulseOrigin(active, heartSource)
-  const showWatchWave = pulseFrom === 'watch'
+  const watchLive = pulseFrom === 'watch'
+  // 워치 리듬 칸은 측정 중 워치가 연결돼 있는 동안 계속 둔다. 대표 여부는 표본마다 다시 판정되므로
+  // (8초 넘는 수신 간격·접촉 불량 표본 한 번) 그 값에 칸을 붙이면 칸이 떨어졌다 붙으며 파형이 처음부터 다시 그려진다.
+  // 대표가 아닌 동안에는 평평한 선과 '수신 대기'를 보이고, 정상 표본이 오면 같은 칸에서 이어 그린다.
+  const showWatchWave = active && watch.status === 'connected'
+  const watchWavePulse = useCallback(() => watchLive ? watchPulse() : 0, [watchLive, watchPulse])
+  const watchWaveTag = `${WATCH_PULSE_TAG} · ${watchLive ? `${bpmText(bpm)} BPM` : '수신 대기'}`
   // 두 칸이 같이 보일 때는 카메라 이름표에도 카메라 심박을 적어, 두 값을 그래프 옆에서 읽게 한다
   const cameraWaveTag = `${pulseTag(rppg)}${showWatchWave && rppgBpm !== null ? ` · ${bpmText(rppgBpm)} BPM` : ''}`
   const orbPulse = useCallback(() => !active ? 0
@@ -314,8 +320,8 @@ export default function MeasureDemo() {
             {/* 워치 리듬 칸은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 보이게 한다 */}
             {showWatchWave && (
               <div className={`${styles.waveBox} ${styles.watchWave}`}>
-                <PulseCanvas getPulse={watchPulse} className={styles.wave} color={watchInk} />
-                <span className={styles.frameTag}>{`${WATCH_PULSE_TAG} · ${bpmText(bpm)} BPM`}</span>
+                <PulseCanvas getPulse={watchWavePulse} className={styles.wave} color={watchInk} />
+                <span className={styles.frameTag}>{watchWaveTag}</span>
               </div>
             )}
           </div>
