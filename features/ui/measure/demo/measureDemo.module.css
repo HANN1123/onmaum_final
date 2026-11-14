@@ -1192,18 +1192,44 @@
   overflow-x: clip;
   text-align: right;
 }
+/*
+ * 카메라 칸을 영상 비율에 맞춘다(2026-11-08). 영상을 칸 안에 통째로 넣기만 하면(fitLayout) 칸과 영상 비율이 다를 때
+ * 칸 안에 빈 띠가 생겼다(맥북 16:9 영상에서 칸의 약 29%). 칸 자체를 돌린 영상의 비율(--cam-ratio)로 만들고,
+ * 왼쪽 열 안에 들어가는 가장 큰 크기로 정한다. 남는 높이는 맥박 파형 칸이 받고(최대 --wave-max), 파형 칸은 카메라 칸과 폭을 맞춘다.
+ * 영상 크기를 알기 전에는 16:9 로 둔다. 테두리 1px 는 border-box 안에 있으므로 빼고 비율을 맞춘다.
+ */
 .measureBody .left {
-  gap: clamp(8px, 1.4vh, 20px);
+  container-type: size;
+  --left-gap: clamp(8px, 1.4vh, 20px);
+  --wave-min: clamp(52px, 10vh, 120px);
+  --wave-max: clamp(120px, 24vh, 240px);
+  --cam-w: min(100cqw, (100cqh - var(--wave-min) - var(--left-gap) - 2px) * var(--cam-ratio, 1.7778) + 2px);
+  --cam-h: calc((var(--cam-w) - 2px) / var(--cam-ratio, 1.7778) + 2px);
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: var(--left-gap);
+}
+.measureBody .frame {
+  width: var(--cam-w);
+  height: var(--cam-h);
+  justify-self: center;
 }
 .measureBody .waveBox {
-  height: clamp(52px, 10vh, 120px);
+  width: var(--cam-w);
+  height: clamp(var(--wave-min), calc(100cqh - var(--cam-h) - var(--left-gap)), var(--wave-max));
+  justify-self: center;
 }
 .measureBody .bpm {
   font-size: clamp(44px, min(8vw, 11vh), 150px);
 }
 .measureBody .row {
   padding: clamp(4px, 1.05vh, 16px) 0;
-  font-size: clamp(11px, min(0.84vw, 1.6vh), 15px);
+  font-size: clamp(12px, min(1vw, 1.9vh), 16px);
+}
+/* 왼쪽 이름(측정·얼굴·심박 신호…)도 값과 같은 크기로 읽히게 키운다. 한글은 넓은 자간이 띄엄띄엄 읽혀 줄인다 */
+.measureBody .row .k {
+  font-size: 1em;
+  letter-spacing: 0.08em;
 }
 .measureBody .btnSolid {
   padding: clamp(10px, 1.8vh, 24px) 20px;
@@ -1221,9 +1247,22 @@
   /* 세로 배치: 카메라·파형 칸이 화면 높이의 일부만 쓰게 해서 아래 정보가 같은 화면에 들어오게 한다 */
   .measureBody > .left {
     height: clamp(160px, 26vh, 480px);
+    --wave-min: clamp(40px, 6vh, 96px);
+    --wave-max: var(--wave-min);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  /* 세로 배치에서는 카메라 칸이 낮아 영상 비율에 맞추면 칸이 너무 좁아지고 글자가 겹친다.
+     예전처럼 폭을 꽉 채우고, 영상은 칸 가운데에 맞춘다(양옆 여백에 표지·회전 버튼이 놓인다) */
+  .measureBody .frame,
+  .measureBody .waveBox {
+    width: auto;
+    justify-self: stretch;
+  }
+  .measureBody .frame {
+    height: auto;
   }
   .measureBody .waveBox {
-    height: clamp(40px, 6vh, 96px);
+    height: var(--wave-min);
   }
   .measureBody .row {
     padding: clamp(4px, 0.9vh, 14px) 0;
@@ -1237,9 +1276,9 @@
 @media (max-aspect-ratio: 1/1) and (max-height: 720px), (max-width: 720px) and (max-height: 720px) {
   .measureBody > .left {
     height: clamp(120px, 22vh, 480px);
-  }
-  .measureBody .waveBox {
-    height: clamp(34px, 5vh, 96px);
+    --wave-min: clamp(34px, 5vh, 96px);
+    --wave-max: var(--wave-min);
+    --left-gap: 6px;
   }
   .measureBody .row {
     padding: clamp(3px, 0.6vh, 14px) 0;

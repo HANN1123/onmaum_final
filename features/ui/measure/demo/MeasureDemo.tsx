@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Skeleton, SkeletonBox, SkulletProvider } from 'skullet/react'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
@@ -12,7 +12,7 @@ import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/use
 import { LEGAL } from './demoCopy'
 import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type CameraRotation } from '@/shared/storage/cameraRotation'
 import FaceLayer from './FaceLayer'
-import { rotatedVideoStyle } from './rotationLayout'
+import { rotatedSize, rotatedVideoStyle } from './rotationLayout'
 import { useWatch } from './useWatch'
 import { WATCH_HINT, WATCH_PULSE_TAG, pulseOrigin } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
@@ -118,6 +118,9 @@ export default function MeasureDemo() {
     }
   }, [frameEl, videoEl])
   const videoStyle = rotatedVideoStyle(frameSize.cw, frameSize.ch, frameSize.vw, frameSize.vh, rotation) ?? undefined
+  // 카메라 칸을 돌린 영상의 비율(가로/세로)로 만든다. 칸과 영상 비율이 같아 칸 안에 빈 띠가 생기지 않는다(CSS --cam-ratio)
+  const camSize = frameSize.vw > 0 && frameSize.vh > 0 ? rotatedSize(frameSize.vw, frameSize.vh, rotation) : null
+  const leftStyle = camSize ? ({ '--cam-ratio': (camSize.w / camSize.h).toFixed(4) } as CSSProperties) : undefined
   const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
@@ -273,7 +276,7 @@ export default function MeasureDemo() {
         </nav>
 
         <div className={`${styles.body} ${styles.measureBody}`}>
-          <div className={styles.left}>
+          <div className={styles.left} style={leftStyle}>
             <div ref={setFrameEl} className={styles.frame}>
               <video ref={attachVideo} muted playsInline autoPlay style={videoStyle} />
               <FaceLayer box={active ? face.box : null} videoRef={videoRef} rotation={rotation} />
