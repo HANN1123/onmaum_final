@@ -2,6 +2,11 @@ import type { StressLevel } from '../../algorithm/baseline/baseline'
 
 export interface NudgeSettings {
   enabled: boolean
+  /**
+   * 화면 안 배너와 함께 OS(윈도우) 알림도 띄울지. 권한이 있어도 이 값이 false 면 띄우지 않는다.
+   * 이전 설정에는 없던 값이라, 없으면 이전 동작(권한이 있으면 띄움)과 같게 true 로 읽는다.
+   */
+  osNotify: boolean
   maxPerDay: number
   cooldownMs: number
   sustainMs: number

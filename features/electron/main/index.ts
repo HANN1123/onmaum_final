@@ -32,6 +32,7 @@ import {
   type WidgetEvent,
   type WidgetState,
 } from './widgetRules'
+import { resolveMainWindowSize } from './mainWindowSize'
 import { createMainWindow, createWidgetWindow } from './windows'
 
 const mode = resolveRunMode(app.isPackaged)
@@ -205,7 +206,8 @@ function start(): void {
     return next
   })
 
-  const win = createMainWindow(ses)
+  // 처음 열 때 주 모니터 작업 영역 안으로 줄인다(Electron 이 창을 그 화면 가운데에 놓는다)
+  const win = createMainWindow(ses, resolveMainWindowSize(screen.getPrimaryDisplay().workAreaSize))
   mainWindow = win
   restrictNavigation(win.webContents, mode.name, 'main')
   // 워치 연동(Web Bluetooth): 메인 창에서만 장치를 고른다. 위젯 창에는 설치하지 않는다

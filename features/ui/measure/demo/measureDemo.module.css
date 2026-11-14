@@ -10,6 +10,8 @@
   --line-strong: rgba(255, 255, 255, 0.26);
   --fill-ghost: rgba(255, 255, 255, 0.05);
   --fill-solid: rgba(255, 255, 255, 0.10);
+  /* 워치(기준 심박) 표시 색. 오브의 감정 색(빨강·금빛·청록·파랑)과 겹치지 않는 연두 */
+  --watch: #c8f26b;
   --gutter: clamp(20px, 5vw, 100px);
   --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -40,6 +42,8 @@
   --line-strong: rgba(0, 0, 0, 0.26);
   --fill-ghost: rgba(0, 0, 0, 0.05);
   --fill-solid: rgba(0, 0, 0, 0.10);
+  /* 흰 바탕에서는 연두가 묻혀서 짙은 초록을 쓴다 */
+  --watch: #3f6b00;
 }
 
 /* 공통 글자 */
@@ -1083,44 +1087,7 @@
   transition: opacity 0.45s ease;
 }
 
-/* 측정 스위치 — uiverse 의 토글 스위치 발상을 각진 1px 선 스타일로 옮긴 것 */
-.switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  letter-spacing: inherit;
-}
-.switchTrack {
-  position: relative;
-  width: 44px;
-  height: 22px;
-  border: 1px solid var(--line-strong);
-  transition: background-color 0.25s ease, border-color 0.25s ease;
-}
-.switchKnob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  background: var(--text-dimmer);
-  transition: transform 0.35s var(--ease-out), background-color 0.25s ease;
-}
-.switchOn .switchTrack {
-  border-color: var(--text);
-}
-.switchOn .switchKnob {
-  background: var(--text);
-  transform: translateX(22px);
-}
-
-/* 표 안의 작은 선택 버튼(모의 심박·색 반응) */
+/* 표 안의 작은 선택 버튼(워치 연결·저장 여부) */
 .presets {
   display: inline-flex;
   gap: 6px;
@@ -1192,24 +1159,103 @@
   overflow-x: clip;
   text-align: right;
 }
+/*
+ * 카메라 칸을 영상 비율에 맞춘다(2026-11-08). 영상을 칸 안에 통째로 넣기만 하면(fitLayout) 칸과 영상 비율이 다를 때
+ * 칸 안에 빈 띠가 생겼다(맥북 16:9 영상에서 칸의 약 29%). 칸 자체를 돌린 영상의 비율(--cam-ratio)로 만들고,
+ * 왼쪽 열 안에 들어가는 가장 큰 크기로 정한다. 남는 높이는 맥박 파형 칸이 받고(최대 --wave-max), 파형 칸은 카메라 칸과 폭을 맞춘다.
+ * 영상 크기를 알기 전에는 16:9 로 둔다. 테두리 1px 는 border-box 안에 있으므로 빼고 비율을 맞춘다.
+ * 워치가 대표 심박이면 파형 칸이 둘이 된다(--waves, data-waves). 카메라 칸은 파형 칸 수만큼 자리를 남기고, 남는 높이는 두 칸이 똑같이 나눈다.
+ */
 .measureBody .left {
-  gap: clamp(8px, 1.4vh, 20px);
+  container-type: size;
+  --left-gap: clamp(8px, 1.4vh, 20px);
+  --wave-min: clamp(52px, 10vh, 120px);
+  --wave-max: clamp(120px, 24vh, 240px);
+  --waves: 1;
+  --cam-w: min(100cqw, (100cqh - (var(--wave-min) + var(--left-gap)) * var(--waves) - 2px) * var(--cam-ratio, 1.7778) + 2px);
+  --cam-h: calc((var(--cam-w) - 2px) / var(--cam-ratio, 1.7778) + 2px);
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: var(--left-gap);
+}
+.measureBody .left[data-waves='2'] {
+  --waves: 2;
+}
+.measureBody .frame {
+  width: var(--cam-w);
+  height: var(--cam-h);
+  justify-self: center;
 }
 .measureBody .waveBox {
-  height: clamp(52px, 10vh, 120px);
+  width: var(--cam-w);
+  height: clamp(var(--wave-min), calc((100cqh - var(--cam-h)) / var(--waves) - var(--left-gap)), var(--wave-max));
+  justify-self: center;
 }
 .measureBody .bpm {
   font-size: clamp(44px, min(8vw, 11vh), 150px);
 }
+/*
+ * 글자 크기(2026-11-14 교수님 피드백): 기본 창(1280×900)에서 행 글자 17px, 작은 표지·단위 14px 가 되게 키웠다.
+ * 창이 작으면 예전처럼 12px·11px 까지 줄어든다.
+ */
 .measureBody .row {
-  padding: clamp(4px, 1.05vh, 16px) 0;
-  font-size: clamp(11px, min(0.84vw, 1.6vh), 15px);
+  /* 글자를 키운 만큼 행 사이를 조금 좁혀 기본 창에서 오른쪽 칸이 넘치지 않게 한다 */
+  padding: clamp(4px, 0.85vh, 16px) 0;
+  font-size: clamp(12px, min(1.33vw, 1.95vh), 18px);
+}
+/* 왼쪽 이름(측정·얼굴·심박 신호…)도 값과 같은 크기로 읽히게 키운다. 한글은 넓은 자간이 띄엄띄엄 읽혀 줄인다 */
+.measureBody .row .k {
+  font-size: 1em;
+  letter-spacing: 0.08em;
+}
+/* 핵심 행(현재 감정·현재 상태)은 값만 한 단계 더 크고 굵게 */
+.measureBody .rowKey .rowValue {
+  font-size: 1.45em;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.measureBody .frameTag,
+.measureBody .faceTag,
+.measureBody .unit,
+.measureBody .preset {
+  font-size: clamp(11px, min(1.13vw, 1.65vh), 15px);
+}
+.measureShell .navLink,
+.measureShell .live,
+.measureShell .themeBtn,
+.measureBody .btnSolid {
+  font-size: clamp(11px, min(1.22vw, 1.78vh), 16px);
+}
+.measureShell .legal {
+  font-size: clamp(12px, min(1.13vw, 1.65vh), 15px);
 }
 .measureBody .btnSolid {
   padding: clamp(10px, 1.8vh, 24px) 20px;
 }
+/* 심박 숫자 묶음은 오브 옆에 남는 폭을 쓰고, 출처(워치 · 카메라)는 숫자 아래 줄로 내려 오브가 커질 가로 폭을 만든다 */
+.measureBody .bpmRow {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.bpmSource {
+  flex-basis: 100%;
+  font-size: clamp(13px, min(1.5vw, 2.2vh), 20px);
+  color: var(--text-dim);
+}
+/* 워치 표시는 워치 색으로: 출처 글자, 워치 행의 값, 워치 리듬 칸 이름표(선 색은 MeasureDemo 의 watchInk) */
+.watchWave .frameTag,
+.watchInk {
+  color: var(--watch);
+}
 /* 오브 캔버스는 정사각형으로 그리고 크기만 화면에 맞춰 줄인다 */
 .measureOrb {
+  width: clamp(64px, min(15vw, 21vh), 192px) !important;
+  height: clamp(64px, min(15vw, 21vh), 192px) !important;
+}
+/* 저장 여부를 묻는 상자가 떠 있는 동안은 예전 크기로 줄여 상자에 자리를 내준다 */
+.measureOrb.measureOrbSmall {
   width: clamp(64px, min(9vw, 13vh), 128px) !important;
   height: clamp(64px, min(9vw, 13vh), 128px) !important;
 }
@@ -1221,28 +1267,52 @@
   /* 세로 배치: 카메라·파형 칸이 화면 높이의 일부만 쓰게 해서 아래 정보가 같은 화면에 들어오게 한다 */
   .measureBody > .left {
     height: clamp(160px, 26vh, 480px);
+    --wave-min: clamp(40px, 6vh, 96px);
+    --wave-max: var(--wave-min);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  /* 세로 배치에서는 카메라 칸이 낮아 영상 비율에 맞추면 칸이 너무 좁아지고 글자가 겹친다.
+     예전처럼 폭을 꽉 채우고, 영상은 칸 가운데에 맞춘다(양옆 여백에 표지·회전 버튼이 놓인다) */
+  .measureBody .frame,
+  .measureBody .waveBox {
+    width: auto;
+    justify-self: stretch;
+  }
+  .measureBody .frame {
+    height: auto;
   }
   .measureBody .waveBox {
-    height: clamp(40px, 6vh, 96px);
+    height: var(--wave-min);
   }
   .measureBody .row {
     padding: clamp(4px, 0.9vh, 14px) 0;
   }
-  /* 위쪽 메뉴의 "측정 종료"가 항상 보이므로 아래 같은 버튼은 숨겨 정보 행에 자리를 준다 */
-  .measureEndBottom {
-    display: none;
+  /* 세로 배치는 오른쪽 칸이 넓어 출처를 숫자 옆에 두고, 오브는 예전 크기로 둬서 아래 정보에 자리를 준다 */
+  .bpmSource {
+    flex-basis: auto;
+  }
+  .measureOrb {
+    width: clamp(64px, min(9vw, 13vh), 128px) !important;
+    height: clamp(64px, min(9vw, 13vh), 128px) !important;
   }
 }
 /* 세로 배치이면서 높이가 낮을 때(데스크톱 앱 최소 크기의 실제 화면 영역 약 504×661 포함): 한 단계 더 줄인다 */
 @media (max-aspect-ratio: 1/1) and (max-height: 720px), (max-width: 720px) and (max-height: 720px) {
   .measureBody > .left {
     height: clamp(120px, 22vh, 480px);
-  }
-  .measureBody .waveBox {
-    height: clamp(34px, 5vh, 96px);
+    --wave-min: clamp(34px, 5vh, 96px);
+    --wave-max: var(--wave-min);
+    --left-gap: 6px;
   }
   .measureBody .row {
-    padding: clamp(3px, 0.6vh, 14px) 0;
+    padding: 3px 0;
+  }
+  /* 높이가 낮을 때는 핵심 행 강조를 줄이고 버튼을 낮춰, 아래 측정 종료 버튼까지 한 화면에 넣는다 */
+  .measureBody .rowKey .rowValue {
+    font-size: 1.15em;
+  }
+  .measureBody .btnSolid {
+    padding: 8px 20px;
   }
   .measureBody .right {
     --right-gap: 6px;
@@ -1418,4 +1488,186 @@
 /* 바로 위 상태 행 묶음의 아래 선과 겹치지 않게 워치 행의 위 선은 그리지 않는다 */
 .measureBody .watchRows .row {
   border-top: 0;
+}
+
+/* 기록 저장 동의(측정 화면, 아직 고르지 않았을 때 한 번) */
+.consentBox {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--fill-ghost);
+}
+.consentText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+
+/* 오른쪽 칸이 넘치면 그 칸만 스크롤한다(결과·리포트·기록에 제안·체크인·설정을 더했다) */
+.rightScroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+/* 쉬어 가기 제안·체크인 카드 */
+.careBox {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--fill-ghost);
+}
+.careLabel {
+  composes: mono;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.careText {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(16px, 1.2vw, 20px);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+/* 측정 중 휴식 알림: 화면 오른쪽 아래에 떠 있다. 측정은 계속된다 */
+.nudgeDock {
+  position: fixed;
+  right: clamp(16px, 2vw, 32px);
+  bottom: clamp(16px, 2vw, 32px);
+  z-index: 20;
+  width: min(380px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  animation: swapIn 0.4s var(--ease-arrive);
+}
+.nudgeMessage {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  word-break: keep-all;
+}
+
+/* 내 설정: 선택지가 길면 다음 줄로 */
+.settingOptions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 설문 선택지 설명·마지막 저장·알림 화면 */
+.surveyOptionText {
+  display: grid;
+  gap: 4px;
+}
+.surveyDetail {
+  font-size: 12px;
+  color: var(--text-dimmer);
+  line-height: 1.4;
+}
+.consentSteps {
+  display: grid;
+  gap: clamp(18px, 2vw, 28px);
+}
+.consentQuestion {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: clamp(16px, 1.2vw, 20px);
+}
+.btnSolid:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 호흡 안내 창 */
+.breathBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(var(--bg-rgb), 0.82);
+  backdrop-filter: blur(6px);
+}
+.breathPanel {
+  width: min(520px, 100%);
+  max-height: calc(100svh - 32px);
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 2vw, 28px);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.breathTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.breathBody {
+  display: grid;
+  gap: 14px;
+}
+.breathLead {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: clamp(18px, 1.5vw, 24px);
+  line-height: 1.45;
+  word-break: keep-all;
+}
+.breathChoices {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px 16px;
+}
+.breathStage {
+  display: grid;
+  place-items: center;
+  height: clamp(180px, 32vh, 260px);
+}
+.breathCircle {
+  display: block;
+  width: clamp(160px, 28vh, 230px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: radial-gradient(circle, rgba(var(--text-rgb), 0.16), rgba(var(--text-rgb), 0.04) 70%);
+  will-change: transform;
+}
+.breathCue {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1.8vw, 28px);
+  font-weight: 300;
+  min-height: 1.5em;
+}
+.breathSource {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}
+
+/* 제안 위 상태 한 줄(측정 기록으로 본 판정) */
+.careHeadline {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  word-break: keep-all;
 }

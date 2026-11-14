@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Skeleton, SkeletonBox, SkulletProvider } from 'skullet/react'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
 import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
@@ -12,7 +12,7 @@ import { useDesktopMeasurementPublisher } from '@/features/electron/renderer/use
 import { LEGAL } from './demoCopy'
 import { loadCameraRotation, nextCameraRotation, saveCameraRotation, type CameraRotation } from '@/shared/storage/cameraRotation'
 import FaceLayer from './FaceLayer'
-import { rotatedVideoStyle } from './rotationLayout'
+import { rotatedSize, rotatedVideoStyle } from './rotationLayout'
 import { useWatch } from './useWatch'
 import { WATCH_HINT, WATCH_PULSE_TAG, pulseOrigin } from './watchStatus'
 import { bpmText, pulseTag, signalText, useHeartRateSource } from './heartRate'
@@ -28,21 +28,39 @@ import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
 import { useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
-import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
+import { attachSessionExtras } from './sessionLog'
+import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
+import { useSteadyEmotion } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
+import { useMeasureRecording } from './useMeasureRecording'
+import { storageRowText } from './storageStatus'
+import { loadConsent, saveConsent, type StorageConsent } from '@/shared/storage/consent'
+import { useNudge } from '@/features/feedback/hooks/useNudge'
+import { careSuggestions, type BreathingPlan } from '@/features/feedback/lib/careActions'
+import { loadProfile } from '@/shared/storage/profile'
+import BreathingGuide from './BreathingGuide'
+import CareCard from './CareCard'
 
 /**
  * 측정 화면 데모(분할 계기판). 검정 히어로에서 "측정 시작"을 누르면 온다.
  * 왼쪽은 카메라 프레임과 맥박 파형, 오른쪽은 BPM·오브·상태 행이다.
  * 감정·rPPG는 같은 카메라에서 얻고, 유효한 워치가 있으면 표시 심박으로 우선한다.
  * 워치가 없거나 끊기면 카메라 표시값을 쓰며 품질이 낮으면 참고값으로 알린다.
+ * 워치가 대표 심박인 동안에는 카메라 파형 칸 아래에 워치 리듬 칸이 하나 더 생긴다(워치 표시는 연두색).
+ * 측정 시작·종료는 오른쪽 아래 버튼 하나로 한다.
  * "오늘"과 "14일 기준선"은 이 기기에 저장된 실제 기록으로 계산한다.
- * 측정 종료를 누르면 이번 측정 기록을 sessionStorage 로 넘기고 결과 화면으로 간다(저장 계층에는 저장하지 않는다).
+ * 기록 저장에 동의했으면 측정하는 동안 1분 감정 요약을 이 기기에 저장한다(useMeasureRecording, 세션 연결).
+ * 아직 고르지 않았으면 오른쪽 위에 저장 여부를 한 번 묻고 기억한다. 영상·심박 원시값은 저장하지 않는다.
+ * 측정 종료를 누르면 남은 기록 저장을 마친 뒤 1초 표본(심박 포함)을 sessionStorage 로 넘기고 결과 화면으로 간다.
+ * 휴식 알림(useNudge, 저장된 기록으로 판정)이 뜨면 아래에 쉬어 가기 제안을 띄운다. 위쪽 "숨 고르기"로 언제든 호흡 안내를 연다.
+ * 호흡 안내를 하는 동안은 감정 기록을 저장하지 않는다(호흡이 표정·심박을 바꿔 평소 기록·기준선에 섞이지 않게).
  */
 
 const HERO_HREF = DEMO_HOME_HREF
 const RESULT_HREF = '/demo/result'
+/** 얼굴 검출 주기. 저장 표본 간격의 기본값으로도 쓴다 */
+const FACE_INTERVAL_MS = 250
 /**
  * 준비 중 뼈대(Skullet) 색. 화면 토큰과 같은 결: 검정 바탕엔 흰 잉크를, 흰 바탕엔 검정 잉크를 옅게.
  * 모서리는 각지게, 글자 막대는 대문자 높이에서 기준선까지만 그려 실제 글자 덩어리와 맞춘다.
@@ -66,6 +84,11 @@ export default function MeasureDemo() {
     setVideoEl(el)
   }, [])
   const [active, setActive] = useState(true)
+  // 표본 콜백이 렌더 중 값이 아니라 최신 측정 여부를 읽게 한다
+  const activeRef = useRef(active)
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
   // 카메라 회전(시계 방향). 웹캠을 세워 쓰거나 뒤집어 달았을 때 화면과 분석 입력을 함께 돌린다. 이 기기에만 저장한다
   const [rotation, setRotation] = useState<CameraRotation>(0)
   useEffect(() => {
@@ -97,9 +120,13 @@ export default function MeasureDemo() {
     }
   }, [frameEl, videoEl])
   const videoStyle = rotatedVideoStyle(frameSize.cw, frameSize.ch, frameSize.vw, frameSize.vh, rotation) ?? undefined
-  const [responseMode, setResponseMode] = useState<EmotionResponseMode>('demo')
+  // 카메라 칸을 돌린 영상의 비율(가로/세로)로 만든다. 칸과 영상 비율이 같아 칸 안에 빈 띠가 생기지 않는다(CSS --cam-ratio)
+  const camSize = frameSize.vw > 0 && frameSize.vh > 0 ? rotatedSize(frameSize.vw, frameSize.vh, rotation) : null
+  const leftStyle = camSize ? ({ '--cam-ratio': (camSize.w / camSize.h).toFixed(4) } as CSSProperties) : undefined
   const [theme, toggleTheme] = useDemoTheme()
   const ink = theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.8)'
+  // 워치 리듬 선 색. 글자에 쓰는 CSS --watch 와 같은 값이다
+  const watchInk = theme === 'dark' ? '#c8f26b' : '#3f6b00'
   const webcam = useWebcam(videoRef, true)
   // rPPG 엔진이 매 프레임 BlazeFace 로 찾은 얼굴 상자를 감정 분석도 같이 쓴다(엔진이 돌지 않을 때만 SSD)
   const { displayBpm: rppgBpm, quality: rppgQuality, getPulse, reading: rppg, getFace, getFaceRate } = useHeartRateSource(videoRef, webcam === 'ready' && active, rotation)
@@ -112,20 +139,61 @@ export default function MeasureDemo() {
   const sourceLabel = selected.source === 'watch' ? '워치'
     : selected.source === 'rppg' ? `카메라${rppgQuality === 'good' ? '' : ' · 참고값'}` : ''
   const watchPulse = useLivePulse(bpm ?? 0)
-  // 워치가 대표 심박이면 파형·오브 박동도 워치 BPM 리듬을 따른다(워치를 기준으로 둔다).
-  // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 그 밖에는 rPPG 실측 파형을 쓴다.
+  // 워치가 대표 심박이면 오브 박동이 워치 BPM 리듬을 따르고(워치를 기준으로 둔다), 워치 리듬 칸이 따로 생긴다.
+  // 워치 리듬은 수신 BPM 으로 만든 주기 애니메이션이며 실측 파형이 아니다. 카메라 파형 칸은 늘 rPPG 실측 파형을 그린다.
   const pulseFrom = pulseOrigin(active, heartSource)
-  const wavePulse = useCallback(() => pulseFrom === 'watch' ? watchPulse() : getPulse(),
-    [pulseFrom, watchPulse, getPulse])
+  const showWatchWave = pulseFrom === 'watch'
+  // 두 칸이 같이 보일 때는 카메라 이름표에도 카메라 심박을 적어, 두 값을 그래프 옆에서 읽게 한다
+  const cameraWaveTag = `${pulseTag(rppg)}${showWatchWave && rppgBpm !== null ? ` · ${bpmText(rppgBpm)} BPM` : ''}`
   const orbPulse = useCallback(() => !active ? 0
     : pulseFrom === 'watch' ? watchPulse() : rppg.rawBpm !== null ? getPulse() : 0,
   [active, pulseFrom, rppg.rawBpm, getPulse, watchPulse])
-  const face = useFaceTrack(videoRef, webcam === 'ready', { rotation, getFace })
+  // 기록 저장 동의. 아직 고르지 않았으면 null, 첫 렌더(서버와 맞춤) 동안은 undefined
+  const [consent, setConsent] = useState<StorageConsent | null | undefined>(undefined)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConsent(loadConsent())
+  }, [])
+  const decideConsent = (record: boolean) => {
+    saveConsent(record)
+    setConsent({ version: 1, record, decidedAt: new Date().toISOString() })
+  }
+  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
+  const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
+  // 이번 측정의 표정 평균(결과 화면의 상태별 제안용). 측정을 다시 시작하면 처음부터 모은다
+  const faceSum = useRef({ happy: 0, calm: 0, sad: 0, angry: 0, n: 0 })
+  useEffect(() => {
+    if (active) faceSum.current = { happy: 0, calm: 0, sad: 0, angry: 0, n: 0 }
+  }, [active])
+  const pushSample = recording.push
+  const onSample = useCallback((raw: EmotionResult | null) => {
+    pushSample(raw)
+    if (!raw || !activeRef.current) return
+    const acc = faceSum.current
+    acc.happy += raw.happy
+    acc.calm += raw.calm
+    acc.sad += raw.sad
+    acc.angry += raw.angry
+    acc.n += 1
+  }, [pushSample])
+  const face = useFaceTrack(videoRef, webcam === 'ready', {
+    rotation,
+    getFace,
+    intervalMs: FACE_INTERVAL_MS,
+    // 호흡 안내 중에는 저장·평균 모두 넘기지 않는다
+    onSample: breathing ? undefined : onSample,
+  })
+  const nudge = useNudge()
+  /** 위쪽 숨 고르기: 설문에서 고른 호흡 방법(받지 않기여도 직접 열면 순환 한숨 1분) */
+  const openBreathing = () => {
+    const plan = careSuggestions(loadProfile(), 'during').find((s) => s.breathing)?.breathing
+    setBreathing(plan ?? { technique: 'sigh', durationSec: 60 })
+  }
   // 카메라와 얼굴 인식 모델이 모두 준비되기 전에는 값 대신 실제 모양의 뼈대를 보여준다(Skullet 시험 적용).
   const ready = webcam === 'ready' && face.modelsReady
   const elapsed = useElapsed(active)
-  // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다.
-  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, responseMode, 'calm', rotation)
+  // 오브 색은 순간 감정이 아니라 안정된 감정을 따른다. 반응 속도는 빠른 쪽('demo')으로 고정한다.
+  const orbEmotion = useSteadyEmotion(active ? face.emotion : null, 'demo', 'calm', rotation)
   // 기록에는 얼굴을 찾은 순간의 감정만 남긴다. 못 찾은 순간을 마지막 색(기본 평온)으로 채우지 않는다.
   const finishLog = useSessionLog(active, bpm, active && face.emotion ? orbEmotion : null, rppgQuality, rppg.rawBpm,
     { latest: watch.latest, status: watch.status, rppgBpm })
@@ -134,14 +202,28 @@ export default function MeasureDemo() {
   // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
   const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
-  // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
-  useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
+  useDesktopMeasurementPublisher({
+    active,
+    emotions: active ? face.emotions : null,
+    recordCount: recording.status?.saved ?? 0,
+    videoEl,
+    saveFailed: recording.status?.failed ?? false,
+  })
 
-  /** 측정 종료: 기록을 넘기고 결과 화면으로 간다. */
-  const endMeasure = () => {
-    if (!active) return
+  /** 측정 종료: 남은 1분 기록 저장을 마치고, 이번 측정 표본을 넘긴 뒤 결과 화면으로 간다. */
+  const [ending, setEnding] = useState(false)
+  const endMeasure = async () => {
+    if (!active || ending) return
+    setEnding(true)
     finishLog()
+    const saved = await recording.stop()
+    const acc = faceSum.current
+    attachSessionExtras({
+      sessionId: saved?.sessionId && saved.saved > 0 ? saved.sessionId : undefined,
+      faceMean: acc.n > 0 ? { happy: acc.happy / acc.n, calm: acc.calm / acc.n, sad: acc.sad / acc.n, angry: acc.angry / acc.n } : undefined,
+    })
     setActive(false)
+    setEnding(false)
     router.push(RESULT_HREF)
   }
 
@@ -169,7 +251,7 @@ export default function MeasureDemo() {
           : `기록 3일 미만 · ${levelShort(stored.today.level, stored.baseline)}`
 
   return (
-    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell}`} data-theme={theme}>
+    <section className={`${sora.variable} ${jetbrainsMono.variable} ${styles.shell} ${styles.measureShell}`} data-theme={theme}>
       <SkulletProvider mode={theme} theme={SKULLET_THEME} reveal="smart">
         <nav className={styles.nav}>
           <Link href={HERO_HREF} className={`${styles.logo} ${styles.focusable}`}>
@@ -185,17 +267,17 @@ export default function MeasureDemo() {
               {active && <span className={styles.liveDot} aria-hidden="true" />}
               <Morph>{`${active ? '측정 중' : '측정 종료'} ${elapsedText}`}</Morph>
             </span>
+            <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={openBreathing}>
+              숨 고르기
+            </button>
             <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
               {theme === 'dark' ? '화이트' : '다크'}
             </button>
           </div>
-          <button type="button" className={`${styles.cta} ${styles.focusable}`} onClick={() => (active ? endMeasure() : setActive(true))}>
-            {active ? '측정 종료' : '측정 시작'}
-          </button>
         </nav>
 
         <div className={`${styles.body} ${styles.measureBody}`}>
-          <div className={styles.left}>
+          <div className={styles.left} style={leftStyle} data-waves={showWatchWave ? 2 : 1}>
             <div ref={setFrameEl} className={styles.frame}>
               <video ref={attachVideo} muted playsInline autoPlay style={videoStyle} />
               <FaceLayer box={active ? face.box : null} videoRef={videoRef} rotation={rotation} />
@@ -223,12 +305,19 @@ export default function MeasureDemo() {
                 style={{ opacity: ready ? 0 : 1 }}
               />
             </div>
-            <Skeleton loading={!ready && pulseFrom !== 'watch'} id="measure-wave" label="맥박 파형 준비 중">
+            <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
               <div className={styles.waveBox} skullet-block="">
-                <PulseCanvas getPulse={wavePulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>{pulseFrom === 'watch' ? WATCH_PULSE_TAG : pulseTag(rppg)}</span>
+                <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
+                <span className={styles.frameTag}>{cameraWaveTag}</span>
               </div>
             </Skeleton>
+            {/* 워치 리듬 칸은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 보이게 한다 */}
+            {showWatchWave && (
+              <div className={`${styles.waveBox} ${styles.watchWave}`}>
+                <PulseCanvas getPulse={watchPulse} className={styles.wave} color={watchInk} />
+                <span className={styles.frameTag}>{`${WATCH_PULSE_TAG} · ${bpmText(bpm)} BPM`}</span>
+              </div>
+            )}
           </div>
 
           <div className={styles.right}>
@@ -237,40 +326,40 @@ export default function MeasureDemo() {
                 <div className={styles.bpmRow}>
                   <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
                   <span className={styles.unit}>BPM</span>
-                  {active && sourceLabel && <span className={styles.k}>{sourceLabel}</span>}
+                  {active && sourceLabel && (
+                    <span className={`${styles.bpmSource} ${selected.source === 'watch' ? styles.watchInk : ''}`}>{sourceLabel}</span>
+                  )}
                 </div>
                 <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb getPulse={orbPulse} emotion={orbEmotion} bpm={bpm ?? undefined} scheme={theme} size={128} className={styles.measureOrb} />
+                  <DotOrb
+                    getPulse={orbPulse}
+                    emotion={orbEmotion}
+                    bpm={bpm ?? undefined}
+                    scheme={theme}
+                    size={192}
+                    className={`${styles.measureOrb} ${consent === null ? styles.measureOrbSmall : ''}`}
+                  />
                 </span>
               </div>
             </Skeleton>
-            <div className={styles.rows}>
-              <div className={styles.row}>
-                <span className={styles.k}>측정</span>
-                <CallSwitch on={active} onToggle={() => (active ? endMeasure() : setActive(true))} />
-              </div>
-              <div className={styles.row}>
-                <span className={styles.k}>색 반응</span>
+            {consent === null && (
+              <div className={styles.consentBox} role="region" aria-label="기록 저장 여부">
+                <p className={styles.consentText}>
+                  측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·상태 확인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
+                </p>
                 <span className={styles.presets}>
-                  <button
-                    type="button"
-                    className={`${styles.preset} ${styles.focusable} ${responseMode === 'demo' ? styles.presetOn : ''}`}
-                    onClick={() => setResponseMode('demo')}
-                  >
-                    시연
+                  <button type="button" className={`${styles.preset} ${styles.presetOn} ${styles.focusable}`} onClick={() => decideConsent(true)}>
+                    저장
                   </button>
-                  <button
-                    type="button"
-                    className={`${styles.preset} ${styles.focusable} ${responseMode === 'daily' ? styles.presetOn : ''}`}
-                    onClick={() => setResponseMode('daily')}
-                  >
-                    사용
+                  <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={() => decideConsent(false)}>
+                    저장 안 함
                   </button>
                 </span>
               </div>
-            </div>
+            )}
             <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
               <Rows
+                emphasize={KEY_ROWS}
                 rows={[
                   ['측정 시간', elapsedText],
                   ['얼굴', faceState],
@@ -279,6 +368,7 @@ export default function MeasureDemo() {
                   ...fusedRows(active, fused, stored?.baseline ?? null, heartSource),
                   ['오늘', todayText],
                   ['14일 기준선', baselineText],
+                  ['기록 저장', storageRowText(consent, active, recording.status)],
                 ]}
               />
             </Skeleton>
@@ -287,7 +377,7 @@ export default function MeasureDemo() {
               <div className={styles.row}>
                 <span className={styles.k}>워치</span>
                 <span className={styles.watchValue}>
-                  <span role="status">{watch.text}</span>
+                  <span role="status" className={watch.state === 'live' ? styles.watchInk : undefined}>{watch.text}</span>
                   {watch.action && (
                     <button
                       type="button"
@@ -301,43 +391,51 @@ export default function MeasureDemo() {
                 </span>
               </div>
             </div>
-            {/* 세로 배치에서는 위쪽 메뉴의 측정 종료와 같아서 숨긴다(measureEndBottom) */}
-            <div className={styles.measureEndBottom} style={{ marginTop: 'auto' }}>
-              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={endMeasure}>
-                측정 종료
+            {/* 측정 시작·종료는 이 버튼 하나로 한다(위쪽 메뉴 버튼과 측정 스위치를 없앴다) */}
+            <div style={{ marginTop: 'auto' }}>
+              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={() => (active ? void endMeasure() : setActive(true))}>
+                {active ? '측정 종료' : '측정 시작'}
               </button>
             </div>
           </div>
         </div>
         <p className={styles.legal}>{LEGAL}</p>
+        {nudge.bannerOpen && !breathing && (
+          <div className={styles.nudgeDock} role="status">
+            <p className={styles.nudgeMessage}>{nudge.message}</p>
+            <CareCard
+              moment="during"
+              level="high"
+              title="지금 해볼 수 있는 것"
+              onBreathe={(plan) => {
+                nudge.close()
+                setBreathing(plan)
+              }}
+            />
+            <span className={styles.presets}>
+              <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={nudge.close}>
+                나중에
+              </button>
+              <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={nudge.muteToday}>
+                오늘은 그만
+              </button>
+            </span>
+          </div>
+        )}
+        {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
       </SkulletProvider>
     </section>
   )
 }
 
-/** 측정 시작/종료 스위치. 켜짐이 측정 중이다. */
-function CallSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      className={`${styles.switch} ${styles.focusable} ${on ? styles.switchOn : ''}`}
-      onClick={onToggle}
-    >
-      <span className={styles.switchTrack} aria-hidden="true">
-        <span className={styles.switchKnob} />
-      </span>
-      <span>{on ? '측정 중' : '대기'}</span>
-    </button>
-  )
-}
+/** 다른 행보다 크고 굵게 보이는 핵심 행 */
+const KEY_ROWS = ['현재 감정', '현재 상태']
 
-function Rows({ rows }: { rows: [string, string][] }) {
+function Rows({ rows, emphasize = [] }: { rows: [string, string][]; emphasize?: string[] }) {
   return (
     <div className={styles.rows}>
       {rows.map(([k, v]) => (
-        <div key={k} className={styles.row}>
+        <div key={k} className={`${styles.row} ${emphasize.includes(k) ? styles.rowKey : ''}`}>
           <span className={styles.k}>{k}</span>
           <Morph className={styles.rowValue}>{v}</Morph>
         </div>

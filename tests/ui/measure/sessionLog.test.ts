@@ -99,3 +99,32 @@ describe('parseDemoSession', () => {
     expect(parseDemoSession(one)).toBeNull()
   })
 })
+
+describe('attachSessionExtras·sessionStressLevel: 저장 세션 잇기와 이번 측정 판정', () => {
+  const base = { startedAt: 0, endedAt: 2000, durationSec: 2, samples: [{ t: 0, bpm: null, emotion: null }, { t: 1, bpm: null, emotion: 'calm' as const }] }
+
+  it('넘긴 측정에 세션 id·표정 평균을 붙이고, 넘긴 측정이 없으면 아무것도 만들지 않는다', async () => {
+    const { attachSessionExtras, saveDemoSession, parseDemoSession, readDemoSessionRaw } = await import('@/features/ui/measure/demo/sessionLog')
+    sessionStorage.clear()
+    attachSessionExtras({ sessionId: 's1' })
+    expect(readDemoSessionRaw()).toBeNull()
+    saveDemoSession(base)
+    attachSessionExtras({ sessionId: 's1', faceMean: { happy: 0.1, calm: 0.6, sad: 0.2, angry: 0.1 } })
+    const saved = parseDemoSession(readDemoSessionRaw())
+    expect(saved?.sessionId).toBe('s1')
+    expect(saved?.faceMean?.calm).toBe(0.6)
+    sessionStorage.clear()
+  })
+
+  it('표정 평균으로 기존 지수·기준선 판정을 하고, 보정값을 더한다', async () => {
+    const { sessionStressLevel } = await import('@/features/ui/measure/demo/sessionLog')
+    const absolute = { mode: 'absolute' as const, baselineN: null }
+    // 슬픔 0.6 → N 60 → 절대 기준 매우 높음
+    expect(sessionStressLevel({ ...base, faceMean: { happy: 0, calm: 0.4, sad: 0.6, angry: 0 } }, absolute, 0)).toBe('veryHigh')
+    // 슬픔 0.1 → N 10 → 낮음, 보정 +15 → 25 → 보통
+    const light = { ...base, faceMean: { happy: 0.3, calm: 0.6, sad: 0.1, angry: 0 } }
+    expect(sessionStressLevel(light, absolute, 0)).toBe('low')
+    expect(sessionStressLevel(light, absolute, 15)).toBe('typical')
+    expect(sessionStressLevel(base, absolute, 0)).toBeNull()
+  })
+})
