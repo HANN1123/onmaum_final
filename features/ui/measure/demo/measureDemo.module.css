@@ -1754,9 +1754,12 @@
     --cam-w: min(100cqw, 24vh * var(--cam-ratio, 1.7778) + 2px);
     --wave-max: 100cqh;
   }
+  /* 파형 칸 높이는 워치 연결과 관계없이 카메라 아래 남는 높이의 절반이다.
+     워치가 없으면 카메라 파형 칸 하나만 절반 크기로, 워치가 있으면 워치 칸과 카메라 칸이 절반씩 쓴다 */
   .measureBody .waveBox {
     width: 100%;
     justify-self: stretch;
+    height: max(var(--wave-min), calc((100cqh - var(--cam-h)) / 2 - var(--left-gap)));
   }
   /* 작은 카메라 칸에서는 이름표가 회전 버튼과 겹친다. 얼굴 상태는 오른쪽 '얼굴' 행에 같은 내용이 있어 숨긴다 */
   .measureBody .frame .frameTag {
