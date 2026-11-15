@@ -46,11 +46,15 @@
   --watch: #3f6b00;
 }
 
-/* 공통 글자 */
+/*
+ * 공통 글자. 작은 글자(.mono)는 기본 창(1280×900)에서 14px, 위쪽 메뉴와 큰 버튼은 15px 로 읽힌다(2026-11 글자 키우기).
+ * 창이 좁으면 예전처럼 11px 까지 줄어든다. 모든 데모 화면이 이 크기를 함께 쓴다.
+ * 창 폭만 따르므로 어떤 창 모양에서도 예전보다 작아지지 않는다. 높이까지 따라 줄이는 규칙은 측정 화면에만 둔다(.measureBody).
+ */
 .mono {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.13vw, 15px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -213,7 +217,7 @@
   text-align: center;
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(12px, 0.82vw, 15px);
+  font-size: clamp(12px, 1.13vw, 15px);
   color: var(--text-dim);
   line-height: 1.5;
 }
@@ -299,6 +303,14 @@
 .btnGhost:hover {
   background: rgba(var(--text-rgb), 0.09);
   color: var(--text);
+}
+
+/* 위쪽 메뉴와 큰 버튼의 글자는 작은 글자(.mono)보다 한 단계 크게 */
+.navLink,
+.cta,
+.btnSolid,
+.btnGhost {
+  font-size: clamp(11px, 1.22vw, 16px);
 }
 
 /* 버튼 두 개 나란히 */
@@ -711,7 +723,7 @@
 }
 .readoutUnit {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: clamp(12px, 1.13vw, 15px);
   letter-spacing: 0.12em;
   color: var(--text-dim);
 }
@@ -1094,7 +1106,7 @@
 }
 .preset {
   font-family: var(--font-mono);
-  font-size: clamp(11px, 0.72vw, 13px);
+  font-size: clamp(11px, 1.13vw, 15px);
   letter-spacing: 0.08em;
   padding: 4px 10px;
   border: 1px solid var(--line);
@@ -1117,7 +1129,7 @@
 .themeBtn {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   background: none;
@@ -1523,7 +1535,7 @@
 }
 .careLabel {
   composes: mono;
-  font-size: 11px;
+  font-size: clamp(11px, 1.13vw, 15px);
   color: var(--text-dim);
 }
 .careText {

@@ -67,7 +67,7 @@
     linear-gradient(to bottom, rgba(var(--bg-rgb), 0.55) 0%, transparent 22%, transparent 78%, rgba(var(--bg-rgb), 0.65) 100%);
 }
 
-/* 상단 */
+/* 상단. 메뉴·버튼 글자는 기본 창에서 15px, 작은 글자(칩·안내)는 14px 로 읽힌다(측정 화면과 같은 크기, 2026-11 글자 키우기) */
 .nav {
   position: relative;
   z-index: 60;
@@ -100,7 +100,7 @@
 .cta {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text);
@@ -222,7 +222,7 @@
 .chip {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.72vw, 14px);
+  font-size: clamp(11px, 1.13vw, 15px);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   line-height: 1;
@@ -241,7 +241,7 @@
   margin: clamp(14px, 1.4vw, 24px) 0 0;
   font-family: var(--font-mono);
   font-weight: 300;
-  font-size: clamp(11px, 0.94vw, 17px);
+  font-size: clamp(11px, 1.03vw, 17px);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   line-height: 1.4;
@@ -396,7 +396,7 @@
   right: 2px;
   top: -1px;
   font-family: var(--font-display);
-  font-size: 12px;
+  font-size: clamp(12px, 1.13vw, 15px);
   line-height: 1.4;
   color: var(--text-dimmer);
   pointer-events: none;
@@ -416,7 +416,7 @@
   padding: clamp(17px, 1.6vw, 27px) 20px;
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   cursor: pointer;
@@ -442,7 +442,7 @@
   align-self: center;
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.74vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text);
@@ -463,7 +463,7 @@
   text-align: center;
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(12px, 0.82vw, 16px);
+  font-size: clamp(12px, 1.13vw, 16px);
   line-height: 1.5;
   color: var(--text-dim);
 }
@@ -593,7 +593,7 @@
 .themeBtn {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   background: none;
