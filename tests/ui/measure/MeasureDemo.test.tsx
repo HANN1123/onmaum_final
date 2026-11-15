@@ -103,6 +103,29 @@ it('워치가 대표 심박이면 카메라 파형 칸은 그대로 두고 워�
   expect(screen.queryByText(/심박 리듬/)).toBeNull()
 })
 
+it('워치가 연결된 동안에는 표본이 접촉 불량이거나 늦어도 워치 리듬 칸을 떼지 않고 수신 대기로 표시한다', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74
+  state.status = 'connected'; state.latest = { t: 1000, bpm: 92, contact: 'good' }
+  const { rerender } = render(<MeasureDemo />)
+  expect(screen.getByText('심박 리듬 · 워치 BPM 기준 · 92 BPM')).toBeVisible()
+  // 접촉 불량 표본 한 번: 대표 심박은 카메라로 넘어가지만 워치 칸은 남는다
+  state.latest = { t: 1000, bpm: 92, contact: 'poor' }
+  rerender(<MeasureDemo />)
+  expect(screen.getByText('74')).toBeVisible()
+  expect(screen.getByText('심박 리듬 · 워치 BPM 기준 · 수신 대기')).toBeVisible()
+  // 8초 넘게 새 표본이 없을 때도 같다
+  state.latest = { t: 1000, bpm: 92, contact: 'good' }
+  now.mockReturnValue(20_000)
+  rerender(<MeasureDemo />)
+  expect(screen.getByText('심박 리듬 · 워치 BPM 기준 · 수신 대기')).toBeVisible()
+  // 정상 표본이 오면 같은 칸에서 바로 이어진다
+  state.latest = { t: 20_000, bpm: 95, contact: 'good' }
+  rerender(<MeasureDemo />)
+  expect(screen.getByText('심박 리듬 · 워치 BPM 기준 · 95 BPM')).toBeVisible()
+})
+
 it('측정을 끝내는 버튼은 하나뿐이고, 끝낸 뒤에는 같은 버튼으로 다시 잰다', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.spyOn(performance, 'now').mockReturnValue(1000)
