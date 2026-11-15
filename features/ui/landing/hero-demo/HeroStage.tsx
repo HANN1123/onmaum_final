@@ -195,9 +195,6 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
               <i data-on={scene.live ? '' : undefined} />
               <Swap text={scene.live ? '측정 중' : '측정 종료'} /> <Roll value={elapsed} />
             </span>
-            <span ref={endRef} className={styles.endBtn} data-pressed={scene.pressed === 'end' ? '' : undefined}>
-              측정 종료
-            </span>
           </div>
           <div className={styles.body}>
             <div className={styles.left}>
@@ -215,7 +212,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
                   <Roll value={String(scene.bpm)} />
                   <small>BPM</small>
                 </span>
-                <DotOrb getPulse={getPulse} emotion={scene.emotion} bpm={scene.bpm} scheme={scheme} size={84} />
+                <DotOrb getPulse={getPulse} emotion={scene.emotion} bpm={scene.bpm} scheme={scheme} size={112} />
               </div>
               <div className={styles.rows}>
                 <div className={styles.row}>
@@ -238,6 +235,10 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
                   <b style={{ width: 88 }} />
                 </div>
               </div>
+              {/* 실제 측정 화면처럼 종료 버튼은 오른쪽 칸 아래 하나뿐이다. 커서가 이 버튼을 누른다 */}
+              <span ref={endRef} className={styles.endBtn} data-pressed={scene.pressed === 'end' ? '' : undefined}>
+                측정 종료
+              </span>
             </div>
           </div>
         </div>
