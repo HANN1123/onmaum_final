@@ -251,6 +251,17 @@ export function sourceShareText(shares: SessionSummary['sourceShares']): string 
   return `워치 ${watch}% · 카메라 ${100 - watch}%`
 }
 
+/**
+ * 출처 글을 워치 부분과 그 뒤 나머지로 나눈다. 화면이 워치 부분만 워치 색으로 칠할 때 쓴다.
+ * 워치 기록이 없으면 watch 는 빈 문자열이고 글 전체가 rest 에 들어간다.
+ */
+export function splitSourceShare(shares: SessionSummary['sourceShares']): { watch: string; rest: string } {
+  const text = sourceShareText(shares)
+  if (!shares.watch) return { watch: '', rest: text }
+  const cut = text.indexOf(' · ')
+  return cut < 0 ? { watch: text, rest: '' } : { watch: text.slice(0, cut), rest: text.slice(cut) }
+}
+
 /** 강조 구간과 그 구간에서 가장 오래 머문 감정(구간의 색). 얼굴을 못 찾은 구간이면 감정은 null */
 export function peakWithEmotion(
   session: DemoSession,

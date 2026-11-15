@@ -14,7 +14,7 @@ import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
-import { peakWithEmotion, sessionStressLevel, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
+import { peakWithEmotion, sessionStressLevel, smoothBpm, splitSourceShare, summarizeSession, type DemoSession } from './sessionLog'
 import { loadSettings } from '@/shared/storage/settings'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
@@ -26,6 +26,7 @@ import type { BreathingPlan } from '@/features/feedback/lib/careActions'
  * 측정이 끝난 뒤 나오는 결과 화면 데모. 측정 화면과 같은 틀.
  * 왼쪽은 한 단계 밝은 면 위의 측정 차트. 위쪽 큰 숫자가 읽어 주는 값이고, 차트를 훑으면 그 순간의 값으로 굴러 바뀐다.
  * 오른쪽은 이번 측정의 감정 요약, 숫자 둘, 행, 버튼. 같은 정보는 한 곳에서만 말한다.
+ * 측정으로 가는 버튼도 오른쪽 아래 한 곳에만 둔다(위쪽 메뉴에는 두지 않는다).
  * 측정 화면이 넘긴 이번 측정만 보여준다. 넘겨받은 기록이 없으면 표본으로 채우지 않고 "기록 없음"을 보여준다.
  * 이번 측정에 대한 스트레스 판정은 하지 않는다(하루 판정은 리포트가 저장된 기록으로 한다).
  * 심박은 선택된 원천의 기록을 쓰고, 유효한 기록이 없으면 "--"를 표시한다.
@@ -52,9 +53,6 @@ export default function ResultDemo() {
             {theme === 'dark' ? '화이트' : '다크'}
           </button>
         </div>
-        <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
-          {session ? '다시 측정' : '측정 시작'}
-        </Link>
       </nav>
 
       {session ? <SessionResult session={session} theme={theme} /> : <NoSession />}
@@ -121,6 +119,8 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   const readBpm = point ? smooth[active!] : summary.avgBpm
   const readEmotion = point ? point.emotion : summary.dominant
 
+  // 심박 출처 글에서 워치 부분만 측정 화면과 같은 워치 색으로 보인다
+  const source = splitSourceShare(summary.sourceShares)
   const detectedPct = Math.round(summary.detectedRatio * 100)
   const verdict = summary.dominant ? `${EMOTION_LABELS[summary.dominant]}이 가장 오래 머물렀습니다` : '얼굴을 찾지 못해 감정 기록이 없습니다'
   const shareText = summary.dominant
@@ -181,7 +181,8 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
             emotion={summary.dominant ?? 'calm'}
             bpm={summary.avgBpm ?? undefined}
             scheme={theme}
-            size={112}
+            size={150}
+            className={styles.readOrb}
           />
         </div>
 
@@ -193,7 +194,15 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
         <div className={styles.rows}>
           <Row k="감정 비율" v={shareText} />
           <Row k="심박" v={summary.avgBpm === null ? '심박 기록 없음' : `평균 ${summary.avgBpm} BPM`} />
-          <Row k="심박 출처" v={sourceShareText(summary.sourceShares)} />
+          <Row
+            k="심박 출처"
+            v={
+              <>
+                {source.watch && <span className={styles.watchInk}>{source.watch}</span>}
+                {source.rest}
+              </>
+            }
+          />
           <Row k="오늘" v={todayText} />
         </div>
 
@@ -204,7 +213,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
           mode={stored?.baseline.mode ?? 'absolute'}
         />
 
-        <div className={styles.actions} style={{ marginTop: 'auto' }}>
+        <div className={`${styles.actions} ${styles.actionsPinned}`} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             다시 측정
           </Link>

@@ -357,8 +357,10 @@ export default function CallChart({ points, smooth, durationSec, highlight, shar
       <div className={styles.chartFoot}>
         <span>{(() => {
           const sources = new Set(heartRateRuns(points, smooth).map((run) => run.source))
-          return sources.size > 1 ? '심박 출처 · 워치 진하게 / 카메라 옅게'
-            : sources.has('watch') ? '심박 출처 · 워치' : sources.has('rppg') ? '심박 출처 · 카메라' : '심박 기록 없음'
+          if (!sources.has('watch')) return sources.has('rppg') ? '심박 출처 · 카메라' : '심박 기록 없음'
+          // '워치'라는 글자는 측정 화면과 같은 워치 색으로 보인다. 선 색은 감정 색이라 그대로 둔다
+          const watch = <span className={styles.watchInk}>워치</span>
+          return sources.size > 1 ? <>심박 출처 · {watch} 진하게 / 카메라 옅게</> : <>심박 출처 · {watch}</>
         })()}</span>
       </div>
     </div>

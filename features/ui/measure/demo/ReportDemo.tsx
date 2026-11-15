@@ -71,9 +71,7 @@ export default function ReportDemo() {
             {theme === 'dark' ? '화이트' : '다크'}
           </button>
         </div>
-        <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
-          측정 시작
-        </Link>
+        {/* 측정 시작 버튼은 오른쪽 아래 한 곳에만 둔다 */}
       </nav>
 
       {stored ? (
@@ -253,7 +251,7 @@ function Report({
             <p className={styles.verdict}>{verdict}</p>
             <p className={styles.verdictSub}>{sub}</p>
           </div>
-          <DotOrb getPulse={NO_PULSE} emotion={dominant ?? 'calm'} scheme={theme} size={112} />
+          <DotOrb getPulse={NO_PULSE} emotion={dominant ?? 'calm'} scheme={theme} size={150} className={styles.readOrb} />
         </div>
 
         <CheckInDemo />
@@ -276,7 +274,7 @@ function Report({
 
         <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" level={today.level} mode={baseline.mode} />
 
-        <div className={styles.actions} style={{ marginTop: 'auto' }}>
+        <div className={`${styles.actions} ${styles.actionsPinned}`} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             측정 시작
           </Link>
