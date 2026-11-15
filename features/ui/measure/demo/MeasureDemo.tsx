@@ -342,7 +342,7 @@ export default function MeasureDemo() {
                     emotion={orbEmotion}
                     bpm={bpm ?? undefined}
                     scheme={theme}
-                    size={192}
+                    size={320}
                     className={`${styles.measureOrb} ${consent === null ? styles.measureOrbSmall : ''}`}
                   />
                 </span>
@@ -366,6 +366,7 @@ export default function MeasureDemo() {
             <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
               <Rows
                 emphasize={KEY_ROWS}
+                wide={WIDE_ROWS}
                 rows={[
                   ['측정 시간', elapsedText],
                   ['얼굴', faceState],
@@ -436,12 +437,17 @@ export default function MeasureDemo() {
 
 /** 다른 행보다 크고 굵게 보이는 핵심 행 */
 const KEY_ROWS = ['현재 감정', '현재 상태']
+/** 시연 배치(가로 창)에서 두 열 격자의 한 줄을 통째로 쓰는 긴 행 */
+const WIDE_ROWS = ['얼굴', '결합 근거', '기록 저장']
 
-function Rows({ rows, emphasize = [] }: { rows: [string, string][]; emphasize?: string[] }) {
+function Rows({ rows, emphasize = [], wide = [] }: { rows: [string, string][]; emphasize?: string[]; wide?: string[] }) {
   return (
-    <div className={styles.rows}>
+    <div className={`${styles.rows} ${styles.statusRows}`}>
       {rows.map(([k, v]) => (
-        <div key={k} className={`${styles.row} ${emphasize.includes(k) ? styles.rowKey : ''}`}>
+        <div
+          key={k}
+          className={`${styles.row} ${emphasize.includes(k) ? styles.rowKey : ''} ${wide.includes(k) ? styles.rowWide : ''}`}
+        >
           <span className={styles.k}>{k}</span>
           <Morph className={styles.rowValue}>{v}</Morph>
         </div>
