@@ -5,7 +5,8 @@ export const APP_HOST = 'onmaum'
 export const APP_ORIGIN_URL = `${APP_SCHEME}://${APP_HOST}/`
 export const DEV_PORT = 3003
 export const DEV_URL = `http://localhost:${DEV_PORT}/`
-export const APP_USER_MODEL_ID = 'kr.onmaum.app'
+// 시연용 빌드(feat/ui-measure-demo-layout 전용)는 정식 앱과 작업 표시줄·단일 실행 잠금·저장소를 나눈다
+export const APP_USER_MODEL_ID = 'kr.onmaum.demo'
 
 export type RunModeName = 'packaged' | 'dev'
 
@@ -15,7 +16,7 @@ export interface RunMode {
   startUrl: string
   /** 두 창이 함께 쓰는 영속 partition */
   partition: string
-  /** 기본 userData 대신 쓸 폴더 이름. null이면 기본값 */
+  /** 기본 userData 대신 쓸 폴더 이름. null이면 기본값. 시연용 빌드는 패키지 실행도 따로 둔다 */
   userDataDirName: string | null
 }
 
@@ -28,8 +29,9 @@ export function resolveRunMode(isPackaged: boolean): RunMode {
     return {
       name: 'packaged',
       startUrl: APP_ORIGIN_URL,
-      partition: 'persist:onmaum',
-      userDataDirName: null,
+      // 시연용 빌드는 정식 앱(기본 userData·persist:onmaum)과 동의·기록·설정을 함께 쓰지 않는다
+      partition: 'persist:onmaum-demo',
+      userDataDirName: 'onmaum-demo',
     }
   }
   return {
