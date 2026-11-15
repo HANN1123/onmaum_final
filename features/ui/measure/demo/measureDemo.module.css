@@ -1672,19 +1672,86 @@
   word-break: keep-all;
 }
 
+
 /*
- * 시연 배치(2026-11-15, 시연용 브랜치). 가로로 긴 창에서만 적용하고 세로 배치 규칙은 그대로 둔다.
- * - 카메라는 켜져 있는지만 알아볼 크기로 줄인다(왼쪽 열을 전체의 약 1/3로). 남는 높이는 맥박 파형 칸이 받는다.
- * - 오른쪽 계기판을 넓혀 심박 숫자·오브를 크게 보인다.
- * - 상태 행은 두 열 격자로 놓는다. 현재 감정·현재 상태는 맨 위에서 라벨 아래 큰 값으로, 결합 근거처럼 긴 행은 한 줄을 통째로 쓴다.
+ * 시연 배치(2026-11-15, 시연용 브랜치). 이정환 스케치 기준.
+ * - 왼쪽: 카메라는 위에 적당한 크기로 두고, 워치가 연결되면 그 아래 워치 리듬 칸, 맨 아래 카메라 맥박 파형 칸.
+ * - 오른쪽 위: 왼쪽에 심박 숫자·저장 여부·현재 감정/상태(큰 글자), 오른쪽에 큰 오브가 세로로 걸친다.
+ * - 오른쪽 아래: 측정값 두 열 격자가 남는 높이를 나눠 쓰고, 맨 아래 측정 종료 버튼.
  */
+.demoTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head orb'
+    'consent orb'
+    'key orb';
+  column-gap: clamp(16px, 2vw, 40px);
+  row-gap: var(--right-gap, 12px);
+  align-items: end;
+}
+.demoHead {
+  grid-area: head;
+  min-width: 0;
+}
+.demoOrb {
+  grid-area: orb;
+  align-self: center;
+  justify-self: end;
+}
+.demoConsent {
+  grid-area: consent;
+}
+.demoKey {
+  grid-area: key;
+  min-width: 0;
+}
+.keyRows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(16px, 2vw, 36px);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.keyCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: clamp(6px, 1.2vh, 16px) 0;
+}
+.keyCell .k {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  font-size: clamp(12px, min(1.4vw, 2vh), 20px);
+}
+.keyValue {
+  min-width: 0;
+  overflow-x: clip;
+  white-space: nowrap;
+  font-size: clamp(20px, min(2.6vw, 4.2vh), 46px);
+  font-weight: 500;
+}
+/* 뼈대(Skeleton)가 안쪽에 감싸는 요소를 더할 수 있어, 두 단계 아래까지 남는 높이를 넘겨준다 */
+.demoRows,
+.demoRows > *,
+.demoRows > * > * {
+  /* 내용보다 작게 줄지 않게 한다(min-height 기본값). 줄면 아래 워치 행과 겹친다 */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.demoRows .statusRows {
+  flex: 1 1 auto;
+}
 @media (min-aspect-ratio: 1001/1000) and (min-width: 721px) {
   .body.measureBody {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr);
   }
-  /* 카메라 칸은 높이 18vh 안팎(기본 창에서 약 155px)으로 줄이고, 맥박 파형 칸은 왼쪽 열 폭을 다 쓴다 */
+  /* 카메라 칸은 높이 24vh 안팎으로 두고, 파형 칸들은 왼쪽 열 폭과 남는 높이를 다 쓴다 */
   .measureBody .left {
-    --cam-w: min(100cqw, 18vh * var(--cam-ratio, 1.7778) + 2px);
+    --cam-w: min(100cqw, 24vh * var(--cam-ratio, 1.7778) + 2px);
     --wave-max: 100cqh;
   }
   .measureBody .waveBox {
@@ -1696,46 +1763,34 @@
     display: none;
   }
   .measureBody .bpm {
-    font-size: clamp(56px, min(10vw, 15vh), 200px);
+    font-size: clamp(56px, min(9vw, 14vh), 190px);
   }
   .measureBody .unit,
   .bpmSource {
-    font-size: clamp(14px, min(1.7vw, 2.5vh), 24px);
+    font-size: clamp(14px, min(1.6vw, 2.4vh), 24px);
   }
   .measureOrb {
-    width: clamp(96px, min(24vw, 31vh), 320px) !important;
-    height: clamp(96px, min(24vw, 31vh), 320px) !important;
-  }
-  .measureOrb.measureOrbSmall {
-    width: clamp(64px, min(14vw, 19vh), 200px) !important;
-    height: clamp(64px, min(14vw, 19vh), 200px) !important;
+    width: clamp(120px, min(22vw, 40vh), 380px) !important;
+    height: clamp(120px, min(22vw, 40vh), 380px) !important;
   }
   .measureBody .row {
-    font-size: clamp(13px, min(1.5vw, 2.2vh), 22px);
+    font-size: clamp(13px, min(1.45vw, 2.1vh), 22px);
+    align-items: center;
   }
   .measureBody .row .k {
     white-space: nowrap;
   }
+  /* 측정값: 두 열 격자. 긴 행(얼굴·결합 근거·기록 저장)은 한 줄 전체를 쓰고 뒤로 보낸다. 행 높이는 남는 높이를 똑같이 나눈다 */
   .measureBody .statusRows {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(min-content, 1fr);
     grid-auto-flow: row dense;
     column-gap: clamp(16px, 2vw, 36px);
     border-bottom: 1px solid var(--line);
   }
-  /* 격자에서는 순서가 바뀌어 마지막 행이 맨 아래가 아닐 수 있다. 아래 선은 묶음이 긋는다 */
   .measureBody .statusRows .row:last-child {
     border-bottom: 0;
-  }
-  .measureBody .statusRows .rowKey {
-    order: -1;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-  .measureBody .statusRows .rowKey .rowValue {
-    font-size: 1.8em;
-    text-align: left;
   }
   .measureBody .statusRows .rowWide {
     order: 1;
@@ -1745,7 +1800,7 @@
 /* 시연 배치에서 높이가 낮은 노트북 창(예: 1366×768의 내용 약 688)은 오브를 조금 줄여 측정 종료 버튼까지 한 화면에 넣는다 */
 @media (min-aspect-ratio: 1001/1000) and (min-width: 721px) and (max-height: 720px) {
   .measureOrb {
-    width: clamp(96px, min(24vw, 26vh), 320px) !important;
-    height: clamp(96px, min(24vw, 26vh), 320px) !important;
+    width: clamp(120px, min(22vw, 34vh), 380px) !important;
+    height: clamp(120px, min(22vw, 34vh), 380px) !important;
   }
 }

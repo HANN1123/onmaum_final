@@ -240,6 +240,8 @@ export default function MeasureDemo() {
   const faceRateText = faceRate === null ? '' : ` · 검출 ${Math.round(faceRate * 100)}%`
   const faceState = webcam !== 'ready' ? '카메라 대기' : `${face.box ? '얼굴 추적 중' : '얼굴 찾는 중'}${faceRateText}`
   const emotion = face.emotionLabel ?? '—'
+  // 시연 배치: 첫 값(현재 상태)은 위쪽 큰 글자로, 나머지(결합 근거)는 측정값 격자로 보낸다
+  const fusedNow = fusedRows(active, fused, stored?.baseline ?? null, heartSource)
   const elapsedText = formatElapsed(elapsed)
   const todayText =
     stored === null
@@ -311,74 +313,97 @@ export default function MeasureDemo() {
                 style={{ opacity: ready ? 0 : 1 }}
               />
             </div>
-            <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
-              <div className={styles.waveBox} skullet-block="">
-                <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
-                <span className={styles.frameTag}>{cameraWaveTag}</span>
-              </div>
-            </Skeleton>
-            {/* 워치 리듬 칸은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 보이게 한다 */}
+            {/* 시연 배치: 워치가 연결되면 카메라 아래에 워치 리듬 칸, 맨 아래에 카메라 맥박 파형 칸을 둔다.
+                워치 리듬 칸은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 보이게 한다 */}
             {showWatchWave && (
               <div className={`${styles.waveBox} ${styles.watchWave}`}>
                 <PulseCanvas getPulse={watchWavePulse} className={styles.wave} color={watchInk} />
                 <span className={styles.frameTag}>{watchWaveTag}</span>
               </div>
             )}
+            <Skeleton loading={!ready} id="measure-wave" label="맥박 파형 준비 중">
+              <div className={styles.waveBox} skullet-block="">
+                <PulseCanvas getPulse={getPulse} className={styles.wave} color={ink} />
+                <span className={styles.frameTag}>{cameraWaveTag}</span>
+              </div>
+            </Skeleton>
           </div>
 
-          <div className={styles.right}>
-            <Skeleton loading={!ready && selected.source !== 'watch'} id="measure-head" label="심박 준비 중">
-              <div className={styles.head}>
-                <div className={styles.bpmRow}>
-                  <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
-                  <span className={styles.unit}>BPM</span>
-                  {active && sourceLabel && (
-                    <span className={`${styles.bpmSource} ${selected.source === 'watch' ? styles.watchInk : ''}`}>{sourceLabel}</span>
-                  )}
+          <div className={`${styles.right} ${styles.demoRight}`}>
+            {/* 위쪽: 왼쪽에 심박 숫자·저장 여부·현재 감정/상태, 오른쪽에 큰 오브가 세로로 걸친다 */}
+            <div className={styles.demoTop}>
+              <div className={styles.demoHead}>
+                <Skeleton loading={!ready && selected.source !== 'watch'} id="measure-head" label="심박 준비 중">
+                  <div className={styles.bpmRow}>
+                    <Morph className={styles.bpm}>{bpmText(bpm)}</Morph>
+                    <span className={styles.unit}>BPM</span>
+                    {active && sourceLabel && (
+                      <span className={`${styles.bpmSource} ${selected.source === 'watch' ? styles.watchInk : ''}`}>{sourceLabel}</span>
+                    )}
+                  </div>
+                </Skeleton>
+              </div>
+              <div className={styles.demoOrb}>
+                <Skeleton loading={!ready && selected.source !== 'watch'} id="measure-orb" label="오브 준비 중">
+                  <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
+                    <DotOrb
+                      getPulse={orbPulse}
+                      emotion={orbEmotion}
+                      bpm={bpm ?? undefined}
+                      scheme={theme}
+                      size={360}
+                      className={styles.measureOrb}
+                    />
+                  </span>
+                </Skeleton>
+              </div>
+              {consent === null && (
+                <div className={`${styles.consentBox} ${styles.demoConsent}`} role="region" aria-label="기록 저장 여부">
+                  <p className={styles.consentText}>
+                    측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·상태 확인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
+                  </p>
+                  <span className={styles.presets}>
+                    <button type="button" className={`${styles.preset} ${styles.presetOn} ${styles.focusable}`} onClick={() => decideConsent(true)}>
+                      저장
+                    </button>
+                    <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={() => decideConsent(false)}>
+                      저장 안 함
+                    </button>
+                  </span>
                 </div>
-                <span skullet-block="" style={{ display: 'block', borderRadius: '50%' }}>
-                  <DotOrb
-                    getPulse={orbPulse}
-                    emotion={orbEmotion}
-                    bpm={bpm ?? undefined}
-                    scheme={theme}
-                    size={320}
-                    className={`${styles.measureOrb} ${consent === null ? styles.measureOrbSmall : ''}`}
-                  />
-                </span>
+              )}
+              <div className={styles.demoKey}>
+                <Skeleton loading={!ready} id="measure-key" label="현재 상태 준비 중">
+                  <div className={styles.keyRows}>
+                    <div className={styles.keyCell}>
+                      <span className={styles.k}>현재 감정</span>
+                      <Morph className={styles.keyValue}>{emotion}</Morph>
+                    </div>
+                    <div className={styles.keyCell}>
+                      <span className={styles.k}>현재 상태</span>
+                      <Morph className={styles.keyValue}>{fusedNow[0][1]}</Morph>
+                    </div>
+                  </div>
+                </Skeleton>
               </div>
-            </Skeleton>
-            {consent === null && (
-              <div className={styles.consentBox} role="region" aria-label="기록 저장 여부">
-                <p className={styles.consentText}>
-                  측정하는 동안 1분마다 감정 요약을 이 기기에 저장할까요? 리포트·상태 확인·휴식 알림이 이 기록을 씁니다. 영상과 얼굴 사진은 저장하지 않습니다.
-                </p>
-                <span className={styles.presets}>
-                  <button type="button" className={`${styles.preset} ${styles.presetOn} ${styles.focusable}`} onClick={() => decideConsent(true)}>
-                    저장
-                  </button>
-                  <button type="button" className={`${styles.preset} ${styles.focusable}`} onClick={() => decideConsent(false)}>
-                    저장 안 함
-                  </button>
-                </span>
-              </div>
-            )}
-            <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
-              <Rows
-                emphasize={KEY_ROWS}
-                wide={WIDE_ROWS}
-                rows={[
-                  ['측정 시간', elapsedText],
-                  ['얼굴', faceState],
-                  ['심박 신호', quality],
-                  ['현재 감정', emotion],
-                  ...fusedRows(active, fused, stored?.baseline ?? null, heartSource),
-                  ['오늘', todayText],
-                  ['14일 기준선', baselineText],
-                  ['기록 저장', storageRowText(consent, active, recording.status)],
-                ]}
-              />
-            </Skeleton>
+            </div>
+            {/* 아래: 측정값 격자. 남는 높이를 행들이 똑같이 나눠 쓴다 */}
+            <div className={styles.demoRows}>
+              <Skeleton loading={!ready} id="measure-status" label="측정 상태 준비 중">
+                <Rows
+                  wide={WIDE_ROWS}
+                  rows={[
+                    ['측정 시간', elapsedText],
+                    ['심박 신호', quality],
+                    ['얼굴', faceState],
+                    ...fusedNow.slice(1),
+                    ['오늘', todayText],
+                    ['14일 기준선', baselineText],
+                    ['기록 저장', storageRowText(consent, active, recording.status)],
+                  ]}
+                />
+              </Skeleton>
+            </div>
             {/* 워치 행은 카메라 준비용 뼈대(Skeleton) 밖에 둬서 카메라·모델이 늦거나 실패해도 연결할 수 있게 한다 */}
             <div className={`${styles.rows} ${styles.watchRows}`}>
               <div className={styles.row}>
@@ -435,18 +460,16 @@ export default function MeasureDemo() {
   )
 }
 
-/** 다른 행보다 크고 굵게 보이는 핵심 행 */
-const KEY_ROWS = ['현재 감정', '현재 상태']
 /** 시연 배치(가로 창)에서 두 열 격자의 한 줄을 통째로 쓰는 긴 행 */
 const WIDE_ROWS = ['얼굴', '결합 근거', '기록 저장']
 
-function Rows({ rows, emphasize = [], wide = [] }: { rows: [string, string][]; emphasize?: string[]; wide?: string[] }) {
+function Rows({ rows, wide = [] }: { rows: [string, string][]; wide?: string[] }) {
   return (
     <div className={`${styles.rows} ${styles.statusRows}`}>
       {rows.map(([k, v]) => (
         <div
           key={k}
-          className={`${styles.row} ${emphasize.includes(k) ? styles.rowKey : ''} ${wide.includes(k) ? styles.rowWide : ''}`}
+          className={`${styles.row} ${wide.includes(k) ? styles.rowWide : ''}`}
         >
           <span className={styles.k}>{k}</span>
           <Morph className={styles.rowValue}>{v}</Morph>
