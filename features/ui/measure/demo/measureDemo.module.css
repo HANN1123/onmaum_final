@@ -988,10 +988,14 @@
 .dayOn {
   color: var(--text);
 }
+/* 날짜와 '오늘' 표시는 한 줄에 둔다. 날짜 칸(96px)을 10px 쯤 넘지만 칸 사이 간격(16px) 안이라 옆 칸과 겹치지 않는다 */
+.dayDate {
+  white-space: nowrap;
+}
 .dayDate em {
   margin-left: 8px;
   font-style: normal;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .dayCalls {
