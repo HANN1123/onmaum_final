@@ -79,6 +79,10 @@ export default function ReportDemo() {
       ) : (
         <div className={styles.body}>
           <p className={styles.verdictSub}>기록을 읽는 중입니다</p>
+          {/* 기록을 읽는 동안에도 측정으로 가는 버튼은 같은 자리에 둔다(위쪽 메뉴에 버튼이 없으므로) */}
+          <div className={styles.right}>
+            <ReportActions />
+          </div>
         </div>
       )}
       <p className={styles.legal}>{LEGAL}</p>
@@ -274,16 +278,23 @@ function Report({
 
         <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" level={today.level} mode={baseline.mode} />
 
-        <div className={`${styles.actions} ${styles.actionsPinned}`} style={{ marginTop: 'auto' }}>
-          <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
-            측정 시작
-          </Link>
-          <Link href="/demo/records" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
-            기록 보기
-          </Link>
-        </div>
+        <ReportActions />
       </div>
       {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
+    </div>
+  )
+}
+
+/** 오른쪽 아래 버튼 묶음. 측정으로 가는 버튼은 이 화면에서 여기 한 곳뿐이다 */
+function ReportActions() {
+  return (
+    <div className={`${styles.actions} ${styles.actionsPinned}`} style={{ marginTop: 'auto' }}>
+      <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+        측정 시작
+      </Link>
+      <Link href="/demo/records" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+        기록 보기
+      </Link>
     </div>
   )
 }
