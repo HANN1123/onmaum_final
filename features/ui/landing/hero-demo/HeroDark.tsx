@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { isOnboarded } from '@/shared/storage/onboarding'
+import { needsSurvey } from '@/shared/storage/onboarding'
 import styles from './HeroDark.module.css'
 import { DEMO_FALLBACK_POSTER_DARK, DEMO_FALLBACK_VIDEO_DARK } from './demoAssets'
 import { readDemoName, saveDemoName } from './demoName'
@@ -112,14 +112,14 @@ export default function HeroDark({ media = 'webcam' }: { media?: 'webcam' | 'sta
     saveDemoName(input.value)
   }
 
-  // 측정 시작(본문 버튼·상단 버튼·모바일 메뉴 공통): 처음이면 개인화 설문을 거쳐 측정으로,
+  // 측정 시작(본문 버튼·상단 버튼·모바일 메뉴 공통): 처음이거나 새 설문(저장·알림 선택)을 거친 적이 없으면 설문을 거쳐 측정으로,
   // 설문을 이미 마쳤으면 바로 측정으로 간다. 설문을 건너뛰는 길은 "설문 없이 바로 측정"뿐이다.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    router.push(isOnboarded() ? MEASURE_HREF : SURVEY_HREF)
+    router.push(needsSurvey() ? SURVEY_HREF : MEASURE_HREF)
   }
   const onStartLink = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isOnboarded()) return
+    if (!needsSurvey()) return
     event.preventDefault()
     router.push(SURVEY_HREF)
   }

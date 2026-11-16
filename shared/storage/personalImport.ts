@@ -3,7 +3,7 @@ import { OFFSET_MAX } from '../../features/algorithm/baseline/calibration'
 import { db, type EmotionRecord, type MeasurementSession, type SessionEndReason, type SessionStatus } from './db'
 import { EXPORT_SCHEMA_VERSION, isMeasurementActive, MeasurementActiveError } from './personalData'
 import { SETTINGS_KEY } from './settings'
-import { PROFILE_KEY } from './profile'
+import { PROFILE_KEY, sanitizeProfileValue } from './profile'
 
 /**
  * 내보낸 기록 파일(JSON)을 이 기기로 가져온다. 웹에서 쓰던 기록을 데스크톱 앱으로 옮길 때 쓴다.
@@ -187,9 +187,10 @@ function sanitizeSettings(v: unknown): Record<string, unknown> | null {
     const n = v.nudge
     if (!isObject(n)) return null
     const nudge: Record<string, unknown> = {}
-    if (n.enabled !== undefined) {
-      if (typeof n.enabled !== 'boolean') return null
-      nudge.enabled = n.enabled
+    for (const key of ['enabled', 'osNotify'] as const) {
+      if (n[key] === undefined) continue
+      if (typeof n[key] !== 'boolean') return null
+      nudge[key] = n[key]
     }
     if (n.maxPerDay !== undefined) {
       if (!isIntIn(n.maxPerDay, 0, 20)) return null
@@ -207,13 +208,18 @@ function sanitizeSettings(v: unknown): Record<string, unknown> | null {
     }
     out.nudge = nudge
   }
+  if (v.checkinSlots !== undefined) {
+    const c = v.checkinSlots
+    if (!isObject(c) || typeof c.morning !== 'boolean' || typeof c.afternoon !== 'boolean') return null
+    out.checkinSlots = { morning: c.morning, afternoon: c.afternoon }
+  }
   return out
 }
 
+/** 앱이 읽을 때와 같은 규칙(sanitizeProfileValue)으로 검사한다. 새 설문 필드도 잘못된 것만 빼고 옮긴다 */
 function sanitizeProfile(v: unknown): Record<string, unknown> | null {
-  if (!isObject(v) || !Array.isArray(v.reliefs) || v.reliefs.length > 50) return null
-  if (!v.reliefs.every((r) => typeof r === 'string' && r.length > 0 && r.length <= 100)) return null
-  return { reliefs: [...v.reliefs] }
+  const profile = sanitizeProfileValue(v)
+  return profile ? { ...profile } : null
 }
 
 function sanitizeCheckinDay(v: unknown): unknown[] | null {

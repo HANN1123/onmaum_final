@@ -35,7 +35,7 @@ export function importResultText(s: ImportSummary): string {
   if (invalid > 0) parts.push(`읽을 수 없는 ${invalid}개는 빼고 가져왔어요`)
   if (s.localKeys.kept > 0) parts.push('이 기기의 설정은 그대로 두었어요')
   if (s.localKeys.failed > 0) {
-    parts.push(`설정·체크인 기록 ${s.localKeys.failed}개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요`)
+    parts.push(`설정·상태 확인 기록 ${s.localKeys.failed}개는 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 가져와 주세요`)
   }
   return parts.join('. ')
 }
@@ -177,7 +177,7 @@ export default function DataManagement() {
         ) : (
           <div role="group" aria-label="기록 삭제 확인" className="space-y-3 rounded-xl bg-ink-50 p-3">
             <p className="text-sm text-ink-800">
-              측정 기록, 체크인과 알림 기록을 모두 지워요. 지운 기록은 되돌릴 수 없어요. 필요하면 먼저 파일로 내보내 주세요
+              측정 기록, 상태 확인 응답과 알림 기록을 모두 지워요. 지운 기록은 되돌릴 수 없어요. 필요하면 먼저 파일로 내보내 주세요
             </p>
             <label htmlFor="delete-include-preferences" className="flex items-center gap-2 text-xs text-ink-600">
               <input

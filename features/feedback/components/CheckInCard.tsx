@@ -11,8 +11,8 @@ interface Props {
 }
 
 const SLOT_LABEL: Record<CheckinSlot, string> = {
-  morning: '오전 체크인',
-  afternoon: '오후 체크인',
+  morning: '오전 상태 확인',
+  afternoon: '오후 상태 확인',
 }
 
 export default function CheckInCard({ slot, line, onReport }: Props) {

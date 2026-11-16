@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { isOnboarded, markOnboarded, ONBOARDED_KEY } from '@/shared/storage/onboarding'
+import { isOnboarded, markOnboarded, markSurveyDone, needsSurvey, ONBOARDED_KEY } from '@/shared/storage/onboarding'
 
 beforeEach(() => {
   localStorage.clear()
@@ -14,6 +14,17 @@ describe('처음 설문 완료 기록', () => {
     markOnboarded()
     expect(localStorage.getItem(ONBOARDED_KEY)).toBe('true')
     expect(ONBOARDED_KEY).toBe('onmaum_onboarded')
+    expect(isOnboarded()).toBe(true)
+  })
+})
+
+describe('needsSurvey: 측정 시작 때 설문을 거칠지', () => {
+  it('지금 버전 설문을 마칠 때까지 설문을 보인다(옛 설문만 마쳤어도)', () => {
+    expect(needsSurvey()).toBe(true)
+    markOnboarded() // 옛 설문만 마친 사람
+    expect(needsSurvey()).toBe(true)
+    markSurveyDone()
+    expect(needsSurvey()).toBe(false)
     expect(isOnboarded()).toBe(true)
   })
 })

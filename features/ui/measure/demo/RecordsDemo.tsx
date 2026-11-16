@@ -20,12 +20,14 @@ import styles from './measureDemo.module.css'
 import { Roll, Swap } from './Roll'
 import { levelShort, type StoredDay, type StoredOverview } from './storedOverview'
 import { useStoredOverview } from './useStoredOverview'
+import DemoSettings from './DemoSettings'
 
 /**
  * 기록 화면 데모. 측정·결과·리포트와 같은 틀.
  * 왼쪽은 지난 14일. 한 줄이 하루이고, 막대는 그날 스트레스, 세로 눈금은 평소다. 줄을 훑으면 위쪽 큰 숫자가 그날을 읽는다.
  * 오른쪽은 내 기록 관리(내보내기·가져오기·지우기). 기존 기록 화면(/records)과 같은 저장 함수를 불러 실제로 동작한다.
  * 날마다의 숫자·판정은 이 기기에 저장된 실제 기록을 algorithm 의 기존 함수로 계산한다(storedOverview).
+ * 내 설정(기록 저장·휴식 알림·체크인 시간대·설문 답 고치기)도 여기서 바꾼다(DemoSettings).
  */
 
 const MEASURE_HREF = '/demo/measure'
@@ -55,7 +57,7 @@ export default function RecordsDemo() {
 
       <div className={styles.body}>
         {stored ? <DayPanel stored={stored} /> : <div className={`${styles.panel} ${styles.recordsPanel}`} />}
-        <div className={styles.right}>
+        <div className={`${styles.right} ${styles.rightScroll}`}>
           <div className={styles.head}>
             <div className={styles.verdictBox}>
               <span className={styles.chip}>내 기록 관리</span>
@@ -64,6 +66,7 @@ export default function RecordsDemo() {
             </div>
           </div>
           {stored && <Totals stored={stored} />}
+          <DemoSettings />
           <Manage />
         </div>
       </div>
@@ -216,7 +219,7 @@ function Manage() {
     <div className={styles.manage}>
       {confirming ? (
         <div className={styles.confirm} role="group" aria-label="모든 기록 지우기 확인">
-          <p>측정 기록, 체크인과 알림 기록을 모두 지웁니다. 지운 기록은 되돌릴 수 없습니다.</p>
+          <p>측정 기록, 상태 확인 응답과 알림 기록을 모두 지웁니다. 지운 기록은 되돌릴 수 없습니다.</p>
           <label className={styles.check}>
             <input type="checkbox" checked={alsoSettings} onChange={(e) => setAlsoSettings(e.target.checked)} />
             알림 설정과 처음 설문 답변도 함께 지우기

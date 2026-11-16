@@ -18,13 +18,20 @@ import { isSameLocalDay, summarizeSession } from './sessionLog'
 import { dayLevelCopy, type StoredOverview } from './storedOverview'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
+import BreathingGuide from './BreathingGuide'
+import CareCard from './CareCard'
+import CheckInDemo from './CheckInDemo'
+import type { BreathingPlan } from '@/features/feedback/lib/careActions'
 
 /**
  * 하루 리포트 화면 데모. 측정·결과 화면과 같은 틀.
  * 14일 막대 위의 큰 숫자가 읽어 주는 값이다. 막대를 훑으면 그날의 스트레스와 평소와의 차이로 굴러 바뀐다(Stageshow 의 차트 스크럽).
  * 왼쪽은 14일 스트레스 막대(점선이 평소)와 오늘 측정 목록, 오른쪽은 하루 판정·숫자 셋·행·버튼.
  * 숫자와 판정은 모두 이 기기에 저장된 실제 기록을 algorithm 의 기존 함수로 계산한다(storedOverview).
- * 방금 이 데모에서 끝낸 측정이 오늘이면 목록 맨 위에 올리고 결과 화면으로 잇는다. 데모 측정은 저장 계층에 저장되지 않으므로 숫자에는 들어가지 않는다.
+ * 방금 끝낸 측정이 저장됐으면(sessionId) 목록의 그 세션에서 결과 화면으로 잇는다.
+ * 저장하지 않은 측정이 오늘이면 목록 맨 위에 따로 올리고, 숫자에는 넣지 않는다.
+ * 심박은 저장하지 않으므로 하루 리포트에는 심박 숫자를 만들지 않는다(측정 결과 화면에서만 보인다).
+ * 오른쪽에는 체크인(시간대·최근 30분 기록이 있을 때)과 쉬는 시간·퇴근 후 제안(CareCard)을 둔다.
  */
 
 const MEASURE_HREF = '/demo/measure'
@@ -98,6 +105,7 @@ function Report({
 }) {
   const { history, baseline, today } = stored
   const baselineN = baseline.baselineN
+  const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
   const days = stored.days
   const todayIndex = days.length - 1
 
@@ -115,16 +123,17 @@ function Report({
       durationSec: s.durationSec,
       emotion: s.dominant,
       note: s.active ? '측정 중' : s.stress === null ? '기록 없음' : `스트레스 ${Math.round(s.stress)}`,
+      href: recent?.sessionId === s.id ? RESULT_HREF : undefined,
     }))
-    // 이 데모에서 방금 끝낸 측정(저장 계층에는 없다). 오늘 끝낸 것만 올린다.
-    if (recent && isSameLocalDay(new Date(recent.endedAt), new Date(history[history.length - 1].date + 'T12:00:00'))) {
+    // 방금 끝낸 측정 중 저장하지 않은 것. 오늘 끝낸 것만 올린다.
+    if (recent && !recent.sessionId && isSameLocalDay(new Date(recent.endedAt), new Date(history[history.length - 1].date + 'T12:00:00'))) {
       const summary = summarizeSession(recent)
       list.unshift({
         key: 'recent',
         time: formatClock(new Date(recent.startedAt)),
         durationSec: recent.durationSec,
         emotion: summary.dominant,
-        note: '이 데모 측정 · 저장 안 됨',
+        note: '방금 측정 · 저장 안 함',
         href: RESULT_HREF,
       })
     }
@@ -235,7 +244,7 @@ function Report({
         </div>
       </div>
 
-      <div className={styles.right}>
+      <div className={`${styles.right} ${styles.rightScroll}`}>
         <div className={styles.head}>
           <div className={styles.verdictBox}>
             <span className={styles.chip}>
@@ -247,10 +256,12 @@ function Report({
           <DotOrb getPulse={NO_PULSE} emotion={dominant ?? 'calm'} scheme={theme} size={112} />
         </div>
 
+        <CheckInDemo />
+
         <div className={styles.stats}>
           <Stat k="긍정" v={today.scores ? String(Math.round(today.scores.positive)) : '–'} />
           <Stat k="측정" v={String(today.sessions.length)} unit="회" />
-          <Stat k="평균 심박" v="--" unit="BPM" />
+          <Stat k="저장 기록" v={String(Math.round(storedSec / 60))} unit="분" />
         </div>
 
         <div className={styles.rows}>
@@ -260,8 +271,10 @@ function Report({
             v={today.shares ? SHARE_ORDER.map((e) => `${EMOTION_LABELS[e]} ${Math.round(today.shares![e] * 100)}`).join(' · ') : '–'}
           />
           <Row k="기준선" v={baseline.mode === 'relative' ? `최근 ${BASELINE_WINDOW_DAYS}일 중 ${stored.validDays}일` : '기록 3일 미만 · 절대 기준'} />
-          <Row k="심박" v="rPPG 연결 전" />
+          <Row k="심박" v="저장하지 않음 · 측정 결과 화면에서 확인" />
         </div>
+
+        <CareCard moment="day" onBreathe={setBreathing} title="쉬는 시간·퇴근 후" level={today.level} mode={baseline.mode} />
 
         <div className={styles.actions} style={{ marginTop: 'auto' }}>
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
@@ -272,6 +285,7 @@ function Report({
           </Link>
         </div>
       </div>
+      {breathing && <BreathingGuide plan={breathing} onClose={() => setBreathing(null)} />}
     </div>
   )
 }

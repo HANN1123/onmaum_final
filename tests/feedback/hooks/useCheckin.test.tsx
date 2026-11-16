@@ -148,3 +148,34 @@ describe('useCheckin 판정이 없을 때', () => {
     expect(loadCheckinDone(date)).not.toContain('morning')
   })
 })
+
+describe('useCheckin: 시간대 끄기·중복 응답', () => {
+  beforeEach(async () => {
+    localStorage.clear()
+    await db.emotions.clear()
+  })
+
+  it('끈 시간대에는 묻지 않는다', async () => {
+    const now = new Date('2026-06-12T10:30:00')
+    await seedToday(now)
+    saveSettings({ ...DEFAULT_SETTINGS, checkinSlots: { morning: false, afternoon: true } })
+    const { result } = renderHook(() => useCheckin({ now }))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(result.current.slot).toBe('morning')
+    expect(result.current.due).toBe(false)
+  })
+
+  it('응답하면 바로 카드를 닫고, 두 번 눌러도 보정은 한 번만 한다', async () => {
+    const now = new Date('2026-06-12T10:30:00')
+    await seedToday(now)
+    const { result } = renderHook(() => useCheckin({ now }))
+    await vi.waitFor(() => expect(result.current.due).toBe(true))
+    const submit = result.current.submit
+    await act(async () => { submit('worse') })
+    expect(result.current.due).toBe(false)
+    const once = loadSettings().calibrationOffset
+    await act(async () => { submit('worse') })
+    expect(loadSettings().calibrationOffset).toBe(once)
+    expect(loadCheckinEntries(now.toLocaleDateString('en-CA'))).toHaveLength(1)
+  })
+})

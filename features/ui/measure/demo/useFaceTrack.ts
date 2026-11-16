@@ -57,7 +57,18 @@ export function useFaceTrack(
     mirrored = true,
     rotation = 0 as CameraRotation,
     getFace,
-  }: { intervalMs?: number; mirrored?: boolean; rotation?: CameraRotation; getFace?: () => EngineFace } = {},
+    onSample,
+  }: {
+    intervalMs?: number
+    mirrored?: boolean
+    rotation?: CameraRotation
+    getFace?: () => EngineFace
+    /**
+     * 검출을 한 번 마칠 때마다 다듬기 전 감정 비율(정규화만 한 값)을 넘긴다. 얼굴을 못 찾았으면 null.
+     * 화면용 EMA·놓침 유지와 무관한 값이라, 1분 감정 기록 저장(useMeasureRecording)이 원래 앱 레코더와 같은 표본을 받는다.
+     */
+    onSample?: (raw: EmotionResult | null) => void
+  } = {},
 ): FaceTrack {
   const [modelsReady, setModelsReady] = useState(false)
   const [box, setBox] = useState<FaceBox | null>(null)
@@ -67,6 +78,10 @@ export function useFaceTrack(
   useEffect(() => {
     getFaceRef.current = getFace
   }, [getFace])
+  const onSampleRef = useRef(onSample)
+  useEffect(() => {
+    onSampleRef.current = onSample
+  }, [onSample])
 
   useEffect(() => {
     if (!enabled) return
@@ -129,8 +144,10 @@ export function useFaceTrack(
           }
         }
         if (cancelled) return
+        const raw = result ? normalizeExpressions(result.expressions) : null
+        onSampleRef.current?.(raw)
         presence = nextPresence(presence, Boolean(result))
-        if (!result) {
+        if (!result || !raw) {
           // 잠깐 놓친 동안은 마지막 상자·감정을 유지하고, 연속으로 놓쳤을 때만 지운다
           if (!presence.present) {
             lastBox = null
@@ -141,9 +158,9 @@ export function useFaceTrack(
           }
           return
         }
-        const raw = { x: result.x / result.iw, y: result.y / result.ih, w: result.w / result.iw, h: result.h / result.ih }
-        lastBox = smoothBox(lastBox, mirrored ? mirrorBox(raw) : raw)
-        ema = smoothEmotion(ema, normalizeExpressions(result.expressions))
+        const rawBox = { x: result.x / result.iw, y: result.y / result.ih, w: result.w / result.iw, h: result.h / result.ih }
+        lastBox = smoothBox(lastBox, mirrored ? mirrorBox(rawBox) : rawBox)
+        ema = smoothEmotion(ema, raw)
         setBox(lastBox)
         setEmotion(getDominantEmotion(ema))
         setEmotions(ema)

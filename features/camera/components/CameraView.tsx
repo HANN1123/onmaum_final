@@ -29,6 +29,8 @@ export default function CameraView({ active, onReady, onError }: Props) {
 
     let cancelled = false
     let acquired: MediaStream | null = null
+    // 스트림을 붙인 video 요소. 정리 시점에는 ref 가 이미 비었을 수 있어 붙인 요소를 따로 기억한다
+    let attachedVideo: HTMLVideoElement | null = null
 
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -41,6 +43,7 @@ export default function CameraView({ active, onReady, onError }: Props) {
         streamRef.current = stream
         const video = videoRef.current
         if (!video) return
+        attachedVideo = video
         video.srcObject = stream
         await video.play()
         callbacksRef.current.onReady?.(video)
@@ -57,8 +60,7 @@ export default function CameraView({ active, onReady, onError }: Props) {
       if (acquired) {
         acquired.getTracks().forEach((t) => t.stop())
         if (streamRef.current === acquired) streamRef.current = null
-        const video = videoRef.current
-        if (video && video.srcObject === acquired) video.srcObject = null
+        if (attachedVideo && attachedVideo.srcObject === acquired) attachedVideo.srcObject = null
       }
     }
   }, [active])

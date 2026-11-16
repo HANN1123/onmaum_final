@@ -9,6 +9,7 @@ import {
 
 const settings: NudgeSettings = {
   enabled: true,
+  osNotify: true,
   maxPerDay: 2,
   cooldownMs: 90 * 60 * 1000,
   sustainMs: 5 * 60 * 1000,
