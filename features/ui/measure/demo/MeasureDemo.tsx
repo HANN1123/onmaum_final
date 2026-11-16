@@ -26,7 +26,7 @@ import { fusedRows } from './fusedText'
 import { levelShort } from './storedOverview'
 import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
-import { useLiveFusedState } from './useLiveFusedState'
+import { fusionBpm, useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
 import { attachSessionExtras } from './sessionLog'
 import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
@@ -164,8 +164,9 @@ export default function MeasureDemo() {
     saveConsent(record)
     setConsent({ version: 1, record, decidedAt: new Date().toISOString() })
   }
-  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
   const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
+  // 호흡 안내 중에는 표본 저장을 멈춘다(그 전 표본은 멈춘 시각으로 저장, 세션 생존 갱신은 계속)
+  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS, paused: breathing !== null })
   // 이번 측정의 표정 평균(결과 화면의 상태별 제안용). 측정을 다시 시작하면 처음부터 모은다
   const faceSum = useRef({ happy: 0, calm: 0, sad: 0, angry: 0, n: 0 })
   useEffect(() => {
@@ -206,7 +207,8 @@ export default function MeasureDemo() {
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
   // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
-  const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
+  // 결합 판정에는 품질 기준을 통과한 심박만 넣는다(유효한 워치 또는 good 카메라). 참고값은 화면 숫자에만 쓴다
+  const fused = useLiveFusedState(active, active ? fusionBpm(selected) : null, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   useDesktopMeasurementPublisher({
     active,

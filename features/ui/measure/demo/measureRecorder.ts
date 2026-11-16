@@ -33,6 +33,15 @@ export interface RecorderStatus {
 export interface MeasureRecorder {
   /** 검출 한 번의 결과(다듬기 전 감정 비율, 얼굴 없음은 null) */
   push: (emotion: EmotionResult | null) => void
+  /**
+   * 표본과 무관하게 세션 생존 시각을 갱신한다(주기가 지났을 때만). 측정 화면이 타이머로 부른다.
+   * 호흡 안내처럼 표본이 끊긴 동안에도 다른 탭의 전체 삭제가 측정 중인 세션을 지우지 못하게 한다(isMeasurementActive).
+   */
+  keepAlive: () => void
+  /** 표본 수집을 잠시 멈춘다. 그때까지 모은 표본은 멈춘 시각으로 저장하고, 멈춘 동안의 push 는 버린다 */
+  pause: () => void
+  /** 멈춘 수집을 다시 시작한다. 1분 묶음 경계는 이 시각부터 다시 센다 */
+  resume: () => void
   /** 남은 표본을 저장하고 세션을 끝낸다. 여러 번 불러도 한 번만 처리하고 같은 결과를 돌려준다 */
   stop: (reason?: SessionStopReason) => Promise<RecorderStatus>
   status: () => RecorderStatus
@@ -60,6 +69,7 @@ export function createMeasureRecorder(
   let bufferStart = startedAt
   let lastSampleAt: number | null = null
   let lastTouch = startedAt
+  let paused = false
   let stopping: Promise<RecorderStatus> | null = null
   let queue: Promise<void> = Promise.resolve()
 
@@ -97,9 +107,21 @@ export function createMeasureRecorder(
     })
   }
 
+  /** 생존 갱신 주기가 지났으면 세션 lastSeenAt 을 갱신한다. 표본이 들어오지 않는 동안에도 keepAlive 로 불린다 */
+  const touchIfDue = (t: number) => {
+    if (t - lastTouch < RECORD_HEARTBEAT_MS) return
+    lastTouch = t
+    enqueue(async () => {
+      if (!status.sessionId) return
+      await deps.touchSession(status.sessionId, new Date(t)).catch((err: unknown) => {
+        console.error('측정 세션 갱신 실패:', err)
+      })
+    })
+  }
+
   return {
     push(emotion) {
-      if (stopping) return
+      if (stopping || paused) return
       const t = deps.now()
       const intervalMs = lastSampleAt === null ? nominalIntervalMs : Math.min(MAX_SAMPLE_GAP_MS, Math.max(0, t - lastSampleAt))
       lastSampleAt = t
@@ -108,15 +130,27 @@ export function createMeasureRecorder(
         flush(t)
         bufferStart = t
       }
-      if (t - lastTouch >= RECORD_HEARTBEAT_MS) {
-        lastTouch = t
-        enqueue(async () => {
-          if (!status.sessionId) return
-          await deps.touchSession(status.sessionId, new Date(t)).catch((err: unknown) => {
-            console.error('측정 세션 갱신 실패:', err)
-          })
-        })
-      }
+      touchIfDue(t)
+    },
+    keepAlive() {
+      if (stopping) return
+      touchIfDue(deps.now())
+    },
+    pause() {
+      if (stopping || paused) return
+      paused = true
+      // 멈추기 전 표본은 멈춘 시각으로 바로 저장한다. 다시 시작한 뒤의 표본과 한 기록으로 묶여 늦은 시각에 저장되지 않게 한다
+      const t = deps.now()
+      flush(t)
+      bufferStart = t
+      lastSampleAt = null
+    },
+    resume() {
+      if (stopping || !paused) return
+      paused = false
+      // 1분 묶음 경계와 표본 간격을 다시 시작한 시각부터 센다(멈춘 시간을 표본 간격으로 세지 않는다)
+      bufferStart = deps.now()
+      lastSampleAt = null
     },
     stop(reason = 'user-stop') {
       if (stopping) return stopping

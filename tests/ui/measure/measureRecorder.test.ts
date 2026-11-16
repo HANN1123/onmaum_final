@@ -122,3 +122,53 @@ describe('storageRowText: 측정 화면 기록 저장 행', () => {
     expect(storageRowText(yes, true, { saved: 1, failed: true, sessionId: 's1' })).toContain('저장 실패')
   })
 })
+
+describe('createMeasureRecorder: 호흡 안내 중 멈춤과 세션 생존 갱신', () => {
+  it('멈추면 그 전 표본을 멈춘 시각으로 저장하고, 멈춘 동안의 표본은 버리며, 다시 시작하면 그 시각부터 묶는다', async () => {
+    const { deps, saved, setNow } = fakeDeps()
+    const recorder = createMeasureRecorder(deps, { nominalIntervalMs: 250 })
+    feed(recorder, setNow, 0, 30_000, CALM)
+    recorder.pause()
+    // 5분 호흡 안내: 표본이 와도 버린다
+    feed(recorder, setNow, 30_000, 330_000, ANGRY)
+    recorder.resume()
+    feed(recorder, setNow, 330_000, 340_000, CALM)
+    await recorder.stop()
+    expect(saved).toHaveLength(2)
+    // 호흡 전 30초는 5분 뒤가 아니라 멈춘 시각(30초)의 기록이다
+    expect(saved[0].timestamp.getTime()).toBe(30_000)
+    expect(saved[0].duration).toBeLessThanOrEqual(31_000)
+    expect(saved[1].timestamp.getTime()).toBe(340_000)
+    // 다시 시작한 첫 표본은 멈춘 5분을 간격으로 세지 않는다
+    expect(saved[1].duration).toBeLessThanOrEqual(10_250)
+    expect(saved.map((r) => r.dominantEmotion)).toEqual(['calm', 'calm'])
+  })
+
+  it('표본이 끊겨도 keepAlive 로 30초마다 세션 생존 시각을 갱신한다', async () => {
+    const { deps, setNow } = fakeDeps()
+    const recorder = createMeasureRecorder(deps, { nominalIntervalMs: 250 })
+    feed(recorder, setNow, 0, 30_000, CALM)
+    recorder.pause()
+    for (let t = 35_000; t <= 180_000; t += 5_000) {
+      setNow(t)
+      recorder.keepAlive()
+    }
+    await recorder.stop()
+    const touched = vi.mocked(deps.touchSession).mock.calls.map(([, at]) => at.getTime())
+    expect(touched).toEqual([30_000, 60_000, 90_000, 120_000, 150_000, 180_000])
+  })
+
+  it('종료 뒤에는 keepAlive·pause·resume 이 아무것도 하지 않는다', async () => {
+    const { deps, saved, setNow } = fakeDeps()
+    const recorder = createMeasureRecorder(deps, { nominalIntervalMs: 250 })
+    feed(recorder, setNow, 0, 10_000, CALM)
+    await recorder.stop()
+    setNow(100_000)
+    recorder.keepAlive()
+    recorder.pause()
+    recorder.resume()
+    await recorder.stop()
+    expect(saved).toHaveLength(1)
+    expect(deps.touchSession).not.toHaveBeenCalled()
+  })
+})
