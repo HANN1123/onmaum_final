@@ -164,8 +164,9 @@ export default function MeasureDemo() {
     saveConsent(record)
     setConsent({ version: 1, record, decidedAt: new Date().toISOString() })
   }
-  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS })
   const [breathing, setBreathing] = useState<BreathingPlan | null>(null)
+  // 호흡 안내 중에는 표본 저장을 멈춘다(그 전 표본은 멈춘 시각으로 저장, 세션 생존 갱신은 계속)
+  const recording = useMeasureRecording(active && consent?.record === true, { nominalIntervalMs: FACE_INTERVAL_MS, paused: breathing !== null })
   // 이번 측정의 표정 평균(결과 화면의 상태별 제안용). 측정을 다시 시작하면 처음부터 모은다
   const faceSum = useRef({ happy: 0, calm: 0, sad: 0, angry: 0, n: 0 })
   useEffect(() => {
