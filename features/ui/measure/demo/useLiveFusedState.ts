@@ -7,6 +7,19 @@ import {
   type FusedSample,
   type LiveFusedState,
 } from '@/features/algorithm/stress/fusedStress'
+import type { HeartRateOrigin } from '@/features/rppg/lib/heartRateSource'
+import type { RppgQuality } from '@/features/rppg/engine/rppgGate'
+
+/**
+ * 결합 판정에 넣을 심박. 화면의 큰 숫자는 참고값(움직임·신호 약함·안정화 중)도 보여주지만,
+ * 결합 규칙(docs/architecture/STRESS_FUSION_RULE.md 12절)은 품질 기준을 통과한 심박만 쓴다.
+ * 유효한 워치 값이거나 품질이 good 인 카메라 값만 통과시키고, 나머지는 심박 없음(null)으로 넘긴다.
+ */
+export function fusionBpm(selected: { bpm: number | null; source: HeartRateOrigin | null; rppgQuality: RppgQuality | null }): number | null {
+  if (selected.bpm === null) return null
+  if (selected.source === 'watch') return selected.bpm
+  return selected.source === 'rppg' && selected.rppgQuality === 'good' ? selected.bpm : null
+}
 
 /**
  * 측정 중 1초마다 (경과 초, 대표 심박, 부정 표정 확률)을 쌓고 algorithm 의 liveFusedState 로
