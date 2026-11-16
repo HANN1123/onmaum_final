@@ -71,10 +71,11 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
   const wavesRef = useRef<number[]>([])
   const prevRef = useRef(0)
   const smoothRef = useRef(0)
+  const angleRef = useRef(0)
   const paletteRef = useRef<OrbPalette>(ORB_PALETTE[emotion])
 
   const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, s: number, _dt: number, t: number) => {
+    (ctx: CanvasRenderingContext2D, s: number, dt: number, t: number) => {
       const v = getPulse()
       if (prevRef.current < 0.5 && v >= 0.5) wavesRef.current.push(t)
       prevRef.current = v
@@ -153,7 +154,10 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
         ctx.fill()
       }
 
-      const angle = t * (0.12 + intensity * 0.22)
+      // 회전각은 프레임마다 지금 속도로 더해 간다. t × 속도로 구하면 심박이 바뀌는 순간 속도 변화가
+      // 지난 시간 전체에 곱해져 각도가 튄다(오래 잴수록 크게)
+      angleRef.current += dt * (0.12 + intensity * 0.22)
+      const angle = angleRef.current
       for (const pt of inner) drawPoint(pt, -angle * 1.6, R * 0.5, 0.45, 1.0, false)
       for (const pt of frame) drawPoint(pt, angle, R, 0.35, 0.9, true)
       for (const pt of surface) drawPoint(pt, angle, R, 0.85, 1.25, true)
