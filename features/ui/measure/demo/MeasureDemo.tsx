@@ -26,7 +26,7 @@ import { fusedRows } from './fusedText'
 import { levelShort } from './storedOverview'
 import { formatElapsed, useElapsed } from './useElapsed'
 import { useFaceTrack } from './useFaceTrack'
-import { useLiveFusedState } from './useLiveFusedState'
+import { fusionBpm, useLiveFusedState } from './useLiveFusedState'
 import { useSessionLog } from './useSessionLog'
 import { useSteadyEmotion, type EmotionResponseMode } from './useSteadyEmotion'
 import { useStoredOverview } from './useStoredOverview'
@@ -132,7 +132,8 @@ export default function MeasureDemo() {
   const lastSession = useStoredSession()
   const stored = useStoredOverview()
   // 표정(최근 1분 부정 표정)과 대표 심박(세션 첫 2분 대비 상승)을 결합한 지금 상태 (algorithm/stress/fusedStress)
-  const fused = useLiveFusedState(active, bpm, active ? face.emotions : null)
+  // 결합 판정에는 품질 기준을 통과한 심박만 넣는다(유효한 워치 또는 good 카메라). 참고값은 화면 숫자에만 쓴다
+  const fused = useLiveFusedState(active, active ? fusionBpm(selected) : null, active ? face.emotions : null)
   // Electron 에서만: 측정 상태(감정 비율·측정 중·프레임)를 메인 프로세스로 보내 최소화 위젯이 그린다. 웹에서는 아무 일도 하지 않는다.
   // 이 데모 측정은 저장 계층에 저장하지 않으므로 기록 수는 0, 저장 실패는 없음으로 보낸다.
   useDesktopMeasurementPublisher({ active, emotions: active ? face.emotions : null, recordCount: 0, videoEl, saveFailed: false })
