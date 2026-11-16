@@ -25,6 +25,8 @@ export function createMainWindow(ses: Session, size: MainWindowSize): BrowserWin
   const win = new BrowserWindow({
     // 기본·최소 크기와 실측 근거는 mainWindowSize.ts. 작업 영역 안으로 줄인 값을 받는다.
     ...size,
+    // 시연용 빌드(feat/ui-measure-demo-layout 전용): 창 제목을 화면 제목 대신 앱 이름으로 고정한다
+    title: '온마음 시연',
     show: false,
     // 새 디자인 기본 테마(검정)와 같은 색으로 열어 처음 그리기 전 흰 화면이 번쩍이지 않게 한다
     backgroundColor: '#000000',
@@ -36,6 +38,7 @@ export function createMainWindow(ses: Session, size: MainWindowSize): BrowserWin
       backgroundThrottling: false,
     },
   })
+  win.on('page-title-updated', (event) => event.preventDefault())
   win.once('ready-to-show', () => win.show())
   return win
 }
