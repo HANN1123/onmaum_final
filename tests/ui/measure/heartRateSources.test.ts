@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import { bpmOrigin } from '@/features/rppg/lib/heartRateSource'
-import { heartRateRuns, parseDemoSession, smoothBpm, sourceShareText, summarizeSession, type TimelinePoint } from '@/features/ui/measure/demo/sessionLog'
+import { heartRateRuns, parseDemoSession, smoothBpm, sourceShareText, splitSourceShare, summarizeSession, type TimelinePoint } from '@/features/ui/measure/demo/sessionLog'
 
 const session = (samples: TimelinePoint[]) => ({ startedAt: 0, endedAt: 30000, durationSec: 30, samples })
 const point = (t: number, bpm: number | null, source?: 'watch' | 'rppg'): TimelinePoint => ({ t, bpm, source, emotion: null })
@@ -46,6 +46,12 @@ describe('출처별 기록 정리와 결과', () => {
     expect(sourceShareText(summarizeSession(session([point(0, null), point(1, null)])).sourceShares)).toBe('심박 기록 없음')
     expect(sourceShareText({ watch: 1, rppg: 0 })).toBe('워치')
     expect(sourceShareText({ watch: 0, rppg: 1 })).toBe('카메라')
+  })
+  it('출처 글을 워치 부분과 나머지로 나눠, 화면이 워치 부분만 워치 색으로 칠할 수 있게 한다', () => {
+    expect(splitSourceShare({ watch: 0.62, rppg: 0.38 })).toEqual({ watch: '워치 62%', rest: ' · 카메라 38%' })
+    expect(splitSourceShare({ watch: 1, rppg: 0 })).toEqual({ watch: '워치', rest: '' })
+    expect(splitSourceShare({ watch: 0, rppg: 1 })).toEqual({ watch: '', rest: '카메라' })
+    expect(splitSourceShare({ watch: 0, rppg: 0 })).toEqual({ watch: '', rest: '심박 기록 없음' })
   })
   it('정리로 제거한 카메라 표본은 출처 비율 분모에서도 제외한다', () => {
     const points = Array.from({ length: 12 }, (_, t) => point(t, 70, 'rppg'))

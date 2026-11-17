@@ -46,11 +46,15 @@
   --watch: #3f6b00;
 }
 
-/* 공통 글자 */
+/*
+ * 공통 글자. 작은 글자(.mono)는 기본 창(1280×900)에서 14px, 위쪽 메뉴와 큰 버튼은 15px 로 읽힌다(2026-11 글자 키우기).
+ * 창이 좁으면 예전처럼 11px 까지 줄어든다. 모든 데모 화면이 이 크기를 함께 쓴다.
+ * 창 폭만 따르므로 어떤 창 모양에서도 예전보다 작아지지 않는다. 높이까지 따라 줄이는 규칙은 측정 화면에만 둔다(.measureBody).
+ */
 .mono {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.13vw, 15px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -213,7 +217,7 @@
   text-align: center;
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(12px, 0.82vw, 15px);
+  font-size: clamp(12px, 1.13vw, 15px);
   color: var(--text-dim);
   line-height: 1.5;
 }
@@ -299,6 +303,14 @@
 .btnGhost:hover {
   background: rgba(var(--text-rgb), 0.09);
   color: var(--text);
+}
+
+/* 위쪽 메뉴와 큰 버튼의 글자는 작은 글자(.mono)보다 한 단계 크게 */
+.navLink,
+.cta,
+.btnSolid,
+.btnGhost {
+  font-size: clamp(11px, 1.22vw, 16px);
 }
 
 /* 버튼 두 개 나란히 */
@@ -711,7 +723,7 @@
 }
 .readoutUnit {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: clamp(12px, 1.13vw, 15px);
   letter-spacing: 0.12em;
   color: var(--text-dim);
 }
@@ -976,10 +988,14 @@
 .dayOn {
   color: var(--text);
 }
+/* 날짜와 '오늘' 표시는 한 줄에 둔다. 날짜 칸(96px)을 10px 쯤 넘지만 칸 사이 간격(16px) 안이라 옆 칸과 겹치지 않는다 */
+.dayDate {
+  white-space: nowrap;
+}
 .dayDate em {
   margin-left: 8px;
   font-style: normal;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .dayCalls {
@@ -1094,7 +1110,7 @@
 }
 .preset {
   font-family: var(--font-mono);
-  font-size: clamp(11px, 0.72vw, 13px);
+  font-size: clamp(11px, 1.13vw, 15px);
   letter-spacing: 0.08em;
   padding: 4px 10px;
   border: 1px solid var(--line);
@@ -1117,7 +1133,7 @@
 .themeBtn {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(11px, 0.78vw, 14px);
+  font-size: clamp(11px, 1.22vw, 16px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   background: none;
@@ -1253,6 +1269,12 @@
 .measureOrb {
   width: clamp(64px, min(15vw, 21vh), 192px) !important;
   height: clamp(64px, min(15vw, 21vh), 192px) !important;
+}
+/* 결과·리포트 화면의 오브: 측정 화면보다 한 단계 작게 두고, 창이 작으면 예전 크기(112px)까지 줄인다 */
+.readOrb {
+  flex: none;
+  width: clamp(112px, min(12vw, 17.5vh), 150px) !important;
+  height: clamp(112px, min(12vw, 17.5vh), 150px) !important;
 }
 /* 저장 여부를 묻는 상자가 떠 있는 동안은 예전 크기로 줄여 상자에 자리를 내준다 */
 .measureOrb.measureOrbSmall {
@@ -1512,6 +1534,17 @@
   overscroll-behavior: contain;
   padding-right: 4px;
 }
+/*
+ * 결과·리포트 화면의 아래 버튼 묶음. 위쪽 메뉴에 같은 버튼을 두지 않으므로,
+ * 창이 작아 오른쪽 칸이 스크롤될 때도 칸 바닥에 붙어 항상 보이게 한다.
+ */
+.actionsPinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 12px;
+  background: var(--bg);
+}
 
 /* 쉬어 가기 제안·체크인 카드 */
 .careBox {
@@ -1523,7 +1556,7 @@
 }
 .careLabel {
   composes: mono;
-  font-size: 11px;
+  font-size: clamp(11px, 1.13vw, 15px);
   color: var(--text-dim);
 }
 .careText {

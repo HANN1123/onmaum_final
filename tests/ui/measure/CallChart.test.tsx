@@ -30,5 +30,7 @@ it('출처별 불투명도를 기본선·강조선 모두에 적용하고 단일
   }
   // 3초 워치 표본과 7초 카메라 표본은 MAX_JOIN_GAP_SEC(3초)를 넘는 공백이라 잇지 않는다.
   expect(groups[3].querySelector('path')?.getAttribute('d')).not.toContain('L')
-  expect(screen.getByText('심박 출처 · 워치 진하게 / 카메라 옅게')).toBeVisible()
+  // 출처 안내에서 '워치'라는 글자만 따로 감싸 워치 색으로 보인다(측정 화면과 같은 색)
+  expect(screen.getByText(/^심박 출처/)).toHaveTextContent('심박 출처 · 워치 진하게 / 카메라 옅게')
+  expect(screen.getByText('워치').className).toContain('watchInk')
 })

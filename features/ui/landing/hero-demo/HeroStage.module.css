@@ -74,6 +74,19 @@
   background: rgba(var(--text-rgb), 0.14);
   transform: scale(0.97);
 }
+/* 측정 종료: 실제 측정 화면처럼 오른쪽 칸 맨 아래에 폭을 채운 버튼 */
+.endBtn {
+  display: block;
+  align-self: end;
+  padding: 11px 0;
+  border: 0;
+  background: rgba(var(--text-rgb), 0.1);
+  text-align: center;
+  letter-spacing: 0.12em;
+}
+.endBtn[data-pressed] {
+  background: rgba(var(--text-rgb), 0.2);
+}
 .body {
   display: grid;
   grid-template-columns: 1.25fr 1fr;
@@ -116,7 +129,8 @@
 }
 .right {
   display: grid;
-  align-content: start;
+  /* 심박·오브, 상태 행, 그리고 남는 높이의 맨 아래에 종료 버튼 */
+  grid-template-rows: auto auto 1fr;
   gap: 18px;
 }
 .head {

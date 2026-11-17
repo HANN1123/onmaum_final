@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import styles from './measureDemo.module.css'
 import { mixRgb, ORB_PALETTE, rgba } from './orbs/emotionPalette'
@@ -71,7 +71,7 @@ export function Stat({ k, v, unit }: { k: string; v: string; unit?: string }) {
   )
 }
 
-export function Row({ k, v }: { k: string; v: string }) {
+export function Row({ k, v }: { k: string; v: ReactNode }) {
   return (
     <div className={styles.row}>
       <span className={styles.k}>{k}</span>
