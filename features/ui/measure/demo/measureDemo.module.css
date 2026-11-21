@@ -12,6 +12,8 @@
   --fill-solid: rgba(255, 255, 255, 0.10);
   /* 워치(기준 심박) 표시 색. 오브의 감정 색(빨강·금빛·청록·파랑)과 겹치지 않는 연두 */
   --watch: #c8f26b;
+  /* 기록 저장 중 표시 색. 경고처럼 보이는 빨강 대신 낮음(평온) 오브와 같은 차분한 청록 */
+  --record-rgb: 79, 209, 197;
   --gutter: clamp(20px, 5vw, 100px);
   --font-display: var(--font-sora), 'Pretendard Variable', Pretendard, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: var(--font-jbm), 'Pretendard Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -44,6 +46,7 @@
   --fill-solid: rgba(0, 0, 0, 0.10);
   /* 흰 바탕에서는 연두가 묻혀서 짙은 초록을 쓴다 */
   --watch: #3f6b00;
+  --record-rgb: 15, 128, 118;
 }
 
 /*
@@ -1241,8 +1244,9 @@
 .measureShell .legal {
   font-size: clamp(12px, min(1.13vw, 1.65vh), 15px);
 }
+/* 측정 종료 버튼: 폭은 아래 칸들과 맞추고 높이는 예전의 절반쯤으로(2026-11-20 교수님 피드백: 쓸데없이 크다) */
 .measureBody .btnSolid {
-  padding: clamp(10px, 1.8vh, 24px) 20px;
+  padding: clamp(5px, 0.9vh, 12px) 20px;
 }
 /* 심박 숫자 묶음은 오브 옆에 남는 폭을 쓰고, 출처(워치 · 카메라)는 숫자 아래 줄로 내려 오브가 커질 가로 폭을 만든다 */
 .measureBody .bpmRow {
@@ -1324,7 +1328,7 @@
     font-size: 1.15em;
   }
   .measureBody .btnSolid {
-    padding: 8px 20px;
+    padding: 5px 20px;
   }
   .measureBody .right {
     --right-gap: 6px;
@@ -1460,6 +1464,66 @@
   }
 }
 
+/*
+ * 파형 칸 이름표 "스마트워치 (심박, bpm): 92". bpm·rPPG 를 쓴 그대로 보이게 대문자 변환을 끈다.
+ * 숫자는 한 단계 크고 굵게 둬서 그래프 옆에서 바로 읽힌다.
+ */
+.waveTag {
+  text-transform: none;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  white-space: nowrap;
+}
+.waveTagValue {
+  font-size: 1.5em;
+  font-weight: 500;
+  color: var(--text);
+}
+.watchWave .waveTagValue {
+  color: var(--watch);
+}
+/* 세로로 좁은 창에서는 파형 칸이 낮아 숫자를 키우지 않는다 */
+@media (max-aspect-ratio: 1/1), (max-width: 720px) {
+  .waveTagValue {
+    font-size: 1.1em;
+  }
+}
+/* 단위 bpm 은 소문자로 쓴다(2026-11-20 교수님 피드백) */
+.unit,
+.statUnit {
+  text-transform: none;
+}
+
+/* 얼굴 추적 배지: 카메라 칸 오른쪽 아래. 녹화 표시처럼 점 하나와 짧은 글만 둔다. 추적 중이면 점이 빨갛게 깜빡인다 */
+.faceBadge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, min(0.95vw, 1.4vh), 13px);
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: rgba(var(--bg-rgb), 0.6);
+  white-space: nowrap;
+}
+.faceBadgeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.faceBadge[data-on] .faceBadgeDot {
+  background: #ff3b30;
+  animation: blink 1.1s step-end infinite;
+}
+
 /* 카메라 회전 버튼: 카메라 칸 오른쪽 위. 누를 때마다 시계 방향으로 90°씩 돈다 */
 .rotateBtn {
   position: absolute;
@@ -1500,22 +1564,6 @@
 /* 바로 위 상태 행 묶음의 아래 선과 겹치지 않게 워치 행의 위 선은 그리지 않는다 */
 .measureBody .watchRows .row {
   border-top: 0;
-}
-
-/* 기록 저장 동의(측정 화면, 아직 고르지 않았을 때 한 번) */
-.consentBox {
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  background: var(--fill-ghost);
-}
-.consentText {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-dim);
-  word-break: keep-all;
 }
 
 /* 오른쪽 칸이 넘치면 그 칸만 스크롤한다(결과·리포트·기록에 제안·체크인·설정을 더했다) */
@@ -1691,59 +1739,350 @@
  * - 오른쪽 위: 왼쪽에 심박 숫자·저장 여부·현재 감정/상태(큰 글자), 오른쪽에 큰 오브가 세로로 걸친다.
  * - 오른쪽 아래: 측정값 두 열 격자가 남는 높이를 나눠 쓰고, 맨 아래 측정 종료 버튼.
  */
+/*
+ * 오른쪽 위(2026-11-20 교수님 스케치): 왼쪽에 "심박 상태"·"감정 상태" 두 칸을 위아래로, 오른쪽에 "스트레스 상태" 오브.
+ * 가운데 열의 선 두 개가 두 칸의 가운데에서 오브 쪽으로 모인다. 두 칸 높이를 같게(1fr 1fr) 둬야 선 끝이 칸 가운데에 닿는다.
+ * 측정 중에는 선 위로 점선이 오브 쪽으로 흘러, 심박과 감정이 합쳐져 스트레스 상태가 된다는 것을 보인다.
+ */
 .demoTop {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 오브 열은 오브 크기만큼만(auto) 두고, 남는 폭을 두 칸과 선이 나눠 쓴다. 선이 오브 가장자리에 바로 닿아 길게 이어진다(2026-11-20) */
+  grid-template-columns: minmax(0, 1fr) minmax(56px, 0.9fr) auto;
+  grid-template-rows: 1fr 1fr;
   grid-template-areas:
-    'head orb'
-    'consent orb'
-    'key orb';
-  column-gap: clamp(16px, 2vw, 40px);
+    'heart flow orb'
+    'emotion flow orb';
+  column-gap: 0;
   row-gap: var(--right-gap, 12px);
-  align-items: end;
 }
-.demoHead {
-  grid-area: head;
-  min-width: 0;
-}
-.demoOrb {
-  grid-area: orb;
-  align-self: center;
-  justify-self: end;
-}
-.demoConsent {
-  grid-area: consent;
-}
-.demoKey {
-  grid-area: key;
-  min-width: 0;
-}
-.keyRows {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: clamp(16px, 2vw, 36px);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.keyCell {
+.stateBox {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: center;
+  gap: clamp(2px, 0.6vh, 8px);
   min-width: 0;
-  padding: clamp(6px, 1.2vh, 16px) 0;
+  padding: clamp(8px, 1.4vh, 18px) clamp(12px, 1.4vw, 22px);
+  border: 1px solid var(--line-strong);
 }
-.keyCell .k {
+.heartBox {
+  grid-area: heart;
+}
+.emotionBox {
+  grid-area: emotion;
+}
+.stateLabel {
   font-family: var(--font-mono);
   color: var(--text-dim);
   letter-spacing: 0.08em;
-  font-size: clamp(12px, min(1.4vw, 2vh), 20px);
+  font-size: clamp(12px, min(1.3vw, 1.9vh), 18px);
+  white-space: nowrap;
 }
-.keyValue {
+.stateValue {
   min-width: 0;
   overflow-x: clip;
   white-space: nowrap;
-  font-size: clamp(20px, min(2.6vw, 4.2vh), 46px);
+  font-size: clamp(22px, min(3vw, 4.8vh), 56px);
   font-weight: 500;
+}
+.flow {
+  grid-area: flow;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.flowTrack,
+.flowDash {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.flowTrack {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+.flowDash {
+  stroke: var(--flow-ink, var(--text));
+  stroke-width: 2;
+  transition: stroke 1.2s ease;
+  stroke-dasharray: 4 8;
+  opacity: 0;
+}
+.flow[data-active] .flowDash {
+  opacity: 0.85;
+  animation: flowRun 1.4s linear infinite;
+}
+@keyframes flowRun {
+  to { stroke-dashoffset: -12; }
+}
+.demoOrb {
+  grid-area: orb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(2px, 0.6vh, 8px);
+}
+/* 오브 아래 스트레스 단계(낮음·보통·높음·매우 높음). 점수는 보이지 않는다 */
+.stressLevel {
+  font-size: clamp(18px, min(2.2vw, 3.6vh), 40px);
+  font-weight: 500;
+  white-space: nowrap;
+}
+/*
+ * 모니터링 Info(2026-11-20 교수님 피드백·스케치): 제목 한 줄과 다섯 행. 행들이 남는 높이를 똑같이 나눠 쓴다.
+ * 이름은 앞에 작은 표식을 단 흐린 글자, 값은 밝고 굵은 글자로 둬서 무엇이 이름이고 무엇이 값인지 바로 구별된다.
+ */
+.monitor {
+  /* 내용보다 작게 줄지 않는다(줄면 마지막 행이 테두리 밖으로 잘린다) */
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  padding: 0 clamp(12px, 1.4vw, 22px);
+}
+.monitorTitle {
+  margin: 0;
+  padding: clamp(4px, 0.6vh, 12px) 0;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: clamp(12px, min(1.2vw, 1.8vh), 17px);
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+.monitorRows {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.measureBody .monitorRows .row {
+  flex: 1 1 auto;
+  align-items: center;
+  /* 아래 기록 저장 줄 자리를 내려고 최소 간격을 좁게 둔다. 남는 높이가 있으면 행이 늘어나 다시 넉넉해진다 */
+  padding: clamp(2px, 0.3vh, 12px) 0;
+}
+.monitorRows .row .k {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+.monitorRows .row .k::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--text-dim);
+}
+.monitorValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text);
+}
+/*
+ * 기록 저장 버튼(2026-11-20 교수님 피드백): 모니터링 Info 바로 아래. 저장 중이면 빨간 점이 깜빡여 녹화처럼 보인다.
+ * 옆에 무엇을 저장하는지 한 줄로 적는다(예전 저장 여부 질문 글을 줄인 것)
+ */
+.recordBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1vw, 16px);
+  min-width: 0;
+}
+/* 처음 한 번 묻는 저장 여부 칸: 기록 저장 버튼 바로 위에 떠서, 고른 뒤에는 그 버튼으로 바꾼다는 것을 알 수 있게 한다.
+   떠 있는 칸이라 오른쪽 열 높이를 늘리지 않는다(아래 측정 종료 버튼이 밀리지 않는다) */
+.consentBox {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: min(100%, 560px);
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+/* 칸 아래 꼬리: 기록 저장 버튼을 가리킨다 */
+.consentBox::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 100%;
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  transform: translateY(-50%) rotate(45deg);
+}
+.consentText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  word-break: keep-all;
+}
+.recordBtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: clamp(4px, 0.6vh, 10px) clamp(12px, 1.2vw, 18px);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: clamp(11px, min(1.13vw, 1.65vh), 15px);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.recordBtn:hover {
+  background: var(--fill-ghost);
+  border-color: var(--text-dim);
+}
+.recordBtn[data-on] {
+  border-color: rgba(var(--record-rgb), 0.55);
+  background: rgba(var(--record-rgb), 0.08);
+}
+.recordBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.recordDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+.recordBtn[data-on] .recordDot {
+  border-color: rgb(var(--record-rgb));
+  background: rgb(var(--record-rgb));
+  animation: recordBreath 2.8s ease-in-out infinite;
+}
+@keyframes recordBreath {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recordBtn[data-on] .recordDot {
+    animation: none;
+  }
+}
+.recordHint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(11px, min(1vw, 1.5vh), 13px);
+  color: var(--text-dimmer);
+}
+
+/*
+ * 위쪽 메뉴 버튼과 펼침 목록(2026-11-20 교수님 피드백). 버튼은 테두리 있는 상자, 목록은 버튼 오른쪽 아래로 펼친다
+ */
+.menuRoot {
+  position: relative;
+}
+.menuBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: clamp(11px, min(1.22vw, 1.78vh), 16px);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+.menuBtn:hover,
+.menuBtn[aria-expanded='true'] {
+  background: var(--fill-ghost);
+  border-color: var(--text-dim);
+}
+.menuIcon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: square;
+}
+.menuList {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  animation: menuIn 0.16s ease-out;
+}
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--fill-solid);
+}
+.menuItemIcon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+}
+.menuItemIcon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.menuItemText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menuItemLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+.menuItemHint {
+  font-size: 12px;
+  color: var(--text-dimmer);
+}
+@media (prefers-reduced-motion: reduce) {
+  .menuList {
+    animation: none;
+  }
 }
 /* 뼈대(Skeleton)가 안쪽에 감싸는 요소를 더할 수 있어, 두 단계 아래까지 남는 높이를 넘겨준다 */
 .demoRows,
@@ -1761,9 +2100,10 @@
   .body.measureBody {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr);
   }
-  /* 카메라 칸은 높이 24vh 안팎으로 두고, 파형 칸들은 왼쪽 열 폭과 남는 높이를 다 쓴다 */
+  /* 카메라 칸 폭을 아래 파형 칸들과 같은 선에 맞춘다(2026-11-20 교수님 피드백). 왼쪽 열 폭을 다 쓰되,
+     세로로 긴 영상(회전)처럼 너무 높아지면 파형 칸 두 개의 최소 높이를 남기는 데까지만 키운다 */
   .measureBody .left {
-    --cam-w: min(100cqw, 24vh * var(--cam-ratio, 1.7778) + 2px);
+    --cam-w: min(100cqw, (100cqh - (var(--wave-min) + var(--left-gap)) * 2 - 2px) * var(--cam-ratio, 1.7778) + 2px);
     --wave-max: 100cqh;
   }
   /* 파형 칸 높이는 워치 연결과 관계없이 카메라 아래 남는 높이의 절반이다.
@@ -1773,20 +2113,16 @@
     justify-self: stretch;
     height: max(var(--wave-min), calc((100cqh - var(--cam-h)) / 2 - var(--left-gap)));
   }
-  /* 작은 카메라 칸에서는 이름표가 회전 버튼과 겹친다. 얼굴 상태는 오른쪽 '얼굴' 행에 같은 내용이 있어 숨긴다 */
-  .measureBody .frame .frameTag {
-    display: none;
-  }
   .measureBody .bpm {
-    font-size: clamp(56px, min(9vw, 14vh), 190px);
+    font-size: clamp(44px, min(6vw, 9vh), 140px);
   }
   .measureBody .unit,
   .bpmSource {
     font-size: clamp(14px, min(1.6vw, 2.4vh), 24px);
   }
   .measureOrb {
-    width: clamp(120px, min(22vw, 40vh), 380px) !important;
-    height: clamp(120px, min(22vw, 40vh), 380px) !important;
+    width: clamp(130px, min(24vw, 35vh), 420px) !important;
+    height: clamp(130px, min(24vw, 35vh), 420px) !important;
   }
   .measureBody .row {
     font-size: clamp(13px, min(1.45vw, 2.1vh), 22px);
@@ -1815,7 +2151,183 @@
 /* 시연 배치에서 높이가 낮은 노트북 창(예: 1366×768의 내용 약 688)은 오브를 조금 줄여 측정 종료 버튼까지 한 화면에 넣는다 */
 @media (min-aspect-ratio: 1001/1000) and (min-width: 721px) and (max-height: 720px) {
   .measureOrb {
-    width: clamp(120px, min(22vw, 34vh), 380px) !important;
-    height: clamp(120px, min(22vw, 34vh), 380px) !important;
+    width: clamp(120px, min(24vw, 28vh), 420px) !important;
+    height: clamp(120px, min(24vw, 28vh), 420px) !important;
+  }
+}
+
+/*
+ * 결과 화면 스트레스 게이지(2026-11-20 교수님 피드백 E3). 네 칸 막대 위에 단계 이름, 아래에 ▲ 와 오늘 값.
+ * 칸 색은 측정 화면 오브의 단계 색(--cell-rgb)이고, 오늘 단계의 칸만 진하게 켠다.
+ */
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.gaugeHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.gaugeTitle {
+  color: var(--text-dimmer);
+  font-size: 14px;
+}
+.gaugeStatus {
+  font-size: 15px;
+  color: var(--text);
+}
+.gaugeNames,
+.gaugeTrack {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+.gaugeNames span {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dimmer);
+  transition: color 0.4s ease;
+}
+.gaugeNames span[data-on='true'] {
+  color: var(--text);
+}
+.gaugeCell {
+  height: 10px;
+  background: rgba(var(--cell-rgb), 0.22);
+  transition: background-color 0.4s ease;
+}
+.gaugeCell[data-on='true'] {
+  background: rgb(var(--cell-rgb));
+}
+.gaugeMarkRow {
+  position: relative;
+  height: 14px;
+}
+.gaugeMark {
+  position: absolute;
+  top: 0;
+  width: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+.gaugeMark i,
+.gaugeMark b {
+  position: absolute;
+  top: 0;
+  font-style: normal;
+  font-weight: inherit;
+}
+.gaugeMark i {
+  transform: translateX(-50%);
+}
+.gaugeMark[data-side='right'] b {
+  left: 9px;
+}
+.gaugeMark[data-side='left'] b {
+  right: 9px;
+}
+
+/* 리포트 측정 목록: 줄마다 있던 "결과 보기"를 빼서 네 칸으로 둔다(돌아가기는 아래 버튼) */
+.callNoLink {
+  grid-template-columns: 56px 64px 1fr auto;
+}
+
+/*
+ * 측정 화면: 오브와 그 오른쪽의 세로 스트레스 게이지(2026-11-21). 게이지가 붙은 만큼 오브가 왼쪽으로 옮겨 간다.
+ * 게이지 높이는 오브 높이를 따르고(stretch), 아래가 낮음·위가 매우 높음이다. ▶ 표시가 지금 위치를 가리킨다.
+ */
+.orbRow {
+  display: flex;
+  align-items: stretch;
+  gap: clamp(10px, 1.2vw, 20px);
+}
+.stressBar {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: clamp(6px, 0.6vw, 10px);
+  /* 오브 위아래 끝의 둥근 부분까지 닿지 않게 조금 안쪽에서 시작하고 끝낸다 */
+  padding: 8% 0;
+}
+.stressBarTrack {
+  position: relative;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 3px;
+  width: clamp(8px, 0.7vw, 12px);
+  margin-left: 14px;
+}
+.stressBarTrack .gaugeCell {
+  height: auto;
+}
+.stressBarMark {
+  position: absolute;
+  right: calc(100% + 3px);
+  transform: translateY(50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text);
+  transition: bottom 0.8s ease;
+}
+.stressBarNames {
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 3px;
+  align-items: center;
+}
+.stressBarNames span {
+  font-size: clamp(11px, min(0.95vw, 1.5vh), 15px);
+  color: var(--text-dimmer);
+  white-space: nowrap;
+  transition: color 0.4s ease;
+}
+.stressBarNames span[data-on='true'] {
+  color: var(--text);
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stressBarMark {
+    transition: none;
+  }
+}
+
+/*
+ * 감정 상태 옆 표정 그림(2026-11-21, 팀 디자인 비교용). 메뉴에서 고르면 감정 이름 오른쪽에 얼굴이 붙는다.
+ * 얼굴은 칸의 빈 곳을 채우도록 크게 두되(2026-11-21 피드백: 너무 비어 보임), 칸 폭(cqw)과 화면 높이(vh) 안에서만 커져
+ * 감정 이름 글자가 잘리지 않게 한다. 선 색은 글자 색을 따른다. 감정이 바뀌면 0.16초 안에 서서히 나타난다.
+ */
+.emotionBox {
+  container-type: inline-size;
+}
+.emotionRow {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(8px, 4cqw, 16px);
+  min-width: 0;
+}
+.emotionFace {
+  flex: none;
+  width: clamp(32px, min(40cqw, 9vh), 104px);
+  height: clamp(32px, min(40cqw, 9vh), 104px);
+  color: var(--text);
+  animation: emotionFaceIn 0.16s ease-out;
+}
+/* 원본 그림은 색 원이 칸을 채워 같은 크기에서 더 무거워 보이므로 선 그림과 같은 크기로 둔다 */
+.emotionFaceImage {
+  user-select: none;
+}
+@keyframes emotionFaceIn {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .emotionFace {
+    animation: none;
   }
 }

@@ -41,14 +41,8 @@ export function bpmText(bpm: number | null): string {
   return bpm === null ? '--' : String(Math.round(bpm))
 }
 
-/** 파형 칸 표지: 상태와, 신호가 있으면 SNR */
-export function pulseTag(reading: RppgReading): string {
-  if (reading.status === 'live' && reading.snrDb !== null) return `맥박 파형 · rPPG · SNR ${reading.snrDb.toFixed(1)}dB`
-  return `맥박 파형 · rPPG ${RPPG_STATUS_TEXT[reading.status]}${reading.quality && reading.quality !== 'good' ? ' · 참고값' : ''}`
-}
-
 /** 상태 행 글: 상태와, 추정이 있으면 SNR */
 export function signalText(reading: RppgReading): string {
-  const status = `${RPPG_STATUS_TEXT[reading.status]}${reading.quality && reading.quality !== 'good' ? ' · 참고값' : ''}`
+  const status = RPPG_STATUS_TEXT[reading.status]
   return reading.snrDb !== null && reading.status !== 'off' ? `${status} · SNR ${reading.snrDb.toFixed(1)}dB` : status
 }

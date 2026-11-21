@@ -38,3 +38,16 @@ describe('얼굴 오버레이의 소수 content-box 크기', () => {
     verify()
   })
 })
+
+it('label 이 null 이면 얼굴 상자에 글 없이 상자만 그린다', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: 640, height: 360 }) as DOMRect)
+  const video = document.createElement('video')
+  Object.defineProperties(video, { videoWidth: { configurable: true, value: 1280 }, videoHeight: { configurable: true, value: 720 } })
+  const box = { x: 0.2, y: 0.25, w: 0.3, h: 0.4 }
+  const { container, rerender } = render(<FaceLayer box={box} videoRef={{ current: video }} />)
+  expect(container.textContent).toBe('얼굴 추적 중')
+  rerender(<FaceLayer box={box} videoRef={{ current: video }} label={null} />)
+  expect(container.firstElementChild!.firstElementChild).not.toBeNull()
+  expect(container.textContent).toBe('')
+})
