@@ -8,7 +8,7 @@ import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import CallChart, { type ScrubReason } from './CallChart'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
-import { LEGAL } from './demoCopy'
+import { LEGAL, resultVerdict } from './demoCopy'
 import { themeMenuItem } from './menuItems'
 import NavMenu from './NavMenu'
 import { bpmText, NO_PULSE } from './heartRate'
@@ -123,7 +123,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   const readEmotion = point ? point.emotion : summary.dominant
 
   const detectedPct = Math.round(summary.detectedRatio * 100)
-  const verdict = summary.dominant ? `${EMOTION_LABELS[summary.dominant]}이 가장 오래 머물렀습니다` : '얼굴을 찾지 못해 감정 기록이 없습니다'
+  const verdict = resultVerdict(summary.dominant)
   const shareText = summary.dominant
     ? EMOTION_ORDER.filter((e) => summary.shares[e] > 0)
         .sort((a, b) => summary.shares[b] - summary.shares[a])

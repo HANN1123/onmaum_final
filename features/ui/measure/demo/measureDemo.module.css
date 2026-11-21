@@ -406,6 +406,8 @@
   letter-spacing: -0.01em;
   margin: 0;
   word-break: keep-all;
+  /* 두 줄이 되면 줄 길이를 고르게 나눠 "평온한 표정이 / 가장 많았습니다"처럼 끊는다(한 단어만 다음 줄로 넘어가지 않게) */
+  text-wrap: balance;
 }
 .verdictSub {
   font-family: var(--font-display);
