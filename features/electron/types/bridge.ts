@@ -11,12 +11,21 @@ export interface DesktopEmotion {
   angry: number
 }
 
+/**
+ * 지금 스트레스 단계. `features/algorithm/baseline/baseline.ts`의 StressLevel과 같은 값.
+ * 이 파일은 런타임 의존이 없어야 해서 같은 목록을 여기 둔다.
+ */
+export const DESKTOP_STRESS_LEVELS = ['low', 'typical', 'high', 'veryHigh'] as const
+export type DesktopStressLevel = (typeof DESKTOP_STRESS_LEVELS)[number]
+
 /** 측정 화면이 메인 프로세스로 보내는 측정 상태. */
 export interface MeasurementSnapshot {
   /** 측정 중 여부 (/measure의 active) */
   active: boolean
   /** 현재 감정. 얼굴을 못 찾았거나 측정 전이면 null */
   emotions: DesktopEmotion | null
+  /** 지금 스트레스 단계(위젯 오브 색). 측정 전이거나 아직 점수가 없으면 null */
+  stressLevel: DesktopStressLevel | null
   /** 누적 기록 수 (오브 성장 단계) */
   recordCount: number
   /** 최근 1초 동안 디코딩된 카메라 프레임 수(진단). 알 수 없으면 null */

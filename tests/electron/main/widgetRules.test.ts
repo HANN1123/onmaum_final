@@ -16,6 +16,7 @@ import type { MeasurementSnapshot } from '@/features/electron/types/bridge'
 const snap = (o: Partial<MeasurementSnapshot> = {}): MeasurementSnapshot => ({
   active: true,
   emotions: { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 },
+  stressLevel: null,
   recordCount: 3,
   videoFps: 30,
   saveFailed: false,

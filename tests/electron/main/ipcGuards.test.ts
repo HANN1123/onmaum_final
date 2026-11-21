@@ -14,6 +14,7 @@ import { CHANNELS } from '@/features/electron/types/bridge'
 const valid = {
   active: true,
   emotions: { happy: 0.1, calm: 0.7, sad: 0.1, angry: 0.1 },
+  stressLevel: 'high',
   recordCount: 4,
   videoFps: 30,
   saveFailed: false,
@@ -27,8 +28,8 @@ describe('parseSnapshot', () => {
     expect(r).not.toBe(valid)
   })
 
-  it('emotions·videoFps가 null이어도 받는다', () => {
-    expect(parseSnapshot({ ...valid, emotions: null, videoFps: null })).not.toBeNull()
+  it('emotions·stressLevel·videoFps가 null이어도 받는다', () => {
+    expect(parseSnapshot({ ...valid, emotions: null, stressLevel: null, videoFps: null })).not.toBeNull()
   })
 
   it.each<[string, unknown]>([
@@ -41,6 +42,9 @@ describe('parseSnapshot', () => {
     ['감정 키 추가', { ...valid, emotions: { ...valid.emotions, fear: 0 } }],
     ['감정 범위 밖', { ...valid, emotions: { ...valid.emotions, happy: 2 } }],
     ['감정 NaN', { ...valid, emotions: { ...valid.emotions, sad: Number.NaN } }],
+    ['스트레스 단계 누락', { ...valid, stressLevel: undefined }],
+    ['없는 스트레스 단계', { ...valid, stressLevel: 'extreme' }],
+    ['스트레스 단계가 숫자', { ...valid, stressLevel: 3 }],
     ['음수 기록 수', { ...valid, recordCount: -1 }],
     ['소수 기록 수', { ...valid, recordCount: 1.5 }],
     ['과도한 기록 수', { ...valid, recordCount: 1e12 }],

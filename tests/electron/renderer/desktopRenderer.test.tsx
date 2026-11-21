@@ -11,6 +11,10 @@ import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis
 import type { DesktopEmotion, MeasurementSnapshot, WidgetView } from '@/features/electron/types/bridge'
 import { createFakeBridge, uninstallBridge } from './fakeBridge'
 
+// 위젯 오브는 캔버스 대신 받은 색(기본색 RGB)만 보인다
+vi.mock('@/features/ui/measure/demo/orbs/DotOrb', () => ({ default: ({ palette }: { palette?: { base: number[] } }) =>
+  <span data-testid="widget-orb" data-palette={palette?.base.join(',')} /> }))
+
 afterEach(() => {
   cleanup()
   uninstallBridge()
@@ -52,7 +56,7 @@ describe('ServiceWorkerRegistrar', () => {
 
 describe('useDesktopMeasurementPublisher', () => {
   type Props = Parameters<typeof useDesktopMeasurementPublisher>[0]
-  const base: Props = { active: false, emotions: null, recordCount: 2, videoEl: null, saveFailed: false }
+  const base: Props = { active: false, emotions: null, stressLevel: null, recordCount: 2, videoEl: null, saveFailed: false }
 
   it('웹에서는 아무것도 하지 않는다', () => {
     const { unmount } = renderHook((p: Props) => useDesktopMeasurementPublisher(p), { initialProps: base })
@@ -70,10 +74,14 @@ describe('useDesktopMeasurementPublisher', () => {
     expect(calls().at(-1)).toMatchObject({ active: false, recordCount: 2, videoFps: null })
 
     rerender({ ...base, active: true, emotions: CALM })
-    expect(calls().at(-1)).toMatchObject({ active: true, emotions: CALM })
+    expect(calls().at(-1)).toMatchObject({ active: true, emotions: CALM, stressLevel: null })
+
+    // 스트레스 단계가 나오면 위젯 색을 위해 같이 보낸다
+    rerender({ ...base, active: true, emotions: CALM, stressLevel: 'high' })
+    expect(calls().at(-1)).toMatchObject({ active: true, stressLevel: 'high' })
 
     unmount()
-    expect(calls().at(-1)).toMatchObject({ active: false, emotions: null, videoFps: null })
+    expect(calls().at(-1)).toMatchObject({ active: false, emotions: null, stressLevel: null, videoFps: null })
   })
 
   it('측정 중에는 1초마다 프레임 증가량과 함께 heartbeat를 보낸다', () => {
@@ -146,7 +154,7 @@ describe('DesktopWidget', () => {
     snapshot:
       snap === null
         ? null
-        : { active: true, emotions: CALM, recordCount: 3, videoFps: 30, saveFailed: false, sentAt: Date.now(), ...snap },
+        : { active: true, emotions: CALM, stressLevel: null, recordCount: 3, videoFps: 30, saveFailed: false, sentAt: Date.now(), ...snap },
     ...o,
   })
 
@@ -177,6 +185,17 @@ describe('DesktopWidget', () => {
     await screen.findByText('측정 꺼짐')
     act(() => fake.emit(view({ seq: 4 })))
     expect(screen.getByText('측정 꺼짐')).toBeInTheDocument()
+  })
+
+  it('오브 색은 감정이 아니라 측정 화면이 보낸 스트레스 단계를 따르고, 단계가 없으면 낮음 색이다', async () => {
+    const fake = createFakeBridge(view({ seq: 1 }, { stressLevel: null, emotions: { happy: 0, calm: 0, sad: 0, angry: 1 } }))
+    fake.install()
+    render(<DesktopWidget />)
+    const orb = await screen.findByTestId('widget-orb')
+    // 표정이 화남이어도 단계가 없으면 낮음(평온) 색
+    expect(orb).toHaveAttribute('data-palette', '79,209,197')
+    act(() => fake.emit(view({ seq: 2 }, { stressLevel: 'high' })))
+    await waitFor(() => expect(screen.getByTestId('widget-orb')).toHaveAttribute('data-palette', '255,150,48'))
   })
 
   it('"열기"를 누르면 메인 창을 연다', async () => {

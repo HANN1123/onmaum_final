@@ -2,12 +2,14 @@
 
 import { useEffect, useRef } from 'react'
 import type { EmotionResult } from '@/features/algorithm/emotion/emotionAnalysis'
-import type { DesktopEmotion, MeasurementSnapshot } from '@/features/electron/types/bridge'
+import type { DesktopEmotion, DesktopStressLevel, MeasurementSnapshot } from '@/features/electron/types/bridge'
 import { useDesktopBridge } from './desktopBridge'
 
 interface Options {
   active: boolean
   emotions: EmotionResult | null
+  /** 지금 스트레스 단계(위젯 오브 색). 측정 전이거나 아직 점수가 없으면 null. 주지 않으면 null(위젯은 낮음 색) */
+  stressLevel?: DesktopStressLevel | null
   recordCount: number
   videoEl: HTMLVideoElement | null
   /** 레코더의 감정 기록 저장 실패 여부 */
@@ -38,21 +40,22 @@ function totalFrames(video: HTMLVideoElement | null): number | null {
 export function useDesktopMeasurementPublisher({
   active,
   emotions,
+  stressLevel = null,
   recordCount,
   videoEl,
   saveFailed,
 }: Options): void {
   const bridge = useDesktopBridge()
-  const latest = useRef({ active, emotions, recordCount, saveFailed, videoFps: null as number | null })
+  const latest = useRef({ active, emotions, stressLevel, recordCount, saveFailed, videoFps: null as number | null })
 
   useEffect(() => {
-    latest.current = { ...latest.current, active, emotions, recordCount, saveFailed }
+    latest.current = { ...latest.current, active, emotions, stressLevel, recordCount, saveFailed }
   })
 
   useEffect(() => {
     if (!bridge) return
     bridge.publishMeasurement(buildSnapshot(latest.current))
-  }, [bridge, active, emotions, recordCount, saveFailed])
+  }, [bridge, active, emotions, stressLevel, recordCount, saveFailed])
 
   // 측정 중에는 1초마다 프레임 증가량과 함께 heartbeat를 보낸다.
   useEffect(() => {
@@ -84,6 +87,7 @@ export function useDesktopMeasurementPublisher({
       bridge.publishMeasurement({
         active: false,
         emotions: null,
+        stressLevel: null,
         recordCount: latest.current.recordCount,
         videoFps: null,
         saveFailed: false,
@@ -96,6 +100,7 @@ export function useDesktopMeasurementPublisher({
 function buildSnapshot(s: {
   active: boolean
   emotions: EmotionResult | null
+  stressLevel: DesktopStressLevel | null
   recordCount: number
   saveFailed: boolean
   videoFps: number | null
@@ -103,6 +108,7 @@ function buildSnapshot(s: {
   return {
     active: s.active,
     emotions: toDesktopEmotion(s.emotions),
+    stressLevel: s.active ? s.stressLevel : null,
     recordCount: Math.max(0, Math.floor(s.recordCount)),
     videoFps: s.active ? s.videoFps : null,
     saveFailed: s.active && s.saveFailed,
