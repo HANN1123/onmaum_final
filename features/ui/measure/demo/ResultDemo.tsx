@@ -8,13 +8,16 @@ import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import CallChart, { type ScrubReason } from './CallChart'
 import { mmss, Row, Stat, swatchColor, usePulseAt } from './demoBits'
-import { LEGAL } from './demoCopy'
+import { LEGAL, resultVerdict } from './demoCopy'
+import { themeMenuItem } from './menuItems'
+import NavMenu from './NavMenu'
 import { bpmText, NO_PULSE } from './heartRate'
 import { cleanBpmSeries } from '@/features/rppg/lib/bpmCleaning'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
 import { Roll, Swap } from './Roll'
-import { peakWithEmotion, sessionStressLevel, smoothBpm, sourceShareText, summarizeSession, type DemoSession } from './sessionLog'
+import { peakWithEmotion, sessionStressLevel, smoothBpm, summarizeSession, type DemoSession } from './sessionLog'
+import StressGauge from './StressGauge'
 import { loadSettings } from '@/shared/storage/settings'
 import { useStoredOverview } from './useStoredOverview'
 import { useStoredSession } from './useStoredSession'
@@ -28,6 +31,8 @@ import type { BreathingPlan } from '@/features/feedback/lib/careActions'
  * 오른쪽은 이번 측정의 감정 요약, 숫자 둘, 행, 버튼. 같은 정보는 한 곳에서만 말한다.
  * 측정 화면이 넘긴 이번 측정만 보여준다. 넘겨받은 기록이 없으면 표본으로 채우지 않고 "기록 없음"을 보여준다.
  * 이번 측정에 대한 스트레스 판정은 하지 않는다(하루 판정은 리포트가 저장된 기록으로 한다).
+ * 스트레스는 저장된 오늘 기록의 값을 네 칸 게이지(StressGauge)로만 보인다. 14일 값은 리포트에서 본다.
+ * 2026-11-20 교수님 피드백으로 심박 출처 행과 긍정 점수를 뺐고(같은 정보가 많음), 측정 시작 버튼은 아래 하나만 둔다.
  * 심박은 선택된 원천의 기록을 쓰고, 유효한 기록이 없으면 "--"를 표시한다.
  * 오른쪽 아래에 처음 설문 답으로 고른 쉬어 가기 제안(CareCard, 측정 직후용)을 하나 보이고, 호흡 제안은 바로 따라 할 수 있다.
  */
@@ -48,13 +53,9 @@ export default function ResultDemo() {
         </Link>
         <div className={styles.navMid}>
           <span className={`${styles.live} ${styles.mono}`}>{session ? `측정 종료 ${mmss(session.durationSec)}` : '측정 결과'}</span>
-          <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
-            {theme === 'dark' ? '화이트' : '다크'}
-          </button>
+          {/* 화면 색 바꾸기는 측정 화면처럼 메뉴에 넣는다. 글자가 "화이트"↔"다크"로 바뀌며 폭이 달라져 옆 글자가 움직이던 것을 막는다(2026-11-21) */}
+          <NavMenu items={[themeMenuItem(theme, toggleTheme)]} />
         </div>
-        <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
-          {session ? '다시 측정' : '측정 시작'}
-        </Link>
       </nav>
 
       {session ? <SessionResult session={session} theme={theme} /> : <NoSession />}
@@ -122,19 +123,13 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
   const readEmotion = point ? point.emotion : summary.dominant
 
   const detectedPct = Math.round(summary.detectedRatio * 100)
-  const verdict = summary.dominant ? `${EMOTION_LABELS[summary.dominant]}이 가장 오래 머물렀습니다` : '얼굴을 찾지 못해 감정 기록이 없습니다'
+  const verdict = resultVerdict(summary.dominant)
   const shareText = summary.dominant
     ? EMOTION_ORDER.filter((e) => summary.shares[e] > 0)
         .sort((a, b) => summary.shares[b] - summary.shares[a])
         .map((e) => `${EMOTION_LABELS[e]} ${Math.round(summary.shares[e] * 100)}`)
         .join(' · ')
     : '–'
-  const todayText =
-    stored === null
-      ? '읽는 중'
-      : stored.today.scores
-        ? `긍정 ${Math.round(stored.today.scores.positive)} · 스트레스 ${Math.round(stored.today.stress ?? stored.today.scores.stress)}`
-        : '저장된 기록 없음'
 
   return (
     <div className={styles.body}>
@@ -143,7 +138,7 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
           <Swap text={readLabel} className={styles.readoutLabel} />
           <div className={styles.readoutMain}>
             <Roll value={bpmText(readBpm)} className={styles.readoutValue} />
-            <span className={styles.readoutUnit}>BPM</span>
+            <span className={styles.readoutUnit}>bpm</span>
             <span className={styles.readoutSide}>
               {readEmotion ? (
                 <>
@@ -187,15 +182,20 @@ function SessionResult({ session, theme }: { session: DemoSession; theme: 'dark'
 
         <div className={`${styles.stats} ${styles.stats2}`}>
           <Stat k="측정 시간" v={mmss(session.durationSec)} />
-          <Stat k="최고 심박" v={bpmText(maxBpm)} unit="BPM" />
+          <Stat k="최고 심박" v={bpmText(maxBpm)} unit="bpm" />
         </div>
 
         <div className={styles.rows}>
           <Row k="감정 비율" v={shareText} />
-          <Row k="심박" v={summary.avgBpm === null ? '심박 기록 없음' : `평균 ${summary.avgBpm} BPM`} />
-          <Row k="심박 출처" v={sourceShareText(summary.sourceShares)} />
-          <Row k="오늘" v={todayText} />
+          <Row k="심박" v={summary.avgBpm === null ? '심박 기록 없음' : `평균 ${summary.avgBpm} bpm`} />
         </div>
+
+        <StressGauge
+          value={stored?.today.stress ?? null}
+          level={stored?.today.level ?? null}
+          baseline={stored?.baseline ?? null}
+          loading={stored === null}
+        />
 
         <CareCard
           moment="after"

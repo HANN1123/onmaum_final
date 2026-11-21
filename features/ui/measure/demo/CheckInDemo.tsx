@@ -13,7 +13,8 @@ const TICK_MS = 60_000
 /**
  * 하루 리포트의 상태 확인(코드 이름은 체크인). 화면에는 "체크인" 대신 "상태 확인"이라 쓴다. 조건(시간대·최근 30분 기록·응답 여부·끈 시간대)은 useCheckin 이 정한다.
  * 측정 기록으로 본 최근 30분 판정이 맞는지 묻고, 답은 다음 판정 보정에 쓴다(맞아요 0, 더 힘들었어요 +3, 괜찮았어요 −3).
- * 응답하면 감사 문구로 바꾸고 다시 묻지 않는다.
+ * 응답하면 감사 문구로 바꾸고 다시 묻지 않는다. 감사 문구는 그 날짜·시간대에만 보인다:
+ * 화면을 켜 둔 채 다음 시간대(오후) 질문이 오거나 날짜가 바뀌면 감사 문구를 거두고 새 질문을 보여준다.
  */
 export default function CheckInDemo() {
   const [now, setNow] = useState(() => new Date())
@@ -23,18 +24,22 @@ export default function CheckInDemo() {
   }, [])
   const checkin = useCheckin({ now })
   const [askDirection, setAskDirection] = useState(false)
-  const [thanked, setThanked] = useState<CheckinSlot | null>(null)
+  const [thanked, setThanked] = useState<{ slot: CheckinSlot; date: string } | null>(null)
+  const today = now.toLocaleDateString('en-CA')
+  // 다른 시간대의 질문이 왔거나 날짜가 바뀌었으면 지난 감사 문구는 보이지 않는다
+  const showThanks = thanked !== null && thanked.date === today
+    && !(checkin.due && checkin.slot !== null && checkin.slot !== thanked.slot)
 
   const report = (r: SelfReport) => {
     checkin.submit(r)
-    setThanked(checkin.slot)
+    if (checkin.slot) setThanked({ slot: checkin.slot, date: today })
     setAskDirection(false)
   }
 
-  if (thanked) {
+  if (showThanks) {
     return (
       <div className={styles.careBox} role="status">
-        <span className={styles.careLabel}>{SLOT_LABEL[thanked]}</span>
+        <span className={styles.careLabel}>{SLOT_LABEL[thanked.slot]}</span>
         <p className={styles.careText}>알려 줘서 고마워요. 다음 판정부터 조금씩 반영할게요.</p>
       </div>
     )

@@ -38,7 +38,7 @@ import { createMainWindow, createWidgetWindow } from './windows'
 const mode = resolveRunMode(app.isPackaged)
 
 if (mode.userDataDirName) {
-  // 개발 실행의 저장소를 패키지 실행과 분리한다. setPath는 없는 폴더를 받으면 예외를 던지므로 먼저 만든다.
+  // 개발 실행·시연용 패키지 실행의 저장소를 정식 앱과 분리한다. setPath는 없는 폴더를 받으면 예외를 던지므로 먼저 만든다.
   const devUserData = path.join(app.getPath('appData'), mode.userDataDirName)
   mkdirSync(devUserData, { recursive: true })
   app.setPath('userData', devUserData)

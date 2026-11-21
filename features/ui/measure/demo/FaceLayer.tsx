@@ -9,7 +9,8 @@ import type { FaceBox } from './useFaceTrack'
 interface Props {
   box: FaceBox | null
   videoRef: RefObject<HTMLVideoElement | null>
-  label?: string
+  /** 상자에 붙이는 글. null 이면 글 없이 상자만 그린다 */
+  label?: string | null
   /** 카메라 회전(시계 방향). 상자 좌표는 돌린 화면 기준이므로 칸 채움도 돌린 크기로 계산한다 */
   rotation?: CameraRotation
 }
@@ -62,7 +63,7 @@ export default function FaceLayer({ box, videoRef, label = '얼굴 추적 중', 
     <div ref={setContainer} className={styles.faceLayer} aria-hidden="true">
       {rect && (
         <div className={styles.faceBox} style={rect}>
-          <span className={styles.faceTag}>{label}</span>
+          {label && <span className={styles.faceTag}>{label}</span>}
         </div>
       )}
     </div>

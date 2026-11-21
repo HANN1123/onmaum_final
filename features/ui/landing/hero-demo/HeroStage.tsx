@@ -23,9 +23,16 @@ import styles from './HeroStage.module.css'
  * 커서 모양은 Stageshow kit(MIT, Benji Taylor)의 macOS 화살표를 옮겨 왔다.
  */
 
-/** 결과 카드의 그림자까지 칸 안에 들어오도록 오른쪽에 여유를 둔 폭 */
+/** 무대 폭. 결과 카드의 그림자까지 들어가도록 오른쪽에 여유를 둔다 */
 const W = 810
 const H = 560
+/**
+ * 칸에 맞출 때 쓰는 폭: 결과 카드 오른쪽 끝(744)에 약간의 여유를 더한 값.
+ * 무대 폭(810)으로 맞추면 장면 오른쪽에 빈 곳이 남아 가운데가 비어 보였다(2026-11-21)
+ */
+const FIT_W = 770
+/** 넓은 창에서 장면을 키우는 상한. 칸 높이도 넘지 않게 함께 맞춘다 */
+const MAX_SCALE = 1.5
 
 type Point = { x: number; y: number }
 interface Scene {
@@ -91,12 +98,14 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
   }, [])
   const light = scheme === 'light'
 
-  // 무대는 810×560 으로 짓고, 칸 너비에 맞춰 통째로 줄이고 늘린다.
+  // 무대는 810×560 으로 짓고, 칸 너비(와 높이)에 맞춰 통째로 줄이고 늘린다.
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
     const observer = new ResizeObserver(([entry]) => {
-      setScale(Math.max(0.5, Math.min(1.25, entry.contentRect.width / W)))
+      const { width, height } = entry.contentRect
+      const fit = Math.min(width / FIT_W, height > 0 ? height / H : Infinity)
+      setScale(Math.max(0.5, Math.min(MAX_SCALE, fit)))
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -213,7 +222,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
               <div className={styles.head}>
                 <span className={styles.bpm}>
                   <Roll value={String(scene.bpm)} />
-                  <small>BPM</small>
+                  <small>bpm</small>
                 </span>
                 <DotOrb getPulse={getPulse} emotion={scene.emotion} bpm={scene.bpm} scheme={scheme} size={84} />
               </div>
@@ -261,7 +270,7 @@ export default function HeroStage({ scheme }: { scheme: 'dark' | 'light' }) {
             <path d={SPARK.h} className={styles.sparkHot} data-on={scene.lit ? '' : undefined} style={{ stroke: accent, fill: 'none', strokeWidth: 2 }} />
           </svg>
           <div className={styles.cardRow}>
-            <span>최고 110 BPM</span>
+            <span>최고 110 bpm</span>
             <span ref={nextRef} className={styles.nextBtn} data-pressed={scene.pressed === 'next' ? '' : undefined}>
               다시 측정
             </span>

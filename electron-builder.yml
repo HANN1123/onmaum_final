@@ -1,7 +1,8 @@
 # 온마음 Windows 패키징 설정. `npm run electron:pack`(설치본) / `npm run electron:pack:dir`(설치 없이 폴더)
 # 미서명·publish 없음·사용자별 설치. 서명·자동 업데이트는 범위 밖이다.
-appId: kr.onmaum.app
-productName: OnMaum
+# 시연용 빌드(feat/ui-measure-demo-layout 전용): 정식 앱과 따로 설치·실행·저장되도록 이름과 ID를 나눈다
+appId: kr.onmaum.demo
+productName: OnMaumDemo
 directories:
   output: release
 files:
@@ -25,4 +26,4 @@ nsis:
   allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 온마음
+  shortcutName: 온마음 시연

@@ -3,8 +3,10 @@
  */
 import {
   CHANNELS,
+  DESKTOP_STRESS_LEVELS,
   type ChannelName,
   type DesktopEmotion,
+  type DesktopStressLevel,
   type MeasurementSnapshot,
   type WindowRole,
 } from '../types/bridge'
@@ -65,16 +67,25 @@ function parseEmotion(v: unknown): DesktopEmotion | null | undefined {
   return { happy: happy as number, calm: calm as number, sad: sad as number, angry: angry as number }
 }
 
+/** 네 단계 이름 또는 null 만 받는다. 그 밖(누락 포함)은 undefined */
+function parseStressLevel(v: unknown): DesktopStressLevel | null | undefined {
+  if (v === null) return null
+  return (DESKTOP_STRESS_LEVELS as readonly unknown[]).includes(v) ? (v as DesktopStressLevel) : undefined
+}
+
 /** 검증한 새 객체를 돌려준다. 잘못되면 null. */
 export function parseSnapshot(v: unknown): MeasurementSnapshot | null {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return null
   const o = v as Record<string, unknown>
-  if (Object.keys(o).length > 6) return null
+  if (Object.keys(o).length > 7) return null
 
   if (typeof o.active !== 'boolean') return null
 
   const emotions = parseEmotion(o.emotions)
   if (emotions === undefined) return null
+
+  const stressLevel = parseStressLevel(o.stressLevel)
+  if (stressLevel === undefined) return null
 
   const { recordCount, videoFps, sentAt } = o
   if (
@@ -97,6 +108,7 @@ export function parseSnapshot(v: unknown): MeasurementSnapshot | null {
   return {
     active: o.active,
     emotions,
+    stressLevel,
     recordCount,
     videoFps: videoFps as number | null,
     saveFailed: o.saveFailed,

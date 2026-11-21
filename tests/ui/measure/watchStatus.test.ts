@@ -16,7 +16,7 @@ describe('워치 행 상태', () => {
 
   it('연결 뒤 첫 값을 기다리는 동안과 값을 받는 동안을 구분하고, 끊기 버튼을 둔다', () => {
     expect(watchView({ ...base, status: 'connected' })).toMatchObject({ state: 'waiting', action: 'disconnect' })
-    expect(watchView({ ...base, status: 'connected', latest: sample(99_000) })).toMatchObject({ state: 'live', text: '81 BPM', action: 'disconnect' })
+    expect(watchView({ ...base, status: 'connected', latest: sample(99_000) })).toMatchObject({ state: 'live', text: '81 bpm', action: 'disconnect' })
   })
 
   it('실측 최대 6.06초 간격을 허용하고 8초 넘게 새 값이 없으면 신호 없음이다', () => {
@@ -37,8 +37,8 @@ describe('워치 행 상태', () => {
   })
 
   it('rPPG 값이 있으면 rPPG − 워치 차이를 함께 보인다', () => {
-    expect(watchView({ ...base, status: 'connected', latest: sample(99_000), rppgBpm: 84 }).text).toBe('81 BPM · rPPG 차이 +3')
-    expect(watchView({ ...base, status: 'connected', latest: sample(99_000), rppgBpm: 79 }).text).toBe('81 BPM · rPPG 차이 −2')
+    expect(watchView({ ...base, status: 'connected', latest: sample(99_000), rppgBpm: 84 }).text).toBe('81 bpm · rPPG 차이 +3')
+    expect(watchView({ ...base, status: 'connected', latest: sample(99_000), rppgBpm: 79 }).text).toBe('81 bpm · rPPG 차이 −2')
   })
 
   it('끝난 이유(끊김·못 찾음·실패)를 구분해 보이고 다시 연결할 수 있다', () => {

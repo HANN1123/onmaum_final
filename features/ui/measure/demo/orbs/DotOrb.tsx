@@ -9,6 +9,8 @@ interface Props {
   getPulse: () => number
   /** 감정에 따라 색이 바뀐다. 화남은 빨강. */
   emotion?: Emotion
+  /** 색을 직접 정한다(측정 화면은 스트레스 단계 색). 주면 emotion 색 대신 쓴다 */
+  palette?: OrbPalette
   /** 심박수. 높을수록 빨리, 세게 두근거린다. 파형 자체의 박동 간격은 getPulse 가 정한다. */
   bpm?: number
   /** 바탕이 흰색이면 뒤쪽 점은 연하게, 파동은 어둡게 찍는다. */
@@ -64,27 +66,44 @@ function intensityFromBpm(bpm: number): number {
  * 박동마다 빛의 띠가 북극에서 남극으로 구 표면을 훑고 지나간다.
  * 색은 감정이 정하고, 두근거림의 빠르기와 세기는 심박수가 정한다.
  */
-export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 'dark', size = 280, colorEase = 0.01, className }: Props) {
+export default function DotOrb({ getPulse, emotion = 'calm', palette: paletteProp, bpm = 72, scheme = 'dark', size = 280, colorEase = 0.01, className }: Props) {
+  const target = paletteProp ?? ORB_PALETTE[emotion]
   const surface = useMemo(() => fibonacciSphere(700), [])
   const frame = useMemo(() => meridians(6, 56), [])
   const inner = useMemo(() => fibonacciSphere(160), [])
-  const wavesRef = useRef<number[]>([])
+  // 박동 띠마다 시작 시각과 길이(초). 길이는 띠가 생길 때 정해 두어, 도중에 심박이 바뀌어도 띠가 늘거나 줄며 튀지 않는다
+  const wavesRef = useRef<{ born: number; life: number }[]>([])
   const prevRef = useRef(0)
+  // 직전 두 박동 사이 간격(초). 박동 띠가 다음 박동 전에 사라지도록 띠 길이를 이 간격보다 짧게 둔다
+  const beatRef = useRef({ last: null as number | null, gap: Infinity })
   const smoothRef = useRef(0)
-  const paletteRef = useRef<OrbPalette>(ORB_PALETTE[emotion])
+  // 회전 각도와 세기는 프레임마다 조금씩 이어 간다. 각도를 "누적 시간 × 빠르기"로 구하면
+  // 심박수가 1만 바뀌어도 빠르기가 바뀐 만큼 지난 시간 전체가 다시 계산돼 오브가 툭 튀었다(2026-11-20)
+  const angleRef = useRef(0)
+  const intensityRef = useRef<number | null>(null)
+  const paletteRef = useRef<OrbPalette>(target)
 
   const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, s: number, _dt: number, t: number) => {
+    (ctx: CanvasRenderingContext2D, s: number, dt: number, t: number) => {
       const v = getPulse()
-      if (prevRef.current < 0.5 && v >= 0.5) wavesRef.current.push(t)
+      if (prevRef.current < 0.5 && v >= 0.5) {
+        const beat = beatRef.current
+        if (beat.last !== null) beat.gap = t - beat.last
+        beat.last = t
+        // 박동이 잦으면 띠도 짧게 끝나야 겹치지 않는다. 박동 간격은 심박수와 실제 박동 사이 간격 중 짧은 쪽으로 본다
+        // (측정 화면은 박동을 심박이 아닌 스트레스 단계 간격으로 준다)
+        wavesRef.current.push({ born: t, life: Math.min(1.0, Math.max(0.4, Math.min(60 / bpm, beat.gap) * 0.95)) })
+      }
       prevRef.current = v
       smoothRef.current += (v - smoothRef.current) * 0.2
       const p = smoothRef.current
-      const intensity = intensityFromBpm(bpm)
-      // 심박이 빠르면 파동도 짧게 끝나야 겹치지 않는다.
-      const waveLife = Math.min(1.0, Math.max(0.4, (60 / bpm) * 0.95))
-      wavesRef.current = wavesRef.current.filter((born) => t - born < waveLife)
-      paletteRef.current = approachPalette(paletteRef.current, ORB_PALETTE[emotion], colorEase)
+      // 심박수에서 나온 세기로 약 1초에 걸쳐 다가간다(1초마다 오는 심박 값에 크기·밝기가 계단처럼 바뀌지 않게)
+      const goal = intensityFromBpm(bpm)
+      const intensity = intensityRef.current === null ? goal
+        : intensityRef.current + (goal - intensityRef.current) * Math.min(1, dt * 3)
+      intensityRef.current = intensity
+      wavesRef.current = wavesRef.current.filter((w) => t - w.born < w.life)
+      paletteRef.current = approachPalette(paletteRef.current, target, colorEase)
       const palette = paletteRef.current
       const white: [number, number, number] = [255, 255, 255]
       // 검정 바탕: 뒤쪽은 바닥색 → 앞쪽은 주색, 파동은 흰색.
@@ -121,8 +140,8 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
       // 박동 파동: 위도 1(북극) → -1(남극) 으로 내려가는 밝은 띠
       const waveBoost = (lat: number) => {
         let boost = 0
-        for (const born of wavesRef.current) {
-          const age = (t - born) / waveLife
+        for (const { born, life } of wavesRef.current) {
+          const age = (t - born) / life
           const head = 1 - age * 2.2
           const d = (lat - head) / 0.16
           boost += Math.exp(-d * d) * (1 - age)
@@ -153,12 +172,13 @@ export default function DotOrb({ getPulse, emotion = 'calm', bpm = 72, scheme = 
         ctx.fill()
       }
 
-      const angle = t * (0.12 + intensity * 0.22)
+      angleRef.current += dt * (0.12 + intensity * 0.22)
+      const angle = angleRef.current
       for (const pt of inner) drawPoint(pt, -angle * 1.6, R * 0.5, 0.45, 1.0, false)
       for (const pt of frame) drawPoint(pt, angle, R, 0.35, 0.9, true)
       for (const pt of surface) drawPoint(pt, angle, R, 0.85, 1.25, true)
     },
-    [getPulse, emotion, bpm, scheme, colorEase, surface, frame, inner],
+    [getPulse, target, bpm, scheme, colorEase, surface, frame, inner],
   )
 
   const ref = useOrbCanvas(size, draw)

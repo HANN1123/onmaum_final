@@ -43,6 +43,7 @@ const NUDGE_CHOICES: [NudgeMode, string, string][] = [
  * - 질문은 모두 건너뛸 수 있다. "남은 질문 건너뛰기"는 마지막 저장·알림 화면으로 간다.
  * - 마지막 화면에서 기록 저장 여부를 꼭 고르고(한 번 고르면 기억), 휴식 알림 방식을 고른다(기본 받지 않음).
  * - 저장된 답이 있으면 미리 골라 둔다. 기록 화면에서 "다시 고치기"로 열면 마친 뒤 기록 화면으로 돌아간다.
+ *   시작 화면 메뉴의 "설문 입력·수정"(?edit=home)으로 열면 마친 뒤 시작 화면으로 돌아간다(2026-11-21).
  * 위쪽 "설문 없이 바로 측정"은 저장 없이 측정으로 간다(측정 화면이 저장 여부를 한 번 묻는다).
  * 선택지의 그림 문자는 이 디자인의 단색 톤에 맞춰 쓰지 않는다.
  */
@@ -55,6 +56,8 @@ export default function SurveyDemo() {
   const [record, setRecord] = useState<boolean | null>(null)
   const [nudgeMode, setNudgeMode] = useState<NudgeMode>('off')
   const [editing, setEditing] = useState(false)
+  // 고치기를 마치거나 그만두면 돌아갈 화면
+  const [editBack, setEditBack] = useState(RECORDS_HREF)
 
   // 저장된 답·설정을 불러와 미리 고른다(localStorage 는 클라이언트에서만)
   useEffect(() => {
@@ -62,7 +65,9 @@ export default function SurveyDemo() {
     setAnswers(answersFromProfile(loadProfile()))
     setRecord(loadConsent()?.record ?? null)
     setNudgeMode(nudgeModeOf(loadSettings()))
-    setEditing(new URLSearchParams(window.location.search).has('edit'))
+    const params = new URLSearchParams(window.location.search)
+    setEditing(params.has('edit'))
+    setEditBack(params.get('edit') === 'home' ? DEMO_HOME_HREF : RECORDS_HREF)
   }, [])
 
   const isConsent = step === CONSENT_STEP
@@ -84,7 +89,7 @@ export default function SurveyDemo() {
     markSurveyDone()
     // 윈도우 알림을 골랐으면 이때 한 번만 권한을 묻는다(거부 뒤에는 다시 묻지 않는다)
     if (nudgeMode === 'os' && supported && permission === 'default') await request()
-    router.push(editing ? RECORDS_HREF : MEASURE_HREF)
+    router.push(editing ? editBack : MEASURE_HREF)
   }
 
   const answered = answeredCount(answers)
@@ -103,7 +108,7 @@ export default function SurveyDemo() {
             {theme === 'dark' ? '화이트' : '다크'}
           </button>
         </div>
-        <Link href={editing ? RECORDS_HREF : MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
+        <Link href={editing ? editBack : MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
           {editing ? '고치지 않고 돌아가기' : '설문 없이 바로 측정'}
         </Link>
       </nav>

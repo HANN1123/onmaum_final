@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { getDominantEmotion, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import type { WidgetView } from '@/features/electron/types/bridge'
 import { widgetStatus, type WidgetStatus } from '@/features/electron/types/widgetStatus'
 import DotOrb from '@/features/ui/measure/demo/orbs/DotOrb'
+import { STRESS_BEAT_PER_MIN, STRESS_PALETTE } from '@/features/ui/measure/demo/orbs/stressPalette'
+import { useLivePulse } from '@/features/ui/measure/demo/demoBits'
 import { useDesktopBridge } from './desktopBridge'
 
 export const WIDGET_STATUS_LABEL: Record<WidgetStatus, string> = {
@@ -21,19 +22,15 @@ const DOT_COLOR: Record<WidgetStatus, string> = {
   stopped: 'rgba(255, 255, 255, 0.4)',
 }
 
-/** 위젯 오브의 박동. 위젯 계약에는 심박이 없으므로 일정한 느린 호흡처럼 움직인다(실제 심박이 아니다) */
-function breathe(): number {
-  const phase = (performance.now() / 4000) % 1
-  return 0.5 - 0.5 * Math.cos(phase * 2 * Math.PI)
-}
-
 // Electron 전용 CSS 속성. drag 영역은 Windows에서 마우스 이벤트를 받지 않으므로 버튼은 no-drag에 둔다.
 const DRAG = { WebkitAppRegion: 'drag' } as CSSProperties
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as CSSProperties
 
 /**
  * 메인 창이 최소화된 동안 측정 상태를 보여 주는 표시 전용 오브. 웹에서는 그리지 않는다.
- * 새 디자인의 점 오브(DotOrb)를 쓰고, 측정 화면이 보낸 감정 비율에서 우세 감정의 색을 따른다.
+ * 새 디자인의 점 오브(DotOrb)를 쓰고, 측정 화면 오브와 같이 측정 화면이 보낸 스트레스 단계의 색을 따른다(2026-11-20).
+ * 단계가 아직 없으면(측정 전·표정 수집 중) 낮음 색으로 둔다.
+ * 반짝임도 측정 화면 오브와 같이 단계마다 정한 일정한 간격을 따른다(단계가 높을수록 자주, 실제 심박이 아니다).
  * 색은 오브가 천천히(약 3초) 바뀌므로 1초마다 오는 상태로도 깜빡이지 않는다.
  */
 export default function DesktopWidget() {
@@ -63,11 +60,13 @@ export default function DesktopWidget() {
     return () => clearInterval(id)
   }, [])
 
+  const level = view?.snapshot?.stressLevel ?? 'low'
+  const palette = STRESS_PALETTE[level]
+  const beat = useLivePulse(STRESS_BEAT_PER_MIN[level])
+
   if (!bridge) return null
 
   const status: WidgetStatus = view ? widgetStatus(view, now) : 'stopped'
-  const emotions = view?.snapshot?.emotions ?? null
-  const emotion: Emotion = emotions ? getDominantEmotion(emotions) : 'calm'
 
   return (
     <div
@@ -77,7 +76,7 @@ export default function DesktopWidget() {
         style={{ ...DRAG, cursor: 'grab', opacity: status === 'stopped' ? 0.45 : 1, transition: 'opacity 0.5s ease' }}
         title="끌어서 옮기기"
       >
-        <DotOrb getPulse={breathe} emotion={emotion} scheme="dark" size={132} />
+        <DotOrb getPulse={beat} palette={palette} scheme="dark" size={132} />
       </div>
       <div
         style={{

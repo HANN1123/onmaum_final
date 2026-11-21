@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { BASELINE_WINDOW_DAYS } from '@/features/algorithm/baseline/baseline'
+import { BASELINE_WINDOW_DAYS, classifyStress } from '@/features/algorithm/baseline/baseline'
 import { EMOTION_LABELS, getDominantEmotion, type Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 import { PERIOD_BUCKET_HOURS } from '@/features/algorithm/stress/dailyStress'
 import { jetbrainsMono, sora } from '@/features/ui/landing/hero-demo/fonts'
@@ -10,6 +10,9 @@ import { DEMO_HOME_HREF } from '@/features/ui/landing/hero-demo/routes'
 import { useDemoTheme } from '@/features/ui/landing/hero-demo/useDemoTheme'
 import { mmss, Row, Stat, swatchColor } from './demoBits'
 import { LEGAL } from './demoCopy'
+import { themeMenuItem } from './menuItems'
+import NavMenu from './NavMenu'
+import { STRESS_LEVEL_TEXT } from './fusedText'
 import { NO_PULSE } from './heartRate'
 import styles from './measureDemo.module.css'
 import DotOrb from './orbs/DotOrb'
@@ -32,10 +35,15 @@ import type { BreathingPlan } from '@/features/feedback/lib/careActions'
  * 저장하지 않은 측정이 오늘이면 목록 맨 위에 따로 올리고, 숫자에는 넣지 않는다.
  * 심박은 저장하지 않으므로 하루 리포트에는 심박 숫자를 만들지 않는다(측정 결과 화면에서만 보인다).
  * 오른쪽에는 체크인(시간대·최근 30분 기록이 있을 때)과 쉬는 시간·퇴근 후 제안(CareCard)을 둔다.
+ * 2026-11-20 교수님 피드백:
+ * - 측정 목록의 스트레스 값 옆에 단계(낮음·보통·높음·매우 높음)를 적는다. 단계는 기존 판정(classifyStress)으로 낸다.
+ * - 결과 화면으로 돌아가는 동작은 목록 줄의 "결과 보기" 대신 아래 "돌아가기" 버튼으로 한다(결과 화면의 "리포트 보기"와 같은 자리).
+ * - 측정 시작 버튼은 아래 하나만 두고, 긍정 점수는 보이지 않는다(스트레스만 남김).
  */
 
 const MEASURE_HREF = '/demo/measure'
 const RESULT_HREF = '/demo/result'
+const RECORDS_HREF = '/demo/records'
 const HERO_HREF = DEMO_HOME_HREF
 const SHARE_ORDER: Emotion[] = ['calm', 'happy', 'sad', 'angry']
 
@@ -45,7 +53,6 @@ interface ListRow {
   durationSec: number
   emotion: Emotion | null
   note: string
-  href?: string
 }
 
 function formatClock(date: Date): string {
@@ -67,13 +74,9 @@ export default function ReportDemo() {
         </Link>
         <div className={styles.navMid}>
           <span className={`${styles.live} ${styles.mono}`}>오늘 {stored ? todayLabel(stored) : ''}</span>
-          <button type="button" className={`${styles.themeBtn} ${styles.focusable}`} onClick={toggleTheme}>
-            {theme === 'dark' ? '화이트' : '다크'}
-          </button>
+          {/* 화면 색 바꾸기는 측정 화면처럼 메뉴에 넣는다. 글자가 "화이트"↔"다크"로 바뀌며 폭이 달라져 옆 글자가 움직이던 것을 막는다(2026-11-21) */}
+          <NavMenu items={[themeMenuItem(theme, toggleTheme)]} />
         </div>
-        <Link href={MEASURE_HREF} className={`${styles.cta} ${styles.focusable}`}>
-          측정 시작
-        </Link>
       </nav>
 
       {stored ? (
@@ -122,8 +125,11 @@ function Report({
       time: formatClock(s.startedAt),
       durationSec: s.durationSec,
       emotion: s.dominant,
-      note: s.active ? '측정 중' : s.stress === null ? '기록 없음' : `스트레스 ${Math.round(s.stress)}`,
-      href: recent?.sessionId === s.id ? RESULT_HREF : undefined,
+      note: s.active
+        ? '측정 중'
+        : s.stress === null
+          ? '기록 없음'
+          : `스트레스 ${Math.round(s.stress)} · ${STRESS_LEVEL_TEXT[classifyStress(s.stress, baseline)]}`,
     }))
     // 방금 끝낸 측정 중 저장하지 않은 것. 오늘 끝낸 것만 올린다.
     if (recent && !recent.sessionId && isSameLocalDay(new Date(recent.endedAt), new Date(history[history.length - 1].date + 'T12:00:00'))) {
@@ -134,11 +140,10 @@ function Report({
         durationSec: recent.durationSec,
         emotion: summary.dominant,
         note: '방금 측정 · 저장 안 함',
-        href: RESULT_HREF,
       })
     }
     return list
-  }, [today.sessions, recent, history])
+  }, [today.sessions, recent, history, baseline])
 
   const storedSec = today.sessions.reduce((sum, s) => sum + s.durationSec, 0)
   const dominant = today.shares ? getDominantEmotion(today.shares) : null
@@ -216,7 +221,7 @@ function Report({
           ) : (
             <ul className={styles.calls}>
               {rows.map((c) => (
-                <li key={c.key} className={styles.call}>
+                <li key={c.key} className={`${styles.call} ${styles.callNoLink}`}>
                   <span>{c.time}</span>
                   <span className={styles.callDim}>{mmss(c.durationSec)}</span>
                   <span>
@@ -230,13 +235,6 @@ function Report({
                     )}
                   </span>
                   <span className={styles.callDim}>{c.note}</span>
-                  {c.href ? (
-                    <Link href={c.href} className={`${styles.callLink} ${styles.focusable}`}>
-                      결과 보기
-                    </Link>
-                  ) : (
-                    <span />
-                  )}
                 </li>
               ))}
             </ul>
@@ -258,8 +256,7 @@ function Report({
 
         <CheckInDemo />
 
-        <div className={styles.stats}>
-          <Stat k="긍정" v={today.scores ? String(Math.round(today.scores.positive)) : '–'} />
+        <div className={`${styles.stats} ${styles.stats2}`}>
           <Stat k="측정" v={String(today.sessions.length)} unit="회" />
           <Stat k="저장 기록" v={String(Math.round(storedSec / 60))} unit="분" />
         </div>
@@ -280,7 +277,11 @@ function Report({
           <Link href={MEASURE_HREF} className={`${styles.btnSolid} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             측정 시작
           </Link>
-          <Link href="/demo/records" className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+          {/* 방금 끝낸 측정이 있으면 그 결과 화면으로, 없으면 첫 화면으로 돌아간다 */}
+          <Link href={recent ? RESULT_HREF : HERO_HREF} className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
+            돌아가기
+          </Link>
+          <Link href={RECORDS_HREF} className={`${styles.btnGhost} ${styles.focusable}`} style={{ textAlign: 'center', textDecoration: 'none' }}>
             기록 보기
           </Link>
         </div>

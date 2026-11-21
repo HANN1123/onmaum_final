@@ -75,7 +75,7 @@ export function reduceWidgetState(state: WidgetState, event: WidgetEvent): Widge
       if (!prev?.active) return state
       return applySnapshot(
         state,
-        { ...prev, active: false, emotions: null, videoFps: null, saveFailed: false, sentAt: event.now },
+        { ...prev, active: false, emotions: null, stressLevel: null, videoFps: null, saveFailed: false, sentAt: event.now },
         event.now,
       )
     }

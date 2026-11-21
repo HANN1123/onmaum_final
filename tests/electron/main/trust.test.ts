@@ -70,12 +70,12 @@ describe('isAllowedExternalUrl', () => {
 })
 
 describe('resolveRunMode', () => {
-  it('패키지 실행은 app://와 영속 partition을 쓴다', () => {
+  it('시연용 패키지 실행은 app://와 정식 앱과 분리된 영속 partition·userData를 쓴다', () => {
     expect(resolveRunMode(true)).toEqual({
       name: 'packaged',
       startUrl: 'app://onmaum/',
-      partition: 'persist:onmaum',
-      userDataDirName: null,
+      partition: 'persist:onmaum-demo',
+      userDataDirName: 'onmaum-demo',
     })
   })
 
