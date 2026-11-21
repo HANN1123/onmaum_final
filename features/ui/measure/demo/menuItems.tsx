@@ -20,12 +20,6 @@ export const MENU_ICON = {
   about: (
     <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7v4.5M8 4.5v.5" /></svg>
   ),
-  face: (
-    <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M5.8 9.6c1.2 1.2 3.2 1.2 4.4 0M6 6.4v.6M10 6.4v.6" /></svg>
-  ),
-  faceImage: (
-    <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor" fillOpacity="0.25" /><path d="M5.8 9.6c1.2 1.2 3.2 1.2 4.4 0M6 6.4v.6M10 6.4v.6" /></svg>
-  ),
   theme: (
     <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" /></svg>
   ),

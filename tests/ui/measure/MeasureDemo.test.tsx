@@ -233,7 +233,7 @@ it('저장 여부를 아직 고르지 않았으면 처음 한 번 묻고, 그 �
   expect(recordValue()).toHaveTextContent('저장 중')
 })
 
-it('위쪽 메뉴 버튼을 누르면 숨 고르기·표정 그림·화면 색 항목이 펼쳐지고, 고르거나 Esc 를 누르면 닫힌다', async () => {
+it('위쪽 메뉴 버튼을 누르면 숨 고르기·화면 색 항목이 펼쳐지고, 고르거나 Esc 를 누르면 닫힌다', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74; state.status = 'idle'; state.latest = null
   render(<MeasureDemo />)
@@ -245,7 +245,7 @@ it('위쪽 메뉴 버튼을 누르면 숨 고르기·표정 그림·화면 색 �
   expect(menuBtn).toHaveAttribute('aria-expanded', 'true')
   const items = screen.getAllByRole('menuitem').map((el) => el.textContent)
   // 지난 측정이 없으면 결과 항목은 없다(useStoredSession 모의값 null)
-  expect(items).toEqual(['숨 고르기호흡 안내 따라 하기', '표정 그림: 선단색 선으로 그린 얼굴', '표정 그림: 원본팀원이 그린 색 얼굴', '화이트 모드화면 색 바꾸기'])
+  expect(items).toEqual(['숨 고르기호흡 안내 따라 하기', '화이트 모드화면 색 바꾸기'])
   fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
   expect(screen.queryByRole('menu')).toBeNull()
   expect(menuBtn).toHaveFocus()
@@ -255,37 +255,23 @@ it('위쪽 메뉴 버튼을 누르면 숨 고르기·표정 그림·화면 색 �
   expect(await screen.findByRole('dialog')).toBeVisible()
 })
 
-it('표정 그림은 기본으로 꺼져 있고, 메뉴에서 선 그림·원본 그림을 골라 감정 이름 오른쪽에 붙이며 이 기기에 기억한다', () => {
+it('표정을 읽으면 감정 이름 오른쪽에 단색 선 얼굴이 늘 붙고, 표정이 없으면 얼굴도 없다', () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74; state.status = 'idle'; state.latest = null
-  state.faceEmotion = 'angry'
-  const { container } = render(<MeasureDemo />)
+  const { container, rerender } = render(<MeasureDemo />)
   const face = () => container.querySelector('[data-emotion]')
-  const pick = (name: RegExp) => {
-    fireEvent.click(screen.getByRole('button', { name: '메뉴' }))
-    fireEvent.click(screen.getByRole('menuitem', { name }))
-  }
-  expect(screen.getByText('화남')).toBeTruthy()
   expect(face()).toBeNull()
 
-  pick(/표정 그림: 선/)
+  state.faceEmotion = 'angry'
+  rerender(<MeasureDemo />)
   expect(face()?.tagName.toLowerCase()).toBe('svg')
   expect(face()?.getAttribute('data-emotion')).toBe('angry')
   // 감정 이름 글자가 있으므로 그림은 화면 읽기에서 숨기고, 글자 오른쪽에 둔다
   expect(face()?.getAttribute('aria-hidden')).toBe('true')
   expect(face()?.previousElementSibling?.textContent).toBe('화남')
-  expect(localStorage.getItem('onmaum_demo_face_icons')).toBe('line')
-
-  pick(/표정 그림: 원본/)
-  expect(face()?.tagName.toLowerCase()).toBe('img')
-  expect(face()?.getAttribute('src')).toBe('/demo/faces/angry.png')
-  expect(face()?.getAttribute('alt')).toBe('')
-  expect(localStorage.getItem('onmaum_demo_face_icons')).toBe('image')
-
-  // 켜진 방식을 다시 고르면 끈다
-  pick(/표정 그림: 원본/)
-  expect(face()).toBeNull()
-  expect(localStorage.getItem('onmaum_demo_face_icons')).toBe('off')
+  // 고르는 메뉴 항목은 없앴다(2026-11-22 선 그림으로 확정)
+  fireEvent.click(screen.getByRole('button', { name: '메뉴' }))
+  expect(screen.queryByRole('menuitem', { name: /표정 그림/ })).toBeNull()
 })
 
 it('측정 종료는 남은 기록 저장이 끝난 뒤 결과 화면으로 간다', async () => {

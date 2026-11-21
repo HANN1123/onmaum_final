@@ -27,8 +27,7 @@ import PulseCanvas from './PulseCanvas'
 import styles from './measureDemo.module.css'
 import { liveStressLevel, stressLevelText } from './fusedText'
 import { StressBar } from './StressGauge'
-import EmotionFace, { EmotionFaceImage } from './EmotionFace'
-import { useFaceIcons } from './useFaceIcons'
+import EmotionFace from './EmotionFace'
 import { faceRateText, heartSourceText, recordStateText, signalQualityText } from './monitorText'
 import { STRESS_BEAT_PER_MIN, STRESS_PALETTE } from './orbs/stressPalette'
 import { formatElapsed, useElapsed } from './useElapsed'
@@ -100,7 +99,6 @@ export default function MeasureDemo() {
   // 카메라 회전(시계 방향). 웹캠을 세워 쓰거나 뒤집어 달았을 때 화면과 분석 입력을 함께 돌린다. 이 기기에만 저장한다
   const [rotation, setRotation] = useState<CameraRotation>(0)
   // 감정 상태 옆 표정 그림(팀 디자인 비교용). 메뉴에서 선 그림·원본 그림 중 고르고, 고른 것을 다시 누르면 끈다
-  const [faceMode, chooseFaceMode] = useFaceIcons()
   useEffect(() => {
     // localStorage 는 클라이언트에서만 — 첫 렌더는 0으로 서버와 맞추고, 그 뒤 저장된 값을 읽는다
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -276,20 +274,6 @@ export default function MeasureDemo() {
   const menuItems: NavMenuItem[] = [
     ...(lastSession ? [{ key: 'result', label: '지난 측정 결과', hint: '마지막 측정 결과 보기', icon: MENU_ICON.result, href: RESULT_HREF }] : []),
     { key: 'breath', label: '숨 고르기', hint: '호흡 안내 따라 하기', icon: MENU_ICON.breath, onSelect: openBreathing },
-    {
-      key: 'faceLine',
-      label: '표정 그림: 선',
-      hint: faceMode === 'line' ? '켜짐 · 누르면 끄기' : '단색 선으로 그린 얼굴',
-      icon: MENU_ICON.face,
-      onSelect: () => chooseFaceMode('line'),
-    },
-    {
-      key: 'faceImage',
-      label: '표정 그림: 원본',
-      hint: faceMode === 'image' ? '켜짐 · 누르면 끄기' : '팀원이 그린 색 얼굴',
-      icon: MENU_ICON.faceImage,
-      onSelect: () => chooseFaceMode('image'),
-    },
     themeMenuItem(theme, toggleTheme),
   ]
 
@@ -375,15 +359,10 @@ export default function MeasureDemo() {
               <div className={`${styles.stateBox} ${styles.emotionBox}`}>
                 <span className={styles.stateLabel}>감정 상태</span>
                 <Skeleton loading={!ready} id="measure-key" label="감정 상태 준비 중">
-                  {/* 표정 그림을 켜면 감정 이름 오른쪽에 얼굴을 붙인다(선 그림 또는 원본 그림). 감정이 바뀌면 그림이 짧게 서서히 나타난다 */}
+                  {/* 감정 이름 오른쪽에 단색 선 얼굴을 붙인다(2026-11-22 팀 결정: 선 그림으로 고정). 감정이 바뀌면 그림이 짧게 서서히 나타난다 */}
                   <span className={styles.emotionRow}>
                     <Morph className={styles.stateValue}>{emotion}</Morph>
-                    {faceMode === 'line' && face.emotion && (
-                      <EmotionFace key={face.emotion} emotion={face.emotion} className={styles.emotionFace} />
-                    )}
-                    {faceMode === 'image' && face.emotion && (
-                      <EmotionFaceImage key={face.emotion} emotion={face.emotion} className={`${styles.emotionFace} ${styles.emotionFaceImage}`} />
-                    )}
+                    {face.emotion && <EmotionFace key={face.emotion} emotion={face.emotion} className={styles.emotionFace} />}
                   </span>
                 </Skeleton>
               </div>

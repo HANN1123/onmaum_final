@@ -1,7 +1,7 @@
 import type { Emotion } from '@/features/algorithm/emotion/emotionAnalysis'
 
 /**
- * 감정 상태 옆에 붙이는 단색 선화 얼굴(2026-11-21, 팀 디자인 검토 1안).
+ * 감정 상태 옆에 붙이는 단색 선화 얼굴(2026-11-21 팀 디자인 검토 1안, 2026-11-22 이 방식으로 확정해 늘 보인다).
  * 팀원이 만든 표정 그림(평온·기쁨·슬픔·화남)의 눈·입·눈썹 모양을 따르되, 색 있는 원은 빼고 선만 남겼다.
  * 원 색을 그대로 쓰면 오브·게이지의 스트레스 단계 색과 두 색 체계가 섞여 헷갈리기 때문이다.
  * 선 색은 글자 색(currentColor)을 따라 다크·화이트 테마에 맞춰진다. 감정 이름 글자가 함께 있으므로 그림은 화면 읽기에서 숨긴다.
@@ -57,18 +57,5 @@ export default function EmotionFace({ emotion, className }: { emotion: Emotion; 
       <circle cx="16" cy="16" r="14" />
       {FACE[emotion]}
     </svg>
-  )
-}
-
-/**
- * 팀원이 그린 원래 표정 그림(색 있는 원, 2026-11-21 팀 디자인 비교용).
- * 원본 PNG(1254px)의 원 바깥 흰 테두리·색 점을 걷어 내고 256px 로 줄여 public/demo/faces 에 두었다.
- * 감정 이름 글자가 함께 있으므로 대체 글자는 비우고 화면 읽기에서 숨긴다.
- */
-export function EmotionFaceImage({ emotion, className }: { emotion: Emotion; className?: string }) {
-  return (
-    // 정적 export 라 next/image 최적화를 쓰지 않는다. 작은 고정 그림이다
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/demo/faces/${emotion}.png`} alt="" aria-hidden="true" className={className} data-emotion={emotion} draggable={false} />
   )
 }
