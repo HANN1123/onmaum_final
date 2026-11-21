@@ -230,7 +230,17 @@ export default function MeasureDemo() {
     saveFailed: recording.status?.failed ?? false,
   })
 
-  /** 측정 종료: 남은 1분 기록 저장을 마치고, 이번 측정 표본을 넘긴 뒤 결과 화면으로 간다. */
+  // 결과 화면을 미리 받아 둬서 측정 종료 뒤 이동할 때 경로 데이터·코드를 기다리지 않게 한다(배포 빌드에서만 동작)
+  useEffect(() => {
+    router.prefetch(RESULT_HREF)
+  }, [router])
+
+  /**
+   * 측정 종료: 남은 1분 기록 저장을 마치고, 이번 측정 표본을 넘긴 뒤 결과 화면으로 간다.
+   * 측정 상태(active)를 끄지 않고 바로 이동한다. 끄고 이동하면 이동 직전에 화면 전체가 '측정 종료' 상태로
+   * 다시 그려지고(심박 '--', 오브 정지, 버튼 '측정 시작') 그 화면에서 멈췄다가 넘어가 끊겨 보였다.
+   * 카메라·rPPG·저장·위젯 알림 정리는 화면을 떠날 때(unmount) 각 훅이 한다. 저장기 stop 은 여러 번 불러도 한 번만 처리한다.
+   */
   const [ending, setEnding] = useState(false)
   const endMeasure = async () => {
     if (!active || ending) return
@@ -242,8 +252,6 @@ export default function MeasureDemo() {
       sessionId: saved?.sessionId && saved.saved > 0 ? saved.sessionId : undefined,
       faceMean: acc.n > 0 ? { happy: acc.happy / acc.n, calm: acc.calm / acc.n, sad: acc.sad / acc.n, angry: acc.angry / acc.n } : undefined,
     })
-    setActive(false)
-    setEnding(false)
     router.push(RESULT_HREF)
   }
 
@@ -478,8 +486,14 @@ export default function MeasureDemo() {
             </div>
             {/* 측정 시작·종료는 이 버튼 하나로 한다(위쪽 메뉴 버튼과 측정 스위치를 없앴다) */}
             <div style={{ marginTop: 'auto' }}>
-              <button type="button" className={`${styles.btnSolid} ${styles.focusable}`} onClick={() => (active ? void endMeasure() : setActive(true))}>
-                {active ? '측정 종료' : '측정 시작'}
+              <button
+                type="button"
+                className={`${styles.btnSolid} ${styles.focusable}`}
+                onClick={() => (active ? void endMeasure() : setActive(true))}
+                disabled={ending}
+                aria-busy={ending}
+              >
+                {ending ? '결과 정리 중' : active ? '측정 종료' : '측정 시작'}
               </button>
             </div>
           </div>

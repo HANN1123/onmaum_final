@@ -8,7 +8,7 @@ import MeasureDemo from '@/features/ui/measure/demo/MeasureDemo'
 const state = vi.hoisted(() => ({
   webcam: 'error', modelsReady: false, rppgBpm: null as number | null,
   latest: { t: 1000, bpm: 92, contact: 'good' } as WatchSample | null,
-  status: 'connected' as 'connected' | 'idle', push: vi.fn(),
+  status: 'connected' as 'connected' | 'idle', push: vi.fn(), prefetch: vi.fn(),
   recordingEnabled: [] as boolean[],
   nudgeOpen: false, nudgeClose: vi.fn(), onSample: [] as unknown[],
   stop: vi.fn(async () => null as unknown),
@@ -19,7 +19,7 @@ vi.mock('@/features/ui/measure/demo/useMeasureRecording', () => ({ useMeasureRec
   state.recordingEnabled.push(enabled)
   return { push: vi.fn(), stop: state.stop, status: null }
 } }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: state.push }) }))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: state.push, prefetch: state.prefetch }) }))
 vi.mock('@/features/ui/landing/hero-demo/fonts', () => ({ sora: { variable: '' }, jetbrainsMono: { variable: '' } }))
 vi.mock('@/features/ui/landing/hero-demo/useDemoTheme', () => ({ useDemoTheme: () => ['dark', vi.fn()] }))
 vi.mock('@/features/ui/landing/hero-demo/useWebcam', () => ({ useWebcam: () => state.webcam }))
@@ -61,7 +61,7 @@ const bigBpm = () => document.querySelector('[class*="_bpm_"]') as HTMLElement
 
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); sessionStorage.clear(); localStorage.clear()
-  state.push.mockReset(); state.stop.mockReset(); state.nudgeOpen = false; state.onSample = []; state.stop.mockImplementation(async () => null); state.recordingEnabled = []; state.box = null; state.faceEmotion = null
+  state.push.mockReset(); state.prefetch.mockReset(); state.stop.mockReset(); state.nudgeOpen = false; state.onSample = []; state.stop.mockImplementation(async () => null); state.recordingEnabled = []; state.box = null; state.faceEmotion = null
 })
 
 it('위쪽은 심박 상태·감정 상태 두 칸과 스트레스 상태 오브로 나뉘고, 오브는 스트레스 단계 색과 단계 이름만 보인다', async () => {
@@ -78,7 +78,7 @@ it('위쪽은 심박 상태·감정 상태 두 칸과 스트레스 상태 오브
   expect(screen.getByText('표정 수집 중')).toBeVisible()
   expect(screen.getByTestId('orb')).toHaveAttribute('data-palette', '79,209,197')
   fireEvent.click(screen.getByRole('button', { name: '측정 종료' }))
-  expect(await screen.findByText('측정 전')).toBeVisible()
+  await waitFor(() => expect(state.push).toHaveBeenCalledWith('/demo/result'))
 })
 
 it('모니터링 Info 에는 다섯 행만 남기고, 워치 연결 버튼은 심박 측정 방식 행에 둔다', () => {
@@ -111,7 +111,7 @@ it('얼굴 추적 표시는 카메라 칸 아래 배지로 보이고, 얼굴을 
   expect(screen.queryByText(/카메라 · /)).toBeNull()
 })
 
-it('카메라 오류·모델 로딩 중에도 워치 숫자와 오브가 보이며 종료 때 기록하고 표시를 멈춘다', async () => {
+it('카메라 오류·모델 로딩 중에도 워치 숫자와 오브가 보이며 종료 때 기록하고 결과 화면으로 간다', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.spyOn(performance, 'now').mockReturnValue(1000)
   state.webcam = 'error'; state.modelsReady = false; state.rppgBpm = null
@@ -119,12 +119,14 @@ it('카메라 오류·모델 로딩 중에도 워치 숫자와 오브가 보이�
   render(<MeasureDemo />)
   expect(bigBpm()).toHaveTextContent(/^92$/)
   expect(screen.getByTestId('orb')).toHaveAttribute('data-bpm', '92')
+  expect(state.prefetch).toHaveBeenCalledWith('/demo/result')
   fireEvent.click(screen.getAllByRole('button', { name: '측정 종료' })[0])
-  expect(await screen.findByText('--')).toBeVisible()
-  expect(screen.getByTestId('orb')).not.toHaveAttribute('data-bpm')
+  await waitFor(() => expect(state.push).toHaveBeenCalledWith('/demo/result'))
+  // 이동 전에 화면을 '측정 종료' 상태로 다시 그리지 않는다(끊겨 보이던 원인). 정리는 화면을 떠날 때 한다
+  expect(screen.queryByText('--')).toBeNull()
+  expect(screen.getByTestId('orb')).toHaveAttribute('data-bpm', '92')
   const saved = JSON.parse(sessionStorage.getItem('onmaum_demo_session')!)
   expect(saved.samples[0]).toMatchObject({ bpm: 92, source: 'watch', rppgBpm: null })
-  expect(state.push).toHaveBeenCalledWith('/demo/result')
 })
 
 it('측정 도중 워치가 끊기면 카메라 심박을 참고값 표시 없이 보이고 정상 알림 한 번으로 복귀한다', () => {
@@ -182,17 +184,29 @@ it('워치가 연결된 동안에는 표본이 접촉 불량이거나 늦어도 
   expect(waveTag(WATCH)).toHaveTextContent('스마트워치 (심박, bpm): 95')
 })
 
-it('측정을 끝내는 버튼은 하나뿐이고, 끝낸 뒤에는 같은 버튼으로 다시 잰다', async () => {
+it('측정을 끝내는 버튼은 하나뿐이고, 누르면 결과 화면으로 넘어갈 때까지 결과 정리 중으로 잠긴다', async () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.spyOn(performance, 'now').mockReturnValue(1000)
   state.webcam = 'ready'; state.modelsReady = true; state.rppgBpm = 74
   state.status = 'connected'; state.latest = { t: 1000, bpm: 92, contact: 'good' }
+  let release: (v: unknown) => void = () => {}
+  state.stop.mockImplementation(() => new Promise((r) => { release = r }))
   render(<MeasureDemo />)
   fireEvent.click(screen.getByRole('button', { name: '측정 종료' }))
-  expect(await screen.findByText('--')).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: '측정 시작' }))
-  await waitFor(() => expect(bigBpm()).toHaveTextContent(/^92$/))
-  expect(screen.getByRole('button', { name: '측정 종료' })).toBeVisible()
+  const busy = await screen.findByRole('button', { name: '결과 정리 중' })
+  expect(busy).toBeDisabled()
+  expect(busy).toHaveAttribute('aria-busy', 'true')
+  expect(screen.queryByRole('button', { name: '측정 시작' })).toBeNull()
+  fireEvent.click(busy)
+  await act(async () => { release(null) })
+  // 저장이 끝나 이동을 요청한 뒤에도 화면이 바뀔 때까지 잠김을 풀지 않는다
+  const stillBusy = screen.getByRole('button', { name: '결과 정리 중' })
+  expect(stillBusy).toBeDisabled()
+  expect(stillBusy).toHaveAttribute('aria-busy', 'true')
+  fireEvent.click(stillBusy)
+  expect(state.stop).toHaveBeenCalledTimes(1)
+  expect(state.push).toHaveBeenCalledTimes(1)
+  expect(state.push).toHaveBeenCalledWith('/demo/result')
 })
 
 it('저장 여부를 아직 고르지 않았으면 처음 한 번 묻고, 그 뒤로는 기록 저장 버튼으로 켜고 끄며 기록 여부가 바뀐다', async () => {
