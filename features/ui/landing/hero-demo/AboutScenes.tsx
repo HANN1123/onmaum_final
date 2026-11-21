@@ -67,7 +67,7 @@ export function OrbScene({ scheme }: { scheme: Scheme }) {
         <span className={styles.readLabel}>측정 중 · 지금</span>
         <span className={styles.readValue}>
           <Roll value={String(bpm)} />
-          <small>BPM</small>
+          <small>bpm</small>
         </span>
         <span className={styles.readEmotion}>
           <i style={{ background: swatchColor(emotion, light) }} />
@@ -117,7 +117,7 @@ export function ResultScene({ scheme }: { scheme: Scheme }) {
         <Swap text={label} className={styles.readLabel} />
         <span className={styles.readValue}>
           <Roll value={String(value)} />
-          <small>BPM</small>
+          <small>bpm</small>
           <span className={styles.readEmotion}>
             <i style={{ background: swatchColor(emotion, light) }} />
             <Swap text={EMOTION_LABELS[emotion]} />

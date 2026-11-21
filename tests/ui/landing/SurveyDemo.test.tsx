@@ -64,4 +64,14 @@ describe('SurveyDemo: 처음 설문', () => {
     expect(loadProfile()?.tone).toBe('plain')
     expect(loadSettings().checkinSlots).toEqual({ morning: false, afternoon: true })
   })
+
+  it('시작 화면 메뉴에서 고치러 오면(edit=home) 마치거나 그만둘 때 시작 화면으로 돌아간다', async () => {
+    localStorage.setItem('onmaum_consent', JSON.stringify({ version: 1, record: true, decidedAt: 'x' }))
+    window.history.replaceState(null, '', '/demo/survey?edit=home')
+    render(<SurveyDemo />)
+    expect(await screen.findByRole('link', { name: '고치지 않고 돌아가기' })).toHaveAttribute('href', '/demo/hero-stage')
+    click('남은 질문 건너뛰기')
+    click('고친 내용 저장')
+    await vi.waitFor(() => expect(nav.push).toHaveBeenCalledWith('/demo/hero-stage'))
+  })
 })
